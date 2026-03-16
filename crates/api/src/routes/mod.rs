@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod github;
 pub mod health;
 pub mod openapi;
 pub mod servers;
@@ -22,6 +23,8 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/auth/refresh", post(auth::refresh_token))
         .route("/auth/me", get(auth::get_current_user))
         .route("/auth/account", delete(auth::delete_account))
+        // GitHub
+        .route("/github/repos", get(github::list_repositories))
         // Workspaces
         .route("/workspaces", get(workspaces::list).post(workspaces::create))
         .route(

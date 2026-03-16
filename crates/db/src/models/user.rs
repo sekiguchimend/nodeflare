@@ -14,6 +14,19 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub struct UserWithToken {
+    pub id: Uuid,
+    pub github_id: i64,
+    pub email: String,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub github_access_token_encrypted: Option<Vec<u8>>,
+    pub github_access_token_nonce: Option<Vec<u8>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateUser {
     pub github_id: i64,

@@ -5,9 +5,11 @@ use axum::{
 };
 use mcp_common::types::{CreateServerRequest, PaginationParams, ServerResponse, UpdateServerRequest};
 use mcp_db::{CreateServer, ServerRepository, UpdateServer, WorkspaceRepository};
+use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::AppError;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -112,42 +114,95 @@ pub async fn create(
     auth_user: AuthUser,
     Path(workspace_id): Path<Uuid>,
     Json(body): Json<CreateServerRequest>,
-) -> Result<Json<ServerResponse>, (StatusCode, String)> {
+) -> Result<Json<ServerResponse>, AppError> {
+    // Validate runtime
+    let runtime = body.runtime.clone().unwrap_or_default();
+    if !matches!(runtime, mcp_common::types::Runtime::Node | mcp_common::types::Runtime::Python | mcp_common::types::Runtime::Docker) {
+        return Err(AppError::bad_request(
+            "INVALID_RUNTIME",
+            &format!("Unsupported runtime: {:?}. Supported runtimes are: node, python, docker", runtime),
+        ).with_details(json!({
+            "provided_runtime": format!("{:?}", runtime),
+            "supported_runtimes": ["node", "python", "docker"]
+        })));
+    }
+
     // Check membership and permission
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Database error checking workspace membership: {}", e);
+            AppError::internal("Failed to verify workspace membership")
+        })?
+        .ok_or_else(|| AppError::forbidden("You are not a member of this workspace"))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
+        return Err(AppError::forbidden("Viewers cannot create servers. You need Editor or Admin role."));
     }
 
     // Check if slug is already taken
-    if ServerRepository::find_by_slug(&state.db, workspace_id, &body.slug)
+    if let Some(existing) = ServerRepository::find_by_slug(&state.db, workspace_id, &body.slug)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .is_some()
+        .map_err(|e| {
+            tracing::error!("Database error checking slug: {}", e);
+            AppError::internal("Failed to check server slug availability")
+        })?
     {
-        return Err((StatusCode::CONFLICT, "Slug already taken".to_string()));
+        return Err(AppError::conflict(
+            "SLUG_ALREADY_EXISTS",
+            &format!("A server with slug '{}' already exists in this workspace", body.slug),
+        ).with_details(json!({
+            "conflicting_slug": body.slug,
+            "existing_server_name": existing.name,
+            "suggestion": format!("{}-2", body.slug)
+        })));
+    }
+
+    // Validate GitHub repo format
+    let repo_parts: Vec<&str> = body.github_repo.split('/').collect();
+    if repo_parts.len() != 2 {
+        return Err(AppError::bad_request(
+            "INVALID_GITHUB_REPO",
+            "GitHub repository must be in format 'owner/repo'",
+        ).with_details(json!({
+            "provided_repo": body.github_repo,
+            "expected_format": "owner/repo",
+            "example": "octocat/my-mcp-server"
+        })));
     }
 
     let server = ServerRepository::create(
         &state.db,
         CreateServer {
             workspace_id,
-            name: body.name,
-            slug: body.slug,
-            description: body.description,
-            github_repo: body.github_repo,
-            github_branch: body.github_branch.unwrap_or_else(|| "main".to_string()),
+            name: body.name.clone(),
+            slug: body.slug.clone(),
+            description: body.description.clone(),
+            github_repo: body.github_repo.clone(),
+            github_branch: body.github_branch.clone().unwrap_or_else(|| "main".to_string()),
             github_installation_id: body.github_installation_id,
-            runtime: body.runtime.unwrap_or_default(),
-            visibility: body.visibility.unwrap_or_default(),
+            runtime,
+            visibility: body.visibility.clone().unwrap_or_default(),
         },
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| {
+        tracing::error!("Failed to create server: {}", e);
+        let error_msg = e.to_string();
+
+        // Parse specific database errors
+        if error_msg.contains("duplicate key") {
+            if error_msg.contains("slug") {
+                return AppError::conflict(
+                    "SLUG_ALREADY_EXISTS",
+                    &format!("A server with slug '{}' already exists", body.slug),
+                );
+            }
+            return AppError::conflict("DUPLICATE_ENTRY", "A server with these details already exists");
+        }
+
+        AppError::internal("Failed to create server. Please try again.")
+    })?;
 
     let runtime = server.runtime();
     let visibility = server.visibility();

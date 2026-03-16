@@ -77,6 +77,16 @@ pub async fn github_callback(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Encrypt and store GitHub access token
+    let (encrypted_token, nonce) = state
+        .crypto
+        .encrypt_string(&access_token)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    UserRepository::update_github_token(&state.db, user.id, &encrypted_token, &nonce)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     // Check if user has any workspaces, if not create a personal one
     let workspaces = WorkspaceRepository::list_by_user(&state.db, user.id)
         .await

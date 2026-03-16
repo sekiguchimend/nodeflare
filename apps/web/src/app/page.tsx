@@ -30,7 +30,12 @@ export default function HomePage() {
       <main>
         {/* Hero - ドットパターン背景 */}
         <section className="relative pt-16 pb-20 sm:pt-20 sm:pb-24 overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] bg-[size:20px_20px]">
-          <div className="relative max-w-5xl mx-auto px-6 sm:px-10 lg:px-16">
+          {/* 右側の背景画像 */}
+          <div
+            className="absolute -right-20 w-[60%] h-[120%] bg-no-repeat bg-top bg-contain pointer-events-none hidden lg:block"
+            style={{ backgroundImage: 'url(/top.png)', top: '-5%' }}
+          />
+          <div className="relative max-w-6xl mx-auto px-6 sm:px-10 lg:px-16">
             <div>
               <div className="relative inline-block mb-6 ml-1">
                 <div className="relative px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg">
@@ -45,7 +50,7 @@ export default function HomePage() {
               </h1>
 
               <div className="text-center">
-                <p className="mt-6 text-lg text-gray-600 leading-relaxed max-w-2xl mx-auto">
+                <p className="mt-6 text-lg text-gray-800 leading-relaxed max-w-2xl text-left">
                   GitHubからワンクリックでデプロイ。<br className="hidden sm:block" />
                   インフラ管理なしで、すぐに本番稼働。
                 </p>
@@ -67,7 +72,7 @@ export default function HomePage() {
                   </Button>
                 </a>
                 <Link href="/docs">
-                  <Button size="lg" variant="outline" className="h-14 px-8 text-base border-gray-200 hover:bg-gray-50">
+                  <Button size="lg" variant="outline" className="h-14 px-8 text-base border-gray-400 hover:bg-gray-50">
                     ドキュメント
                   </Button>
                 </Link>
@@ -157,72 +162,57 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Features - ベントグリッド */}
-        <section className="py-20 bg-gray-950 text-white">
+        {/* Features - 吹き出しブロック */}
+        <section className="py-24">
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
-            <div className="text-center mb-10">
-              <h2 className="text-2xl sm:text-3xl font-bold">なぜMCP Cloudなのか</h2>
-              <p className="mt-4 text-gray-400 text-lg">開発者のための、開発者によるプラットフォーム</p>
+            <div className="text-center mb-16">
+              <span className="inline-block text-violet-600 text-sm font-medium mb-4">
+                Why MCP Cloud?
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">なぜMCP Cloudなのか</h2>
+              <p className="mt-4 text-gray-500 text-lg">MCPサーバーをAIから使える状態にするのは、意外と面倒</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              {/* 大きいカード */}
-              <div className="md:col-span-4 bg-violet-600 rounded-3xl p-8 relative overflow-hidden group">
-                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjwvZz48L3N2Zz4=')] opacity-30" />
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center mb-6">
-                    <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-                    </svg>
+            {/* 吹き出しブロック */}
+            <div className="space-y-5">
+              {[
+                { title: 'AIからすぐ使える', desc: 'Claude・CursorにURL貼るだけで接続完了', icon: <><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M21.18 8.02A10 10 0 0 0 12 2v10h10a10 10 0 0 0-0.82-3.98z" /></>, align: 'left' },
+                { title: 'ツール権限を制御', desc: '誰がどのツールを使えるか細かく設定', icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></>, align: 'right' },
+                { title: '外部APIキーを安全に', desc: 'Notion・GitHubのキーを暗号化して管理', icon: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>, align: 'left' },
+                { title: 'MCP専用プロキシ', desc: 'レート制限・ログ・認証をプロトコルレベルで最適化', icon: <><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></>, align: 'right' },
+                { title: 'ローカル不要', desc: '常時オンラインでどこからでもAIがアクセス可能', icon: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></>, align: 'left' },
+              ].map((item, idx) => (
+                <div key={idx} className={`flex ${item.align === 'right' ? 'justify-end' : 'justify-start'}`}>
+                  <div className="relative inline-block max-w-md">
+                    {/* 紫の影（ずらした吹き出し） */}
+                    <div className="absolute top-1 left-1 w-full">
+                      <div className="px-6 py-5 rounded-lg bg-violet-500" style={{ visibility: 'hidden' }}>
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7" />
+                          <p className="text-2xl font-bold">{item.title}</p>
+                        </div>
+                        <p className="mt-3 text-lg">{item.desc}</p>
+                      </div>
+                      <div className="absolute inset-0 rounded-lg bg-violet-500" />
+                      <div className="absolute -bottom-[8px] left-8 w-4 h-4 rotate-45 bg-violet-500" />
+                    </div>
+                    {/* 吹き出し本体 */}
+                    <div className="relative px-6 py-5 rounded-lg bg-gray-900">
+                      {/* タイトル行（アイコン＋タイトル） */}
+                      <div className="flex items-center gap-3">
+                        <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          {item.icon}
+                        </svg>
+                        <p className="text-2xl font-bold text-white">{item.title}</p>
+                      </div>
+                      {/* 説明文 */}
+                      <p className="mt-3 text-lg text-gray-300">{item.desc}</p>
+                    </div>
+                    {/* 吹き出しの矢印（下向き） */}
+                    <div className="absolute -bottom-[8px] left-8 w-4 h-4 rotate-45 bg-gray-900" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-3">GitHubとシームレス連携</h3>
-                  <p className="text-white/80 text-lg leading-relaxed max-w-md">
-                    リポジトリを選ぶだけ。pushするたびに自動でビルド・デプロイ。CI/CDの設定は不要です。
-                  </p>
                 </div>
-              </div>
-
-              {/* 小さいカード */}
-              <div className="md:col-span-2 bg-gray-900 rounded-3xl p-6 border border-gray-800 hover:border-violet-500/50 transition-colors group">
-                <div className="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold mb-2">高速デプロイ</h3>
-                <p className="text-gray-400 text-sm">pushから1〜2分で本番反映</p>
-              </div>
-
-              <div className="md:col-span-2 bg-gray-900 rounded-3xl p-6 border border-gray-800 hover:border-emerald-500/50 transition-colors group">
-                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold mb-2">セキュリティ</h3>
-                <p className="text-gray-400 text-sm">APIキー・アクセス制御標準装備</p>
-              </div>
-
-              <div className="md:col-span-2 bg-gray-900 rounded-3xl p-6 border border-gray-800 hover:border-amber-500/50 transition-colors group">
-                <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold mb-2">モニタリング</h3>
-                <p className="text-gray-400 text-sm">リアルタイムログとメトリクス</p>
-              </div>
-
-              <div className="md:col-span-2 bg-gray-900 rounded-3xl p-6 border border-gray-800 hover:border-cyan-500/50 transition-colors group">
-                <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold mb-2">グローバルCDN</h3>
-                <p className="text-gray-400 text-sm">世界中から低レイテンシー</p>
-              </div>
+              ))}
             </div>
           </div>
         </section>
@@ -232,7 +222,7 @@ export default function HomePage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-sm font-medium mb-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-emerald-700 text-sm font-medium mb-6">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Developer Experience
                 </div>
@@ -339,6 +329,9 @@ export default function HomePage() {
         <section className="py-20 bg-gradient-to-b from-gray-50 to-white">
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="text-center mb-10">
+              <span className="inline-block text-violet-600 text-sm font-medium mb-4">
+                Pricing
+              </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">シンプルな料金</h2>
               <p className="text-lg text-gray-600">小規模なら無料。スケールに合わせてアップグレード。</p>
             </div>
@@ -410,8 +403,10 @@ export default function HomePage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="flex items-end justify-between mb-8">
               <div>
+                <span className="inline-block text-violet-600 text-sm font-medium mb-4">
+                  Blog
+                </span>
                 <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">ブログ</h2>
-                <p className="mt-2 text-gray-600">最新の活用方法やアップデート情報</p>
               </div>
               <Link href="/blog" className="hidden sm:flex items-center gap-2 text-violet-600 hover:text-violet-700 font-medium group">
                 すべて見る
@@ -421,43 +416,32 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="grid md:grid-cols-12 gap-6">
-              {/* メイン記事 */}
-              <Link href="/blog" className="md:col-span-7 group">
-                <div className="relative h-56 rounded-2xl overflow-hidden border border-gray-200 hover:border-violet-200 hover:shadow-lg transition-all bg-white">
-                  <div className="absolute inset-0 bg-violet-50" />
-                  <div className="absolute bottom-0 left-0 right-0 p-8">
-                    <span className="inline-block px-3 py-1 rounded-full bg-violet-100 text-violet-700 text-sm font-medium mb-4">
-                      チュートリアル
-                    </span>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-violet-600 transition-colors">
-                      MCPサーバーの始め方：5分でデプロイする方法
-                    </h3>
-                    <p className="text-gray-500">2024年1月15日</p>
-                  </div>
-                </div>
-              </Link>
-
-              {/* サブ記事 */}
-              <div className="md:col-span-5 grid gap-6">
-                {[
-                  { title: 'MCPサーバーの活用事例', category: '事例紹介', bgColor: 'bg-emerald-50', color: 'bg-emerald-100', textColor: 'text-emerald-700' },
-                  { title: 'セキュリティベストプラクティス', category: 'セキュリティ', bgColor: 'bg-amber-50', color: 'bg-amber-100', textColor: 'text-amber-700' },
-                ].map((post, idx) => (
-                  <Link key={idx} href="/blog" className="group">
-                    <div className={`relative h-[104px] rounded-xl overflow-hidden border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all ${post.bgColor}`}>
-                      <div className="absolute bottom-0 left-0 right-0 p-5">
-                        <span className={`inline-block px-2 py-0.5 rounded-full ${post.color} ${post.textColor} text-xs font-medium mb-2`}>
-                          {post.category}
-                        </span>
-                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700 transition-colors">
-                          {post.title}
-                        </h3>
-                      </div>
+            <div className="grid md:grid-cols-3 gap-8">
+              {[
+                { title: 'MCPサーバーの始め方：5分でデプロイする方法', date: '2024年1月15日', thumbnail: '/blog/thumbnail1.png' },
+                { title: 'MCPサーバーの活用事例', date: '2024年1月10日', thumbnail: '/blog/thumbnail2.png' },
+                { title: 'セキュリティベストプラクティス', date: '2024年1月5日', thumbnail: '/blog/thumbnail3.png' },
+              ].map((post, idx) => (
+                <Link key={idx} href="/blog" className="group">
+                  <div className="h-full rounded-lg border border-gray-200 hover:border-violet-200 hover:shadow-lg transition-all bg-white overflow-hidden">
+                    <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
+                      <img src={post.thumbnail} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     </div>
-                  </Link>
-                ))}
-              </div>
+                    <div className="p-6">
+                      <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-violet-600 transition-colors">
+                        {post.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-5">{post.date}</p>
+                      <span className="inline-flex items-center text-sm text-violet-600 font-medium group-hover:gap-2 transition-all">
+                        詳細を見る
+                        <svg className="w-4 h-4 ml-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
             </div>
 
             <div className="mt-8 text-center sm:hidden">
@@ -472,6 +456,9 @@ export default function HomePage() {
         <section className="py-20 bg-gray-50">
           <div className="max-w-3xl mx-auto px-4 sm:px-6">
             <div className="text-center mb-10">
+              <span className="inline-block text-violet-600 text-sm font-medium mb-4">
+                FAQ
+              </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">よくある質問</h2>
               <p className="text-lg text-gray-600">はじめての方からよく寄せられる質問</p>
             </div>
@@ -484,7 +471,7 @@ export default function HomePage() {
               ].map((item, idx) => (
                 <div
                   key={idx}
-                  className={`bg-white rounded-2xl border transition-all duration-300 ${openFaq === idx ? 'border-violet-200 shadow-lg shadow-violet-500/5' : 'border-gray-200'}`}
+                  className={`bg-white rounded-2xl border transition-all duration-300 ${openFaq === idx ? 'border-violet-400 shadow-lg shadow-violet-500/5' : 'border-gray-300'}`}
                 >
                   <button
                     onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
@@ -508,7 +495,7 @@ export default function HomePage() {
 
             <div className="mt-8 text-center">
               <Link href="/faq">
-                <Button variant="outline" className="border-gray-300 hover:bg-white gap-2">
+                <Button variant="ghost" className="hover:bg-gray-100 gap-2">
                   すべての質問を見る
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
@@ -519,91 +506,57 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Contact - スプリットデザイン */}
+        {/* Contact - シンプルフォーム */}
         <section className="py-20">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6">
-            <div className="grid lg:grid-cols-2 gap-10 items-center">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6">
+            <div className="text-center mb-10">
+              <span className="inline-block text-violet-600 text-sm font-medium mb-4">
+                Contact
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">お問い合わせ</h2>
+              <p className="text-gray-600">ご質問やご相談がありましたらお気軽にどうぞ</p>
+            </div>
+
+            <form className="space-y-6">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
-                  ご質問は<br />お気軽に
-                </h2>
-                <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-                  導入のご相談、技術的なご質問、お見積りなど、どんなことでもお問い合わせください。
-                </p>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">
-                      <svg className="w-6 h-6 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                        <path d="M22 6l-10 7L2 6" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">メール</p>
-                      <p className="font-medium text-gray-900">support@mcpcloud.dev</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">
-                      <svg className="w-6 h-6 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 6v6l4 2" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">対応時間</p>
-                      <p className="font-medium text-gray-900">平日 10:00 - 18:00（日本時間）</p>
-                    </div>
-                  </div>
-                </div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">お名前</label>
+                <input
+                  type="text"
+                  id="name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all"
+                  placeholder="山田 太郎"
+                />
               </div>
-
-              <div className="relative">
-                <div className="relative bg-violet-600 rounded-2xl p-8 text-white text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-2xl font-bold mb-4">お問い合わせフォーム</h3>
-                  <p className="text-white/80 mb-6">1〜2営業日以内にご返信いたします</p>
-                  <Link href="/contact">
-                    <Button size="lg" className="bg-white text-violet-600 hover:bg-violet-50 h-12 px-8">
-                      フォームを開く
-                    </Button>
-                  </Link>
-                </div>
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">メールアドレス</label>
+                <input
+                  type="email"
+                  id="email"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all"
+                  placeholder="example@email.com"
+                />
               </div>
-            </div>
+              <div>
+                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">メッセージ</label>
+                <textarea
+                  id="message"
+                  rows={5}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all resize-none"
+                  placeholder="お問い合わせ内容をご記入ください"
+                />
+              </div>
+              <div className="flex gap-4">
+                <Button type="button" variant="outline" className="flex-1 h-12 border-gray-300 hover:bg-gray-50">
+                  キャンセル
+                </Button>
+                <Button type="submit" className="flex-1 h-12 bg-violet-600 hover:bg-violet-700 text-white">
+                  送信する
+                </Button>
+              </div>
+            </form>
           </div>
         </section>
 
-        {/* Final CTA */}
-        <section className="py-20 bg-gray-950 relative overflow-hidden">
-          {/* 控えめな背景 */}
-          <div className="absolute inset-0">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px]">
-              <div className="absolute inset-0 bg-violet-500/10 rounded-full blur-[100px]" />
-            </div>
-          </div>
-
-          <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              今すぐ始めましょう
-            </h2>
-            <p className="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
-              GitHubアカウントがあれば、数分でMCPサーバーを公開できます。
-            </p>
-            <a href="/api/v1/auth/github">
-              <Button size="lg" className="h-14 px-10 bg-white text-gray-900 hover:bg-gray-100 text-lg font-semibold shadow-xl gap-2">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-                </svg>
-                GitHubで始める
-              </Button>
-            </a>
-          </div>
-        </section>
       </main>
 
       <Footer />

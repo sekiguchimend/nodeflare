@@ -120,7 +120,7 @@ impl ServerRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id, workspace_id, name, slug, description, github_repo, github_branch,
                       github_installation_id, runtime, visibility, status, endpoint_url,
-                      created_at, updated_at
+                      rate_limit_per_minute, created_at, updated_at
             "#,
         )
         .bind(data.workspace_id)
@@ -168,7 +168,7 @@ impl ServerRepository {
             WHERE id = $1
             RETURNING id, workspace_id, name, slug, description, github_repo, github_branch,
                       github_installation_id, runtime, visibility, status, endpoint_url,
-                      created_at, updated_at
+                      rate_limit_per_minute, created_at, updated_at
             "#,
         )
         .bind(id)

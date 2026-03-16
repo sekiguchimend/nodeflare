@@ -11,6 +11,7 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod error;
 mod extractors;
 mod middleware;
 mod routes;

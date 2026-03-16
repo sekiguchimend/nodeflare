@@ -115,7 +115,7 @@ export interface PaginatedResponse<T> {
 
 export interface CreateServerRequest {
   name: string;
-  slug: string;
+  slug?: string;
   description?: string;
   github_repo: string;
   github_branch?: string;
@@ -148,4 +148,16 @@ export interface CreateApiKeyResponse {
 export interface CreateSecretRequest {
   key: string;
   value: string;
+}
+
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  private: boolean;
+  html_url: string;
+  default_branch: string;
+  updated_at: string;
+  language: string | null;
 }

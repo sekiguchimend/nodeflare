@@ -27,11 +27,12 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
+      const errorBody = await response.json().catch(() => ({}));
       throw new ApiError(
-        error.error || 'An error occurred',
+        errorBody.error?.message || errorBody.message || 'An error occurred',
         response.status,
-        error.code
+        errorBody.error?.code || errorBody.code,
+        errorBody.error?.details
       );
     }
 
@@ -77,7 +78,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public code?: string
+    public code?: string,
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'ApiError';

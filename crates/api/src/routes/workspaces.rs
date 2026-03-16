@@ -21,13 +21,17 @@ pub async fn list(
 
     let response: Vec<WorkspaceResponse> = workspaces
         .into_iter()
-        .map(|w| WorkspaceResponse {
-            id: w.id,
-            name: w.name,
-            slug: w.slug,
-            plan: w.plan(),
-            role: w.role(),
-            created_at: w.created_at,
+        .map(|w| {
+            let plan = w.plan();
+            let role = w.role();
+            WorkspaceResponse {
+                id: w.id,
+                name: w.name,
+                slug: w.slug,
+                plan,
+                role,
+                created_at: w.created_at,
+            }
         })
         .collect();
 

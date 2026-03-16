@@ -1,4 +1,4 @@
-use crate::models::{CreateUser, UpdateUser, User};
+use crate::models::{CreateUser, UpdateUser, User, UserWithToken};
 use mcp_common::Result;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -128,5 +128,42 @@ impl UserRepository {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn update_github_token(
+        pool: &PgPool,
+        id: Uuid,
+        encrypted_token: &[u8],
+        nonce: &[u8],
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET github_access_token_encrypted = $2, github_access_token_nonce = $3, updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(encrypted_token)
+        .bind(nonce)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_with_token(pool: &PgPool, id: Uuid) -> Result<Option<UserWithToken>> {
+        let user = sqlx::query_as::<_, UserWithToken>(
+            r#"
+            SELECT id, github_id, email, name, avatar_url, github_access_token_encrypted, github_access_token_nonce, created_at, updated_at
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(user)
     }
 }
