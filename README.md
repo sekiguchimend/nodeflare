@@ -1,130 +1,130 @@
-# MCP Cloud
+# Nodeflare
 
-Deploy, manage, and scale MCP servers - Vercel for MCP.
+MCPサーバーをデプロイ・管理・スケールするプラットフォーム - MCP版Vercel
 
-## Architecture
+## アーキテクチャ
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         MCP Cloud                                │
+│                         Nodeflare                               │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │   Next.js   │  │  API Server │  │     Proxy Gateway       │  │
 │  │  Frontend   │──│   (Axum)    │──│   (Rate Limit, Auth)    │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-│         │                │                      │                │
-│         │                │                      │                │
-│  ┌──────┴────────────────┴──────────────────────┴──────────┐    │
-│  │                    PostgreSQL + Redis                     │    │
-│  └──────────────────────────────────────────────────────────┘    │
-│         │                                                        │
-│  ┌──────┴──────┐                                                │
-│  │   Builder   │────────────────────────────────────────────────┤
-│  │   Worker    │         Build & Deploy                         │
-│  └─────────────┘                                                │
-│         │                                                        │
-│  ┌──────┴──────────────────────────────────────────────────┐    │
-│  │              Fly.io Machines (Container Runtime)          │    │
-│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐     │    │
-│  │  │ MCP Srv │  │ MCP Srv │  │ MCP Srv │  │ MCP Srv │     │    │
-│  │  └─────────┘  └─────────┘  └─────────┘  └─────────┘     │    │
-│  └──────────────────────────────────────────────────────────┘    │
+│         │                │                      │               │
+│         │                │                      │               │
+│  ┌──────┴────────────────┴──────────────────────┴──────────┐   │
+│  │                    PostgreSQL + Redis                    │   │
+│  │                    (Neon + Upstash)                      │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│         │                                                       │
+│  ┌──────┴──────┐                                               │
+│  │   Builder   │───────────────────────────────────────────────┤
+│  │   Worker    │         Build & Deploy                        │
+│  └─────────────┘                                               │
+│         │                                                       │
+│  ┌──────┴──────────────────────────────────────────────────┐   │
+│  │              Fly.io Machines (Container Runtime)         │   │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐    │   │
+│  │  │ MCP Srv │  │ MCP Srv │  │ MCP Srv │  │ MCP Srv │    │   │
+│  │  └─────────┘  └─────────┘  └─────────┘  └─────────┘    │   │
+│  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Tech Stack
+## 技術スタック
 
-- **Backend**: Rust (axum, sqlx, tokio)
-- **Frontend**: Next.js 14, TypeScript, Tailwind CSS
+- **Backend**: Rust (Axum, SQLx, Tokio)
+- **Frontend**: Next.js 15, TypeScript, Tailwind CSS
 - **Database**: [Neon](https://neon.tech) (Serverless PostgreSQL)
 - **Cache/Queue**: [Upstash](https://upstash.com) (Serverless Redis)
 - **Container Runtime**: Fly.io Machines
-- **Job Queue**: Apalis (Upstash Redis-backed)
+- **Job Queue**: Apalis (Redis-backed)
 
-## Project Structure
+## プロジェクト構成
 
 ```
-mcp-cloud/
+nodeflare/
 ├── crates/
-│   ├── common/         # Shared types, config, errors
-│   ├── db/             # Database models & migrations
-│   ├── auth/           # JWT, OAuth, API keys, encryption
-│   ├── api/            # Main API server (axum)
-│   ├── proxy/          # MCP Proxy Gateway
-│   ├── builder/        # Build worker (Docker, Fly.io)
-│   ├── queue/          # Job definitions
-│   ├── github/         # GitHub App integration
-│   ├── container/      # Container runtime abstraction
-│   └── mcp-runtime/    # MCP protocol types
+│   ├── api/            # メインAPIサーバー (Axum)
+│   ├── auth/           # JWT, OAuth, APIキー, 暗号化
+│   ├── builder/        # ビルドワーカー (Docker, Fly.io)
+│   ├── common/         # 共通型, 設定, エラー
+│   ├── container/      # コンテナランタイム抽象化
+│   ├── db/             # データベースモデル & マイグレーション
+│   ├── github/         # GitHub App連携
+│   ├── mcp-runtime/    # MCPプロトコル型
+│   ├── proxy/          # MCP Proxyゲートウェイ
+│   └── queue/          # ジョブ定義
 ├── apps/
-│   └── web/            # Next.js frontend
-├── migrations/         # Database migrations
-└── docker/             # Dockerfiles
+│   └── web/            # Next.js フロントエンド
+├── migrations/         # データベースマイグレーション
+├── docker/             # Dockerfiles
+└── infra/              # インフラ設定
 ```
 
-## Getting Started
+## はじめに
 
-### Prerequisites
+### 必要なもの
 
 - Rust 1.75+
 - Node.js 20+
 - Docker & Docker Compose
-- PostgreSQL 15+
-- Redis 7+
 
-### Local Development
+### ローカル開発
 
-1. **Clone and setup**
+1. **クローンとセットアップ**
 
 ```bash
-git clone https://github.com/your-org/mcp-cloud.git
-cd mcp-cloud
+git clone https://github.com/your-org/nodeflare.git
+cd nodeflare
 cp .env.example .env
 ```
 
-2. **Setup Neon (PostgreSQL)**
+2. **Neon (PostgreSQL) のセットアップ**
 
-- Create account at [neon.tech](https://neon.tech)
-- Create a new project
-- Copy the connection string to `.env`:
+- [neon.tech](https://neon.tech) でアカウント作成
+- 新しいプロジェクトを作成
+- 接続文字列を `.env` にコピー:
   ```
-  DATABASE_URL=postgres://user:pass@ep-xxx.region.aws.neon.tech/mcp_cloud?sslmode=require
+  DATABASE_URL=postgresql://user:pass@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
   ```
 
-3. **Setup Upstash (Redis)**
+3. **Upstash (Redis) のセットアップ**
 
-- Create account at [upstash.com](https://upstash.com)
-- Create a new Redis database
-- Copy the connection string to `.env`:
+- [upstash.com](https://upstash.com) でアカウント作成
+- 新しいRedisデータベースを作成
+- 接続文字列を `.env` にコピー:
   ```
   REDIS_URL=rediss://default:xxx@xxx.upstash.io:6379
   ```
 
-4. **Configure other environment variables**
+4. **その他の環境変数を設定**
 
-Edit `.env` with your GitHub OAuth, Fly.io, and encryption keys (see Configuration section below).
+`.env` にGitHub OAuth、Fly.io、暗号化キーを設定（下記の設定セクション参照）
 
-5. **Run database migrations**
+5. **データベースマイグレーション実行**
 
 ```bash
 cargo install sqlx-cli
 sqlx migrate run
 ```
 
-6. **Start backend services**
+6. **バックエンドサービス起動**
 
 ```bash
-# Terminal 1: API Server
+# Terminal 1: APIサーバー
 cargo run --bin mcp-api
 
-# Terminal 2: Proxy Gateway
+# Terminal 2: Proxyゲートウェイ
 cargo run --bin mcp-proxy
 
-# Terminal 3: Builder Worker
+# Terminal 3: Builderワーカー
 cargo run --bin mcp-builder
 ```
 
-7. **Start frontend**
+7. **フロントエンド起動**
 
 ```bash
 cd apps/web
@@ -132,28 +132,27 @@ npm install
 npm run dev
 ```
 
-8. **Open browser**
+8. **ブラウザで開く**
 
-Navigate to http://localhost:3000
+http://localhost:3000 にアクセス
 
-## Configuration
+## 設定
 
-### Required Settings
+### 必須設定
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection string |
-| `JWT_SECRET` | Secret for JWT signing (64+ bytes) |
-| `ENCRYPTION_KEY` | AES-256 key for secret encryption (32 bytes, base64) |
-| `GITHUB_CLIENT_ID` | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret |
-| `GITHUB_APP_ID` | GitHub App ID for repo access |
-| `GITHUB_APP_PRIVATE_KEY` | GitHub App private key (PEM format) |
-| `FLY_API_TOKEN` | Fly.io API token for deployments |
-| `PROXY_BASE_DOMAIN` | Base domain for subdomain routing (e.g., `mcp.cloud`) |
+| 変数 | 説明 |
+|------|------|
+| `DATABASE_URL` | PostgreSQL接続文字列 |
+| `REDIS_URL` | Redis接続文字列 |
+| `JWT_SECRET` | JWT署名用シークレット (64バイト以上) |
+| `ENCRYPTION_KEY` | シークレット暗号化用AES-256キー (32バイト, base64) |
+| `GITHUB_CLIENT_ID` | GitHub OAuth AppのクライアントID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth Appのクライアントシークレット |
+| `GITHUB_APP_ID` | リポジトリアクセス用GitHub App ID |
+| `GITHUB_APP_PRIVATE_KEY` | GitHub App秘密鍵 (PEM形式) |
+| `FLY_API_TOKEN` | デプロイ用Fly.io APIトークン |
 
-### Generating Keys
+### キー生成
 
 ```bash
 # JWT Secret
@@ -163,86 +162,88 @@ openssl rand -base64 64
 openssl rand -base64 32
 ```
 
-## Deployment
+## デプロイ
 
-### Using Docker Compose (Development)
+### Docker Compose (開発用)
 
 ```bash
 docker-compose up -d
 ```
 
-### Production (Fly.io)
+### 本番環境 (Fly.io)
 
 ```bash
-# Deploy API
+# API
 fly deploy -c fly.api.toml
 
-# Deploy Proxy
+# Proxy
 fly deploy -c fly.proxy.toml
 
-# Deploy Web
+# Web
 fly deploy -c fly.web.toml
 ```
 
-## API Endpoints
+## APIエンドポイント
 
-### Authentication
-- `GET /api/v1/auth/github` - Initiate GitHub OAuth
-- `GET /api/v1/auth/github/callback` - OAuth callback
-- `GET /api/v1/auth/me` - Get current user
-- `POST /api/v1/auth/logout` - Logout
+### 認証
+- `GET /api/v1/auth/github` - GitHub OAuth開始
+- `GET /api/v1/auth/github/callback` - OAuthコールバック
+- `GET /api/v1/auth/me` - 現在のユーザー取得
+- `POST /api/v1/auth/refresh` - トークンリフレッシュ
+- `DELETE /api/v1/auth/account` - アカウント削除
 
-### Servers
-- `GET /api/v1/servers` - List servers
-- `POST /api/v1/servers` - Create server
-- `GET /api/v1/servers/:id` - Get server
-- `PATCH /api/v1/servers/:id` - Update server
-- `DELETE /api/v1/servers/:id` - Delete server
-- `POST /api/v1/servers/:id/deploy` - Trigger deployment
+### ワークスペース
+- `GET /api/v1/workspaces` - ワークスペース一覧
+- `POST /api/v1/workspaces` - ワークスペース作成
+- `GET /api/v1/workspaces/:id` - ワークスペース取得
+- `PATCH /api/v1/workspaces/:id` - ワークスペース更新
+- `DELETE /api/v1/workspaces/:id` - ワークスペース削除
 
-### Tools
-- `GET /api/v1/servers/:id/tools` - List tools
-- `PATCH /api/v1/servers/:id/tools/:tool_id` - Update tool
+### サーバー
+- `GET /api/v1/workspaces/:ws_id/servers` - サーバー一覧
+- `POST /api/v1/workspaces/:ws_id/servers` - サーバー作成
+- `GET /api/v1/workspaces/:ws_id/servers/:id` - サーバー取得
+- `PATCH /api/v1/workspaces/:ws_id/servers/:id` - サーバー更新
+- `DELETE /api/v1/workspaces/:ws_id/servers/:id` - サーバー削除
+- `POST /api/v1/workspaces/:ws_id/servers/:id/deploy` - デプロイ実行
+- `POST /api/v1/workspaces/:ws_id/servers/:id/stop` - 停止
+- `POST /api/v1/workspaces/:ws_id/servers/:id/restart` - 再起動
 
-### API Keys
-- `GET /api/v1/api-keys` - List API keys
-- `POST /api/v1/api-keys` - Create API key
-- `DELETE /api/v1/api-keys/:id` - Delete API key
+### ツール
+- `GET /api/v1/workspaces/:ws_id/servers/:id/tools` - ツール一覧
+- `PATCH /api/v1/workspaces/:ws_id/servers/:id/tools/:tool_id` - ツール更新
 
-### Secrets
-- `GET /api/v1/servers/:id/secrets` - List secrets
-- `POST /api/v1/servers/:id/secrets` - Create secret
-- `DELETE /api/v1/servers/:id/secrets/:secret_id` - Delete secret
+### APIキー
+- `GET /api/v1/workspaces/:ws_id/api-keys` - APIキー一覧
+- `POST /api/v1/workspaces/:ws_id/api-keys` - APIキー作成
+- `DELETE /api/v1/workspaces/:ws_id/api-keys/:id` - APIキー削除
+
+### シークレット
+- `GET /api/v1/workspaces/:ws_id/servers/:id/secrets` - シークレット一覧
+- `POST /api/v1/workspaces/:ws_id/servers/:id/secrets` - シークレット設定
+- `DELETE /api/v1/workspaces/:ws_id/servers/:id/secrets/:key` - シークレット削除
 
 ## MCP Proxy
 
-The proxy gateway handles all MCP requests using **subdomain-based routing**:
+Proxyゲートウェイは**サブドメインベースルーティング**でMCPリクエストを処理:
 
 ```
-POST https://{server-slug}.mcp.cloud/mcp
+POST https://{server-slug}.mcp.run/mcp
 Authorization: Bearer {api-key}
 ```
 
-For example, if your server slug is `my-notion-mcp`:
+例: サーバースラッグが `my-notion-mcp` の場合:
 ```
-https://my-notion-mcp.mcp.cloud/mcp
+https://my-notion-mcp.mcp.run/mcp
 ```
 
-Features:
-- **Subdomain-based routing** - Clean URLs like Vercel (`my-app.vercel.app`)
-- API key authentication
-- Rate limiting (sliding window)
-- Request logging
-- Tool-level permissions
+機能:
+- **サブドメインベースルーティング** - VercelのようなクリーンなURL
+- APIキー認証
+- レート制限 (スライディングウィンドウ)
+- リクエストログ
+- ツールレベルの権限管理
 
-### DNS & SSL Configuration (Production)
-
-For subdomain routing to work in production, you need:
-
-1. **Wildcard DNS record**: `*.mcp.cloud -> proxy server IP`
-2. **Wildcard SSL certificate**: `*.mcp.cloud` (use Let's Encrypt with DNS challenge)
-
-## License
-
+## ライセンス
 
 MIT
