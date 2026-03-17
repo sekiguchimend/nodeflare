@@ -1,4 +1,5 @@
 use crate::models::{CreateDeployment, Deployment, UpdateDeployment};
+use chrono::{DateTime, Utc};
 use mcp_common::types::DeploymentStatus;
 use mcp_common::Result;
 use sqlx::PgPool;
@@ -146,5 +147,27 @@ impl DeploymentRepository {
         .await?;
 
         Ok(())
+    }
+
+    /// Count deployments for a workspace since a given date (for monthly limits)
+    pub async fn count_by_workspace_since(
+        pool: &PgPool,
+        workspace_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<i64> {
+        let count: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM deployments d
+            INNER JOIN mcp_servers s ON d.server_id = s.id
+            WHERE s.workspace_id = $1 AND d.started_at >= $2
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(since)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(count.0)
     }
 }

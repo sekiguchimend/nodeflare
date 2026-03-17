@@ -21,7 +21,7 @@ export function Header() {
               <path d="M2 12l10 5 10-5" />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-gray-900">MCP Cloud</span>
+          <span className="text-lg font-semibold text-gray-900">Nodeflare</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">

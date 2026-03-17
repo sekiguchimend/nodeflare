@@ -170,9 +170,9 @@ export default function HomePage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="text-center mb-16">
               <span className="inline-block text-violet-600 text-sm font-medium mb-4">
-                Why MCP Cloud?
+                Why Nodeflare?
               </span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">なぜMCP Cloudなのか</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">なぜNodeflareなのか</h2>
               <p className="mt-4 text-gray-500 text-lg">MCPサーバーをAIから使える状態にするのは、意外と面倒</p>
             </div>
 
@@ -468,7 +468,7 @@ export default function HomePage() {
 
             <div className="space-y-4">
               {[
-                { q: 'MCP Cloudとは何ですか？', a: 'MCP CloudはMCPサーバーをクラウド上でホスティングするサービスです。MCPサーバーとは、Claude等のAIアシスタントが外部のツールやデータにアクセスするためのサーバーです。GitHubリポジトリを接続するだけで、自動でビルド・デプロイが行われます。' },
+                { q: 'Nodeflareとは何ですか？', a: 'NodeflareはMCPサーバーをクラウド上でホスティングするサービスです。MCPサーバーとは、Claude等のAIアシスタントが外部のツールやデータにアクセスするためのサーバーです。GitHubリポジトリを接続するだけで、自動でビルド・デプロイが行われます。' },
                 { q: '無料プランでどこまで使えますか？', a: '無料プランでは、サーバー3つまで、月間10,000リクエストまでご利用いただけます。個人での利用や小規模なプロジェクトには十分な容量です。' },
                 { q: 'どの言語に対応していますか？', a: '現在、TypeScript / JavaScriptに対応しています。Python対応は近日公開予定です。' },
               ].map((item, idx) => (

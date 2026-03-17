@@ -6,4 +6,4 @@ pub mod types;
 pub use config::AppConfig;
 pub use error::{Error, Result};
 pub use events::EventPublisher;
-pub use types::SLUG_REGEX;
+pub use types::{McpMethod, Scope, ScopeChecker, SLUG_REGEX};

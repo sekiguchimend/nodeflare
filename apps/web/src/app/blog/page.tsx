@@ -8,7 +8,7 @@ const posts = [
   {
     slug: 'getting-started-with-mcp',
     title: 'MCPサーバーの始め方：5分でデプロイする方法',
-    excerpt: 'MCP Cloudを使って、初めてのMCPサーバーをデプロイする手順を解説します。GitHubリポジトリの準備から本番公開まで。',
+    excerpt: 'Nodeflareを使って、初めてのMCPサーバーをデプロイする手順を解説します。GitHubリポジトリの準備から本番公開まで。',
     date: '2024年1月15日',
     category: 'チュートリアル',
     readTime: '5分',
@@ -16,7 +16,7 @@ const posts = [
   {
     slug: 'mcp-use-cases',
     title: 'MCPサーバーの活用事例：Notionとの連携からDB操作まで',
-    excerpt: '実際にMCP Cloudで運用されているサーバーの事例を紹介。Notion API連携、データベースクエリ、ファイル操作など。',
+    excerpt: '実際にNodeflareで運用されているサーバーの事例を紹介。Notion API連携、データベースクエリ、ファイル操作など。',
     date: '2024年1月10日',
     category: '事例紹介',
     readTime: '8分',
@@ -40,7 +40,7 @@ const posts = [
   {
     slug: 'monitoring-and-logging',
     title: 'ログとモニタリングで問題を素早く特定する',
-    excerpt: 'MCP Cloudのログ機能を活用して、ツール呼び出しのデバッグやパフォーマンス監視を行う方法。',
+    excerpt: 'Nodeflareのログ機能を活用して、ツール呼び出しのデバッグやパフォーマンス監視を行う方法。',
     date: '2023年12月28日',
     category: '運用',
     readTime: '7分',
@@ -64,7 +64,7 @@ export default function BlogPage() {
         <div className="mb-12">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">ブログ</h1>
           <p className="text-lg text-gray-600">
-            MCP Cloudの使い方、ベストプラクティス、アップデート情報をお届けします。
+            Nodeflareの使い方、ベストプラクティス、アップデート情報をお届けします。
           </p>
         </div>
 

@@ -100,6 +100,20 @@ export default function ApiKeysPage() {
   );
 }
 
+// Predefined scopes with descriptions
+const PREDEFINED_SCOPES = [
+  { value: '*', label: 'Full Access', description: 'All permissions (tools, resources, prompts)' },
+  { value: 'tools:*', label: 'Tools - All', description: 'List and call any tool' },
+  { value: 'tools:list', label: 'Tools - List Only', description: 'Only list available tools' },
+  { value: 'tools:call', label: 'Tools - Call Any', description: 'Call any tool (includes list)' },
+  { value: 'resources:*', label: 'Resources - All', description: 'List and read any resource' },
+  { value: 'resources:list', label: 'Resources - List Only', description: 'Only list resources' },
+  { value: 'resources:read', label: 'Resources - Read Any', description: 'Read any resource' },
+  { value: 'prompts:*', label: 'Prompts - All', description: 'List and get any prompt' },
+  { value: 'prompts:list', label: 'Prompts - List Only', description: 'Only list prompts' },
+  { value: 'prompts:get', label: 'Prompts - Get Any', description: 'Get any prompt content' },
+] as const;
+
 function CreateApiKeyForm({
   onClose,
   onCreated,
@@ -110,6 +124,8 @@ function CreateApiKeyForm({
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [rateLimit, setRateLimit] = useState('1000');
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(['*']);
+  const [customScope, setCustomScope] = useState('');
 
   const createMutation = useMutation({
     mutationFn: (data: CreateApiKeyRequest) =>
@@ -120,11 +136,46 @@ function CreateApiKeyForm({
     },
   });
 
+  const toggleScope = (scope: string) => {
+    if (scope === '*') {
+      // If selecting full access, clear other scopes
+      setSelectedScopes(['*']);
+    } else {
+      setSelectedScopes((prev) => {
+        // Remove '*' if selecting specific scopes
+        const filtered = prev.filter((s) => s !== '*');
+        if (filtered.includes(scope)) {
+          const result = filtered.filter((s) => s !== scope);
+          return result.length === 0 ? ['*'] : result;
+        } else {
+          return [...filtered, scope];
+        }
+      });
+    }
+  };
+
+  const addCustomScope = () => {
+    if (customScope && !selectedScopes.includes(customScope)) {
+      setSelectedScopes((prev) => {
+        const filtered = prev.filter((s) => s !== '*');
+        return [...filtered, customScope];
+      });
+      setCustomScope('');
+    }
+  };
+
+  const removeScope = (scope: string) => {
+    setSelectedScopes((prev) => {
+      const result = prev.filter((s) => s !== scope);
+      return result.length === 0 ? ['*'] : result;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate({
       name,
-      scopes: ['*'],
+      scopes: selectedScopes,
       rate_limit: parseInt(rateLimit, 10),
     });
   };
@@ -146,6 +197,76 @@ function CreateApiKeyForm({
               required
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>Scopes (Permissions)</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {PREDEFINED_SCOPES.map((scope) => (
+                <label
+                  key={scope.value}
+                  className={`flex items-start space-x-2 p-2 rounded border cursor-pointer transition-colors ${
+                    selectedScopes.includes(scope.value)
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedScopes.includes(scope.value)}
+                    onChange={() => toggleScope(scope.value)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-medium text-sm">{scope.label}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {scope.description}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="customScope">Custom Scope (Optional)</Label>
+            <div className="flex space-x-2">
+              <Input
+                id="customScope"
+                placeholder="tools:call:specific_tool_name"
+                value={customScope}
+                onChange={(e) => setCustomScope(e.target.value)}
+              />
+              <Button type="button" variant="outline" onClick={addCustomScope}>
+                Add
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Examples: <code>tools:call:get_weather</code>, <code>resources:read:file://data</code>
+            </p>
+          </div>
+
+          {selectedScopes.length > 0 && !selectedScopes.includes('*') && (
+            <div className="space-y-2">
+              <Label>Selected Scopes</Label>
+              <div className="flex flex-wrap gap-2">
+                {selectedScopes.map((scope) => (
+                  <span
+                    key={scope}
+                    className="inline-flex items-center px-2 py-1 text-xs bg-secondary rounded"
+                  >
+                    <code>{scope}</code>
+                    <button
+                      type="button"
+                      onClick={() => removeScope(scope)}
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="rateLimit">Rate Limit (requests/hour)</Label>
@@ -189,20 +310,38 @@ function ApiKeyRow({ apiKey }: { apiKey: ApiKey }) {
     },
   });
 
+  const formatScopes = (scopes: string[]) => {
+    if (scopes.includes('*')) return 'Full Access';
+    if (scopes.length === 0) return 'No permissions';
+    if (scopes.length <= 2) return scopes.join(', ');
+    return `${scopes.slice(0, 2).join(', ')} +${scopes.length - 2} more`;
+  };
+
   return (
     <div className="p-4 flex items-center justify-between">
-      <div>
+      <div className="space-y-1">
         <div className="font-medium">{apiKey.name}</div>
         <div className="text-sm text-muted-foreground">
           <code>{apiKey.key_prefix}...</code>
           <span className="mx-2">•</span>
-          Rate limit: {apiKey.rate_limit}/hr
+          {apiKey.rate_limit && <>Rate: {apiKey.rate_limit}/hr</>}
           {apiKey.last_used_at && (
             <>
               <span className="mx-2">•</span>
               Last used: {new Date(apiKey.last_used_at).toLocaleDateString()}
             </>
           )}
+        </div>
+        <div className="flex flex-wrap gap-1 mt-1">
+          {apiKey.scopes?.map((scope) => (
+            <span
+              key={scope}
+              className="inline-flex items-center px-1.5 py-0.5 text-xs bg-secondary rounded"
+              title={scope}
+            >
+              {scope === '*' ? 'Full Access' : scope}
+            </span>
+          ))}
         </div>
       </div>
       <Button

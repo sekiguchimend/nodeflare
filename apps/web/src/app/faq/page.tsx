@@ -10,8 +10,8 @@ const faqs = [
     category: '基本',
     questions: [
       {
-        q: 'MCP Cloudとは何ですか？',
-        a: 'MCP CloudはMCPサーバーをクラウド上でホスティングするサービスです。MCPサーバーとは、Claude等のAIアシスタントが外部のツールやデータにアクセスするためのサーバーです。GitHubリポジトリを接続するだけで、自動でビルド・デプロイが行われます。',
+        q: 'Nodeflareとは何ですか？',
+        a: 'NodeflareはMCPサーバーをクラウド上でホスティングするサービスです。MCPサーバーとは、Claude等のAIアシスタントが外部のツールやデータにアクセスするためのサーバーです。GitHubリポジトリを接続するだけで、自動でビルド・デプロイが行われます。',
       },
       {
         q: 'MCPサーバーとは何ですか？',
@@ -95,7 +95,7 @@ export default function FAQPage() {
         <div className="mb-12 text-center">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">よくある質問</h1>
           <p className="text-lg text-gray-600">
-            MCP Cloudについてのよくある質問と回答です。
+            Nodeflareについてのよくある質問と回答です。
           </p>
         </div>
 

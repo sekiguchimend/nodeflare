@@ -50,7 +50,7 @@ export default function PricingPage() {
       <header className="border-b">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold">
-            MCP Cloud
+            Nodeflare
           </Link>
           <nav className="flex items-center gap-4">
             {user ? (
@@ -291,7 +291,7 @@ export default function PricingPage() {
       {/* Footer */}
       <footer className="border-t py-12">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} MCP Cloud. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Nodeflare. All rights reserved.</p>
         </div>
       </footer>
     </div>

@@ -81,6 +81,10 @@ impl AppError {
     pub fn unauthorized(message: &str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, "UNAUTHORIZED", message)
     }
+
+    pub fn payment_required(code: &str, message: &str) -> Self {
+        Self::new(StatusCode::PAYMENT_REQUIRED, code, message)
+    }
 }
 
 impl IntoResponse for AppError {

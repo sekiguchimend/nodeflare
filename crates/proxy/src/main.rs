@@ -8,8 +8,8 @@ use axum::{
     Router,
 };
 use fred::interfaces::ClientLike;
-use mcp_common::AppConfig;
-use mcp_db::{ApiKeyRepository, McpServer, ServerRepository, ToolRepository};
+use mcp_common::{AppConfig, McpMethod};
+use mcp_db::{ApiKey, ApiKeyRepository, McpServer, ServerRepository};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::TcpListener;
@@ -116,7 +116,8 @@ async fn proxy_handler(
     let query = uri.query().map(|q| format!("?{}", q)).unwrap_or_default();
     let target_url = format!("{}{}{}", endpoint_url, path, query);
 
-    let (response, tool_name) = forward_request(&state, &target_url, request).await?;
+    // 5. Forward request (includes scope check)
+    let (response, mcp_info) = forward_request(&state, &target_url, request, &api_key_record).await?;
 
     // 6. Log request (async, don't block)
     let duration_ms = start.elapsed().as_millis() as i32;
@@ -127,6 +128,7 @@ async fn proxy_handler(
     } else {
         "error"
     };
+    let tool_name = mcp_info.target.clone();
 
     let db = state.db.clone();
     tokio::spawn(async move {
@@ -156,30 +158,120 @@ async fn resolve_server(state: &ProxyState, slug: &str) -> Result<McpServer, Pro
         .ok_or_else(|| ProxyError::NotFound("Server not found".into()))
 }
 
-/// Extract tool name from MCP JSON-RPC request body
-fn extract_tool_name(body: &[u8]) -> Option<String> {
-    // Try to parse as JSON-RPC request
+/// Extracted MCP request info for scope checking and logging
+#[derive(Debug, Clone)]
+struct McpRequestInfo {
+    method: McpMethod,
+    method_str: Option<String>,
+    target: Option<String>,
+}
+
+/// Extract MCP method and target from JSON-RPC request body
+fn extract_mcp_request_info(body: &[u8]) -> McpRequestInfo {
+    let mut info = McpRequestInfo {
+        method: McpMethod::Unknown,
+        method_str: None,
+        target: None,
+    };
+
     if let Ok(json) = serde_json::from_slice::<serde_json::Value>(body) {
-        // Check if it's a tools/call method
-        if let Some(method) = json.get("method").and_then(|m| m.as_str()) {
-            if method == "tools/call" {
-                // Extract tool name from params.name
-                return json
-                    .get("params")
-                    .and_then(|p| p.get("name"))
-                    .and_then(|n| n.as_str())
-                    .map(String::from);
+        if let Some(method_str) = json.get("method").and_then(|m| m.as_str()) {
+            info.method_str = Some(method_str.to_string());
+            info.method = McpMethod::parse(method_str);
+
+            // Extract target based on method type
+            match info.method {
+                McpMethod::ToolsCall => {
+                    // Extract tool name from params.name
+                    info.target = json
+                        .get("params")
+                        .and_then(|p| p.get("name"))
+                        .and_then(|n| n.as_str())
+                        .map(String::from);
+                }
+                McpMethod::ResourcesRead => {
+                    // Extract resource URI from params.uri
+                    info.target = json
+                        .get("params")
+                        .and_then(|p| p.get("uri"))
+                        .and_then(|u| u.as_str())
+                        .map(String::from);
+                }
+                McpMethod::PromptsGet => {
+                    // Extract prompt name from params.name
+                    info.target = json
+                        .get("params")
+                        .and_then(|p| p.get("name"))
+                        .and_then(|n| n.as_str())
+                        .map(String::from);
+                }
+                _ => {}
             }
         }
     }
-    None
+
+    info
+}
+
+/// Check if API key has permission for the MCP request
+fn check_scope_permission(api_key: &ApiKey, mcp_info: &McpRequestInfo) -> Result<(), ProxyError> {
+    // Unknown methods are allowed (forward compatibility)
+    if matches!(mcp_info.method, McpMethod::Unknown) {
+        return Ok(());
+    }
+
+    let allowed = api_key.is_method_allowed(mcp_info.method, mcp_info.target.as_deref());
+
+    if allowed {
+        Ok(())
+    } else {
+        let scope_needed = match mcp_info.method {
+            McpMethod::ToolsList => "tools:list or tools:*",
+            McpMethod::ToolsCall => {
+                if let Some(ref tool) = mcp_info.target {
+                    return Err(ProxyError::Forbidden(format!(
+                        "API key lacks permission for tools:call:{} (need tools:call, tools:call:{}, or tools:*)",
+                        tool, tool
+                    )));
+                }
+                "tools:call or tools:*"
+            }
+            McpMethod::ResourcesList => "resources:list or resources:*",
+            McpMethod::ResourcesRead => {
+                if let Some(ref uri) = mcp_info.target {
+                    return Err(ProxyError::Forbidden(format!(
+                        "API key lacks permission for resources:read:{} (need resources:read, resources:read:{}, or resources:*)",
+                        uri, uri
+                    )));
+                }
+                "resources:read or resources:*"
+            }
+            McpMethod::PromptsList => "prompts:list or prompts:*",
+            McpMethod::PromptsGet => {
+                if let Some(ref name) = mcp_info.target {
+                    return Err(ProxyError::Forbidden(format!(
+                        "API key lacks permission for prompts:get:{} (need prompts:get, prompts:get:{}, or prompts:*)",
+                        name, name
+                    )));
+                }
+                "prompts:get or prompts:*"
+            }
+            McpMethod::Unknown => return Ok(()),
+        };
+
+        Err(ProxyError::Forbidden(format!(
+            "API key lacks required scope: {}",
+            scope_needed
+        )))
+    }
 }
 
 async fn forward_request(
     state: &ProxyState,
     target_url: &str,
     request: Request<Body>,
-) -> Result<(Response, Option<String>), ProxyError> {
+    api_key: &ApiKey,
+) -> Result<(Response, McpRequestInfo), ProxyError> {
     let method = request.method().clone();
     let headers = request.headers().clone();
 
@@ -188,8 +280,11 @@ async fn forward_request(
         .await
         .map_err(|e| ProxyError::BadRequest(format!("Failed to read body: {}", e)))?;
 
-    // Extract tool name from request body
-    let tool_name = extract_tool_name(&body_bytes);
+    // Extract MCP request info (method + target)
+    let mcp_info = extract_mcp_request_info(&body_bytes);
+
+    // Check scope permission before forwarding
+    check_scope_permission(api_key, &mcp_info)?;
 
     // Build outgoing request
     let mut req_builder = state.http_client.request(method, target_url);
@@ -226,7 +321,7 @@ async fn forward_request(
         .body(Body::from(body))
         .map_err(|e| ProxyError::Internal(e.to_string()))?;
 
-    Ok((response, tool_name))
+    Ok((response, mcp_info))
 }
 
 /// Extract server slug from subdomain

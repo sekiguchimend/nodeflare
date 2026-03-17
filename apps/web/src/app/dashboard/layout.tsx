@@ -57,7 +57,7 @@ export default function DashboardLayout({
         <div className="p-4 border-b flex items-center justify-between">
           {sidebarOpen && (
             <Link href="/dashboard" className="text-xl font-bold">
-              MCP Cloud
+              Nodeflare
             </Link>
           )}
           <button
@@ -117,7 +117,7 @@ function NavLink({ href, icon, children, collapsed }: { href: string; icon: Reac
       className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-accent transition-colors ${collapsed ? 'justify-center' : ''}`}
       title={collapsed ? String(children) : undefined}
     >
-      {icon}
+      <span className="flex-shrink-0 w-5 h-5">{icon}</span>
       {!collapsed && <span>{children}</span>}
     </Link>
   );

@@ -72,6 +72,11 @@ pub async fn create_checkout(
     Path(workspace_id): Path<Uuid>,
     Json(body): Json<CreateCheckoutRequest>,
 ) -> Result<Json<CheckoutResponse>, (StatusCode, String)> {
+    // Validate plan is one of the allowed values (server-side validation)
+    if !matches!(body.plan.as_str(), "pro" | "team" | "enterprise") {
+        return Err((StatusCode::BAD_REQUEST, "Invalid plan. Must be one of: pro, team, enterprise".to_string()));
+    }
+
     // Verify user is owner/admin
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
@@ -87,11 +92,16 @@ pub async fn create_checkout(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
+    // Prevent duplicate subscriptions - check if already has active subscription
+    if workspace.stripe_subscription_id.is_some() {
+        return Err((StatusCode::CONFLICT, "Workspace already has an active subscription. Please cancel the existing subscription first or use the billing portal to change plans.".to_string()));
+    }
+
     let billing = state.billing.as_ref()
         .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing not configured".to_string()))?;
 
     // Get or create Stripe customer
-    let customer_id = if let Some(id) = workspace.stripe_customer_id {
+    let customer_id = if let Some(id) = workspace.stripe_customer_id.clone() {
         id
     } else {
         // Get user info to create customer
@@ -105,12 +115,19 @@ pub async fn create_checkout(
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        customer.id.to_string()
+        let customer_id = customer.id.to_string();
+
+        // Save customer ID to workspace
+        WorkspaceRepository::update_stripe_customer(&state.db, workspace_id, &customer_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        customer_id
     };
 
-    // Get price ID based on plan and interval
+    // Get price ID based on plan and interval (server-side only - never trust client price_id)
     let price_id = get_price_id(&body.plan, body.yearly)
-        .ok_or((StatusCode::BAD_REQUEST, "Invalid plan".to_string()))?;
+        .ok_or((StatusCode::BAD_REQUEST, "Price not configured for this plan".to_string()))?;
 
     // Create checkout session
     let session = billing
@@ -121,6 +138,50 @@ pub async fn create_checkout(
     Ok(Json(CheckoutResponse {
         checkout_url: session.url.unwrap_or_default(),
         session_id: session.id.to_string(),
+    }))
+}
+
+/// Cancel subscription
+pub async fn cancel_subscription(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(workspace_id): Path<Uuid>,
+) -> Result<Json<CancelResponse>, (StatusCode, String)> {
+    // Verify user is owner/admin
+    let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
+
+    if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
+        return Err((StatusCode::FORBIDDEN, "Only owners and admins can manage billing".to_string()));
+    }
+
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+
+    let subscription_id = workspace
+        .stripe_subscription_id
+        .ok_or((StatusCode::BAD_REQUEST, "No active subscription to cancel".to_string()))?;
+
+    let billing = state.billing.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing not configured".to_string()))?;
+
+    // Cancel subscription in Stripe
+    let subscription = billing
+        .cancel_subscription(&subscription_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to cancel subscription: {}", e)))?;
+
+    // The webhook will handle updating the database when Stripe confirms cancellation
+    // But we can return the cancellation status immediately
+
+    Ok(Json(CancelResponse {
+        status: subscription.status.to_string(),
+        cancel_at_period_end: subscription.cancel_at_period_end,
+        current_period_end: Some(subscription.current_period_end),
     }))
 }
 
@@ -255,4 +316,11 @@ pub struct CheckoutResponse {
 #[derive(Debug, Serialize)]
 pub struct PortalResponse {
     pub portal_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CancelResponse {
+    pub status: String,
+    pub cancel_at_period_end: bool,
+    pub current_period_end: Option<i64>,
 }

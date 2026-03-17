@@ -3,6 +3,8 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::Datelike;
+use mcp_billing::Plan as BillingPlan;
 use mcp_common::types::{CreateServerRequest, PaginationParams, ServerResponse, UpdateServerRequest};
 use mcp_db::{CreateServer, ServerRepository, UpdateServer, WorkspaceRepository};
 use serde_json::json;
@@ -144,6 +146,47 @@ pub async fn create(
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
         return Err(AppError::forbidden("Viewers cannot create servers. You need Editor or Admin role."));
+    }
+
+    // Get workspace to check plan limits
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error fetching workspace: {}", e);
+            AppError::internal("Failed to fetch workspace")
+        })?
+        .ok_or_else(|| AppError::not_found("Workspace not found"))?;
+
+    // Check plan limits for server count
+    let billing_plan = match workspace.plan.as_str() {
+        "pro" => BillingPlan::Pro,
+        "team" => BillingPlan::Team,
+        "enterprise" => BillingPlan::Enterprise,
+        _ => BillingPlan::Free,
+    };
+    let limits = billing_plan.limits();
+
+    let current_server_count = ServerRepository::count_by_workspace(&state.db, workspace_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error counting servers: {}", e);
+            AppError::internal("Failed to check server count")
+        })?;
+
+    if current_server_count >= limits.max_servers as i64 {
+        return Err(AppError::payment_required(
+            "SERVER_LIMIT_REACHED",
+            &format!(
+                "You have reached the maximum number of servers ({}) for your {} plan. Please upgrade to create more servers.",
+                limits.max_servers,
+                workspace.plan
+            ),
+        ).with_details(json!({
+            "current_count": current_server_count,
+            "max_allowed": limits.max_servers,
+            "plan": workspace.plan,
+            "upgrade_url": "/dashboard/billing"
+        })));
     }
 
     // Check if slug is already taken
@@ -421,6 +464,48 @@ pub async fn deploy(
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
         return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
+    }
+
+    // Get workspace to check plan limits
+    let workspace = WorkspaceRepository::find_by_id(&state.db, path.workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+
+    // Check deployment limits for this month
+    let billing_plan = match workspace.plan.as_str() {
+        "pro" => BillingPlan::Pro,
+        "team" => BillingPlan::Team,
+        "enterprise" => BillingPlan::Enterprise,
+        _ => BillingPlan::Free,
+    };
+    let limits = billing_plan.limits();
+
+    // Get first day of current month
+    let now = chrono::Utc::now();
+    let month_start = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_utc();
+
+    let deployments_this_month = mcp_db::DeploymentRepository::count_by_workspace_since(
+        &state.db,
+        path.workspace_id,
+        month_start,
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if deployments_this_month >= limits.max_deployments_per_month as i64 {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            format!(
+                "You have reached the maximum number of deployments ({}) for your {} plan this month. Please upgrade to deploy more.",
+                limits.max_deployments_per_month,
+                workspace.plan
+            ),
+        ));
     }
 
     // Get server

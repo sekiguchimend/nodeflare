@@ -129,6 +129,264 @@ impl Default for ToolPermissionLevel {
 }
 
 // ============================================================================
+// API Key Scopes
+// ============================================================================
+
+/// MCP API Key Scope definitions
+///
+/// Scope format: `{resource}:{action}` or `{resource}:{action}:{target}`
+///
+/// Examples:
+/// - `*` - Full access (all permissions)
+/// - `tools:*` - All tool operations
+/// - `tools:list` - List available tools
+/// - `tools:call` - Call any tool
+/// - `tools:call:get_weather` - Call only the `get_weather` tool
+/// - `resources:*` - All resource operations
+/// - `resources:list` - List resources
+/// - `resources:read` - Read resources
+/// - `prompts:*` - All prompt operations
+/// - `prompts:list` - List prompts
+/// - `prompts:get` - Get prompt content
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scope {
+    /// Full access to everything
+    All,
+    /// All tool operations
+    ToolsAll,
+    /// List available tools
+    ToolsList,
+    /// Call any tool
+    ToolsCall,
+    /// Call a specific tool only
+    ToolsCallSpecific(String),
+    /// All resource operations
+    ResourcesAll,
+    /// List resources
+    ResourcesList,
+    /// Read resources
+    ResourcesRead,
+    /// Read a specific resource only
+    ResourcesReadSpecific(String),
+    /// All prompt operations
+    PromptsAll,
+    /// List prompts
+    PromptsList,
+    /// Get prompt content
+    PromptsGet,
+    /// Get a specific prompt only
+    PromptsGetSpecific(String),
+}
+
+impl Scope {
+    /// Parse a scope string into a Scope enum
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "*" => Some(Scope::All),
+            "tools:*" => Some(Scope::ToolsAll),
+            "tools:list" => Some(Scope::ToolsList),
+            "tools:call" => Some(Scope::ToolsCall),
+            "resources:*" => Some(Scope::ResourcesAll),
+            "resources:list" => Some(Scope::ResourcesList),
+            "resources:read" => Some(Scope::ResourcesRead),
+            "prompts:*" => Some(Scope::PromptsAll),
+            "prompts:list" => Some(Scope::PromptsList),
+            "prompts:get" => Some(Scope::PromptsGet),
+            _ => {
+                // Check for specific target scopes
+                if let Some(tool_name) = s.strip_prefix("tools:call:") {
+                    Some(Scope::ToolsCallSpecific(tool_name.to_string()))
+                } else if let Some(resource_uri) = s.strip_prefix("resources:read:") {
+                    Some(Scope::ResourcesReadSpecific(resource_uri.to_string()))
+                } else if let Some(prompt_name) = s.strip_prefix("prompts:get:") {
+                    Some(Scope::PromptsGetSpecific(prompt_name.to_string()))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// Convert scope to string representation
+    pub fn as_str(&self) -> String {
+        match self {
+            Scope::All => "*".to_string(),
+            Scope::ToolsAll => "tools:*".to_string(),
+            Scope::ToolsList => "tools:list".to_string(),
+            Scope::ToolsCall => "tools:call".to_string(),
+            Scope::ToolsCallSpecific(name) => format!("tools:call:{}", name),
+            Scope::ResourcesAll => "resources:*".to_string(),
+            Scope::ResourcesList => "resources:list".to_string(),
+            Scope::ResourcesRead => "resources:read".to_string(),
+            Scope::ResourcesReadSpecific(uri) => format!("resources:read:{}", uri),
+            Scope::PromptsAll => "prompts:*".to_string(),
+            Scope::PromptsList => "prompts:list".to_string(),
+            Scope::PromptsGet => "prompts:get".to_string(),
+            Scope::PromptsGetSpecific(name) => format!("prompts:get:{}", name),
+        }
+    }
+}
+
+/// MCP method to required scope mapping
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpMethod {
+    ToolsList,
+    ToolsCall,
+    ResourcesList,
+    ResourcesRead,
+    PromptsList,
+    PromptsGet,
+    Unknown,
+}
+
+impl McpMethod {
+    /// Parse MCP JSON-RPC method string
+    pub fn parse(method: &str) -> Self {
+        match method {
+            "tools/list" => McpMethod::ToolsList,
+            "tools/call" => McpMethod::ToolsCall,
+            "resources/list" => McpMethod::ResourcesList,
+            "resources/read" => McpMethod::ResourcesRead,
+            "prompts/list" => McpMethod::PromptsList,
+            "prompts/get" => McpMethod::PromptsGet,
+            _ => McpMethod::Unknown,
+        }
+    }
+}
+
+/// Scope checker for API key authorization
+pub struct ScopeChecker {
+    scopes: Vec<Scope>,
+}
+
+impl ScopeChecker {
+    /// Create a new scope checker from a list of scope strings
+    pub fn new(scope_strings: &[String]) -> Self {
+        let scopes: Vec<Scope> = scope_strings
+            .iter()
+            .filter_map(|s| Scope::parse(s))
+            .collect();
+        Self { scopes }
+    }
+
+    /// Check if the API key has permission for an MCP method
+    pub fn is_allowed(&self, method: McpMethod, target: Option<&str>) -> bool {
+        // If no valid scopes, deny by default
+        if self.scopes.is_empty() {
+            return false;
+        }
+
+        for scope in &self.scopes {
+            match scope {
+                // Wildcard allows everything
+                Scope::All => return true,
+
+                // Tools scopes
+                Scope::ToolsAll => {
+                    if matches!(method, McpMethod::ToolsList | McpMethod::ToolsCall) {
+                        return true;
+                    }
+                }
+                Scope::ToolsList => {
+                    if matches!(method, McpMethod::ToolsList) {
+                        return true;
+                    }
+                }
+                Scope::ToolsCall => {
+                    if matches!(method, McpMethod::ToolsCall) {
+                        return true;
+                    }
+                }
+                Scope::ToolsCallSpecific(allowed_tool) => {
+                    if matches!(method, McpMethod::ToolsCall) {
+                        if let Some(tool_name) = target {
+                            if tool_name == allowed_tool {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                // Resources scopes
+                Scope::ResourcesAll => {
+                    if matches!(method, McpMethod::ResourcesList | McpMethod::ResourcesRead) {
+                        return true;
+                    }
+                }
+                Scope::ResourcesList => {
+                    if matches!(method, McpMethod::ResourcesList) {
+                        return true;
+                    }
+                }
+                Scope::ResourcesRead => {
+                    if matches!(method, McpMethod::ResourcesRead) {
+                        return true;
+                    }
+                }
+                Scope::ResourcesReadSpecific(allowed_uri) => {
+                    if matches!(method, McpMethod::ResourcesRead) {
+                        if let Some(uri) = target {
+                            if uri == allowed_uri {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                // Prompts scopes
+                Scope::PromptsAll => {
+                    if matches!(method, McpMethod::PromptsList | McpMethod::PromptsGet) {
+                        return true;
+                    }
+                }
+                Scope::PromptsList => {
+                    if matches!(method, McpMethod::PromptsList) {
+                        return true;
+                    }
+                }
+                Scope::PromptsGet => {
+                    if matches!(method, McpMethod::PromptsGet) {
+                        return true;
+                    }
+                }
+                Scope::PromptsGetSpecific(allowed_prompt) => {
+                    if matches!(method, McpMethod::PromptsGet) {
+                        if let Some(prompt_name) = target {
+                            if prompt_name == allowed_prompt {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Check if the API key has any valid scopes
+    pub fn has_any_scope(&self) -> bool {
+        !self.scopes.is_empty()
+    }
+
+    /// Get list of available predefined scopes (for UI)
+    pub fn predefined_scopes() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("*", "Full access - all permissions"),
+            ("tools:*", "Tools - all operations"),
+            ("tools:list", "Tools - list only"),
+            ("tools:call", "Tools - execute any tool"),
+            ("resources:*", "Resources - all operations"),
+            ("resources:list", "Resources - list only"),
+            ("resources:read", "Resources - read any"),
+            ("prompts:*", "Prompts - all operations"),
+            ("prompts:list", "Prompts - list only"),
+            ("prompts:get", "Prompts - get any"),
+        ]
+    }
+}
+
+// ============================================================================
 // Request DTOs
 // ============================================================================
 

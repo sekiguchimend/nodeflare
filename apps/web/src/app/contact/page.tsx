@@ -52,7 +52,7 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <h3 className="font-medium text-gray-900">メール</h3>
-                  <p className="text-gray-600">support@mcpcloud.dev</p>
+                  <p className="text-gray-600">support@nodeflare.dev</p>
                 </div>
               </div>
 

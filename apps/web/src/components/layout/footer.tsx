@@ -14,7 +14,7 @@ export function Footer() {
                   <path d="M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="font-semibold text-white">MCP Cloud</span>
+              <span className="font-semibold text-white">Nodeflare</span>
             </div>
             <p className="text-gray-400 text-sm">
               MCPサーバーのホスティングプラットフォーム
@@ -48,7 +48,7 @@ export function Footer() {
         </div>
 
         <div className="pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
-          © 2024 MCP Cloud. All rights reserved.
+          © 2024 Nodeflare. All rights reserved.
         </div>
       </div>
     </footer>

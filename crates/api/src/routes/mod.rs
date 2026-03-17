@@ -133,6 +133,10 @@ pub fn api_router() -> Router<Arc<AppState>> {
             "/workspaces/:workspace_id/billing/portal",
             post(billing::create_portal_session),
         )
+        .route(
+            "/workspaces/:workspace_id/billing/cancel",
+            post(billing::cancel_subscription),
+        )
         // Stripe webhook (no auth required)
         .route("/webhooks/stripe", post(billing::handle_webhook))
 }

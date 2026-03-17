@@ -92,7 +92,7 @@ export default function NewServerPage() {
     <div className="max-w-2xl mx-auto">
       {isFirstServer && (
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Welcome to MCP Cloud</h1>
+          <h1 className="text-3xl font-bold mb-2">Welcome to Nodeflare</h1>
           <p className="text-muted-foreground">
             Deploy your first MCP server in seconds. Connect your GitHub repository and we'll handle the rest.
           </p>

@@ -1,5 +1,4 @@
 use chrono::{Duration, Utc};
-use mcp_common::Result;
 use mcp_db::models::CreateApiKey;
 use rand::Rng;
 use ring::digest::{digest, SHA256};

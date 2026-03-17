@@ -121,6 +121,29 @@ impl WorkspaceRepository {
         Ok(workspace)
     }
 
+    /// Update Stripe customer ID only
+    pub async fn update_stripe_customer(
+        pool: &PgPool,
+        id: Uuid,
+        customer_id: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE workspaces
+            SET
+                stripe_customer_id = $2,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(customer_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Update Stripe customer and subscription IDs
     pub async fn update_stripe_ids(
         pool: &PgPool,

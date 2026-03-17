@@ -1,10 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface Plan {
   plan: string;
@@ -85,6 +96,19 @@ export default function BillingPage() {
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.post<{ status: string; cancel_at_period_end: boolean; current_period_end: number | null }>(
+        `/workspaces/${currentWorkspace?.id}/billing/cancel`
+      );
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscription', currentWorkspace?.id] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+
   const isLoading = workspacesLoading || plansLoading || subscriptionLoading;
 
   if (isLoading) {
@@ -127,13 +151,39 @@ export default function BillingPage() {
               )}
             </div>
             {subscription?.stripe_subscription_id && (
-              <Button
-                variant="outline"
-                onClick={() => portalMutation.mutate()}
-                disabled={portalMutation.isPending}
-              >
-                {portalMutation.isPending ? 'Loading...' : 'Manage Subscription'}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => portalMutation.mutate()}
+                  disabled={portalMutation.isPending}
+                >
+                  {portalMutation.isPending ? 'Loading...' : 'Manage Subscription'}
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" disabled={cancelMutation.isPending}>
+                      {cancelMutation.isPending ? 'Cancelling...' : 'Cancel Subscription'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to cancel your subscription? You will continue to have access until the end of your current billing period, after which your account will be downgraded to the Free plan.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => cancelMutation.mutate()}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Yes, Cancel Subscription
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             )}
           </div>
         </CardContent>
