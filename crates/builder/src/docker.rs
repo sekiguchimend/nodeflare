@@ -175,6 +175,8 @@ fn add_dockerfile_to_tar(original_tar: &[u8], runtime: &str) -> Result<Vec<u8>> 
     let dockerfile = match runtime {
         "node" => generate_node_dockerfile(),
         "python" => generate_python_dockerfile(),
+        "go" => generate_go_dockerfile(),
+        "rust" => generate_rust_dockerfile(),
         _ => generate_docker_dockerfile(),
     };
 
@@ -233,6 +235,66 @@ COPY . .
 EXPOSE 8000
 
 CMD ["python", "main.py"]
+"#
+    .to_string()
+}
+
+fn generate_go_dockerfile() -> String {
+    r#"
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server .
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/server .
+
+EXPOSE 8080
+
+CMD ["./server"]
+"#
+    .to_string()
+}
+
+fn generate_rust_dockerfile() -> String {
+    r#"
+FROM rust:1.75-alpine AS builder
+
+RUN apk add --no-cache musl-dev
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release
+RUN rm -rf src
+
+COPY . .
+RUN touch src/main.rs
+RUN cargo build --release
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/mcp-server .
+
+EXPOSE 8080
+
+CMD ["./mcp-server"]
 "#
     .to_string()
 }

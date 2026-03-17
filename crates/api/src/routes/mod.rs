@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod billing;
 pub mod github;
 pub mod health;
 pub mod openapi;
@@ -10,6 +11,7 @@ pub mod deployments;
 pub mod api_keys;
 pub mod secrets;
 pub mod logs;
+pub mod ws;
 
 use axum::{routing::{get, post, patch, delete}, Router};
 use std::sync::Arc;
@@ -116,5 +118,41 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route(
             "/workspaces/:workspace_id/servers/:server_id/stats",
             get(logs::stats),
+        )
+        // Billing
+        .route("/billing/plans", get(billing::list_plans))
+        .route(
+            "/workspaces/:workspace_id/billing/subscription",
+            get(billing::get_subscription),
+        )
+        .route(
+            "/workspaces/:workspace_id/billing/checkout",
+            post(billing::create_checkout),
+        )
+        .route(
+            "/workspaces/:workspace_id/billing/portal",
+            post(billing::create_portal_session),
+        )
+        // Stripe webhook (no auth required)
+        .route("/webhooks/stripe", post(billing::handle_webhook))
+}
+
+/// WebSocket router for real-time updates
+pub fn ws_router() -> Router<Arc<AppState>> {
+    Router::new()
+        // Deployment status updates
+        .route(
+            "/deployments/:deployment_id",
+            get(ws::deployment_ws),
+        )
+        // Build logs streaming
+        .route(
+            "/deployments/:deployment_id/logs",
+            get(ws::build_logs_ws),
+        )
+        // Server logs streaming
+        .route(
+            "/workspaces/:workspace_id/servers/:server_id/logs",
+            get(ws::server_logs_ws),
         )
 }

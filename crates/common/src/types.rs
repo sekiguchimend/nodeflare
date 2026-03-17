@@ -12,6 +12,8 @@ use validator::Validate;
 pub enum Runtime {
     Node,
     Python,
+    Go,
+    Rust,
     Docker,
 }
 
@@ -26,6 +28,8 @@ impl std::fmt::Display for Runtime {
         match self {
             Runtime::Node => write!(f, "node"),
             Runtime::Python => write!(f, "python"),
+            Runtime::Go => write!(f, "go"),
+            Runtime::Rust => write!(f, "rust"),
             Runtime::Docker => write!(f, "docker"),
         }
     }
@@ -353,6 +357,75 @@ pub struct PaginationMeta {
     pub per_page: u32,
     pub total: u64,
     pub total_pages: u32,
+}
+
+// ============================================================================
+// WebSocket Messages
+// ============================================================================
+
+/// WebSocket message types for real-time updates
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum WsMessage {
+    /// Deployment status update
+    DeploymentStatus(DeploymentStatusUpdate),
+    /// Build log line
+    BuildLog(BuildLogLine),
+    /// Server log line
+    ServerLog(ServerLogLine),
+    /// Error message
+    Error(WsError),
+    /// Ping/Pong for connection keepalive
+    Ping,
+    Pong,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeploymentStatusUpdate {
+    pub deployment_id: Uuid,
+    pub server_id: Uuid,
+    pub status: DeploymentStatus,
+    pub error_message: Option<String>,
+    pub progress: Option<u8>, // 0-100
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildLogLine {
+    pub deployment_id: Uuid,
+    pub line: String,
+    pub stream: LogStream,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerLogLine {
+    pub server_id: Uuid,
+    pub line: String,
+    pub level: LogLevel,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogStream {
+    Stdout,
+    Stderr,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WsError {
+    pub code: String,
+    pub message: String,
 }
 
 // ============================================================================

@@ -13,6 +13,7 @@ mcp-db = { path = "../db" }
 mcp-auth = { path = "../auth" }
 mcp-queue = { path = "../queue" }
 mcp-github = { path = "../github" }
+mcp-billing = { path = "../billing" }
 
 # Async
 tokio.workspace = true
@@ -59,3 +60,6 @@ rustls = { version = "0.23", features = ["ring"] }
 uuid.workspace = true
 chrono.workspace = true
 dotenvy.workspace = true
+
+# Redis (for pub/sub WebSocket events)
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager", "tokio-rustls-comp"] }

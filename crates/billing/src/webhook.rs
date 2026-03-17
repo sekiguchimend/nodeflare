@@ -1,0 +1,227 @@
+use anyhow::{anyhow, Result};
+use mcp_db::{DbPool, WorkspaceRepository};
+use stripe::{Event, EventObject, EventType, Webhook};
+use uuid::Uuid;
+
+use crate::plans::{get_plan_by_price_id, Plan};
+
+/// Stripe webhook handler
+pub struct WebhookHandler {
+    webhook_secret: String,
+    db: DbPool,
+}
+
+impl WebhookHandler {
+    pub fn new(webhook_secret: &str, db: DbPool) -> Self {
+        Self {
+            webhook_secret: webhook_secret.to_string(),
+            db,
+        }
+    }
+
+    /// Verify and parse webhook event
+    pub fn verify_event(&self, payload: &str, signature: &str) -> Result<Event> {
+        Webhook::construct_event(payload, signature, &self.webhook_secret)
+            .map_err(|e| anyhow!("Failed to verify webhook: {}", e))
+    }
+
+    /// Handle a Stripe webhook event
+    pub async fn handle_event(&self, event: Event) -> Result<()> {
+        tracing::info!("Processing Stripe webhook event: {:?}", event.type_);
+
+        match event.type_ {
+            EventType::CheckoutSessionCompleted => {
+                self.handle_checkout_completed(event).await?;
+            }
+            EventType::CustomerSubscriptionCreated => {
+                self.handle_subscription_created(event).await?;
+            }
+            EventType::CustomerSubscriptionUpdated => {
+                self.handle_subscription_updated(event).await?;
+            }
+            EventType::CustomerSubscriptionDeleted => {
+                self.handle_subscription_deleted(event).await?;
+            }
+            EventType::InvoicePaid => {
+                self.handle_invoice_paid(event).await?;
+            }
+            EventType::InvoicePaymentFailed => {
+                self.handle_invoice_payment_failed(event).await?;
+            }
+            _ => {
+                tracing::debug!("Unhandled event type: {:?}", event.type_);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_checkout_completed(&self, event: Event) -> Result<()> {
+        if let EventObject::CheckoutSession(session) = event.data.object {
+            tracing::info!("Checkout completed for session: {}", session.id);
+
+            // Get workspace ID from metadata
+            let workspace_id = session
+                .metadata
+                .as_ref()
+                .and_then(|m| m.get("workspace_id"))
+                .and_then(|id| Uuid::parse_str(id).ok())
+                .ok_or_else(|| anyhow!("Missing workspace_id in metadata"))?;
+
+            // Get customer ID
+            let customer_id = session
+                .customer
+                .as_ref()
+                .map(|c| c.id().to_string())
+                .ok_or_else(|| anyhow!("Missing customer ID"))?;
+
+            // Get subscription ID
+            let subscription_id = session
+                .subscription
+                .as_ref()
+                .map(|s| s.id().to_string())
+                .ok_or_else(|| anyhow!("Missing subscription ID"))?;
+
+            // Update workspace with Stripe IDs
+            WorkspaceRepository::update_stripe_ids(
+                &self.db,
+                workspace_id,
+                &customer_id,
+                &subscription_id,
+            )
+            .await?;
+
+            tracing::info!(
+                "Updated workspace {} with Stripe customer {} and subscription {}",
+                workspace_id,
+                customer_id,
+                subscription_id
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn handle_subscription_created(&self, event: Event) -> Result<()> {
+        if let EventObject::Subscription(subscription) = event.data.object {
+            tracing::info!("Subscription created: {}", subscription.id);
+
+            // Get workspace ID from metadata
+            let workspace_id = subscription
+                .metadata
+                .get("workspace_id")
+                .and_then(|id| Uuid::parse_str(id).ok())
+                .ok_or_else(|| anyhow!("Missing workspace_id in subscription metadata"))?;
+
+            // Get plan from price
+            let plan = subscription
+                .items
+                .data
+                .first()
+                .and_then(|item| item.price.as_ref())
+                .and_then(|price| get_plan_by_price_id(&price.id))
+                .unwrap_or(Plan::Free);
+
+            // Update workspace plan
+            WorkspaceRepository::update_plan(&self.db, workspace_id, plan.into())
+                .await?;
+
+            tracing::info!("Updated workspace {} to plan {:?}", workspace_id, plan);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_subscription_updated(&self, event: Event) -> Result<()> {
+        if let EventObject::Subscription(subscription) = event.data.object {
+            tracing::info!("Subscription updated: {}", subscription.id);
+
+            // Get workspace ID from metadata
+            let workspace_id = subscription
+                .metadata
+                .get("workspace_id")
+                .and_then(|id| Uuid::parse_str(id).ok())
+                .ok_or_else(|| anyhow!("Missing workspace_id in subscription metadata"))?;
+
+            // Get plan from price
+            let plan = subscription
+                .items
+                .data
+                .first()
+                .and_then(|item| item.price.as_ref())
+                .and_then(|price| get_plan_by_price_id(&price.id))
+                .unwrap_or(Plan::Free);
+
+            // Update workspace plan
+            WorkspaceRepository::update_plan(&self.db, workspace_id, plan.into())
+                .await?;
+
+            tracing::info!("Updated workspace {} to plan {:?}", workspace_id, plan);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_subscription_deleted(&self, event: Event) -> Result<()> {
+        if let EventObject::Subscription(subscription) = event.data.object {
+            tracing::info!("Subscription deleted: {}", subscription.id);
+
+            // Get workspace ID from metadata
+            let workspace_id = subscription
+                .metadata
+                .get("workspace_id")
+                .and_then(|id| Uuid::parse_str(id).ok())
+                .ok_or_else(|| anyhow!("Missing workspace_id in subscription metadata"))?;
+
+            // Downgrade to free plan
+            WorkspaceRepository::update_plan(&self.db, workspace_id, mcp_common::types::Plan::Free)
+                .await?;
+
+            // Clear Stripe subscription ID
+            WorkspaceRepository::clear_stripe_subscription(&self.db, workspace_id)
+                .await?;
+
+            tracing::info!("Downgraded workspace {} to Free plan", workspace_id);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_invoice_paid(&self, event: Event) -> Result<()> {
+        if let EventObject::Invoice(invoice) = event.data.object {
+            tracing::info!(
+                "Invoice paid: {} for amount {}",
+                invoice.id.as_str(),
+                invoice.amount_paid.unwrap_or(0)
+            );
+            // Could log payment history here
+        }
+
+        Ok(())
+    }
+
+    async fn handle_invoice_payment_failed(&self, event: Event) -> Result<()> {
+        if let EventObject::Invoice(invoice) = event.data.object {
+            tracing::warn!(
+                "Invoice payment failed: {}",
+                invoice.id.as_str()
+            );
+
+            // Could send notification to user here
+            // Could also suspend service after multiple failures
+        }
+
+        Ok(())
+    }
+}
+
+impl From<Plan> for mcp_common::types::Plan {
+    fn from(plan: Plan) -> Self {
+        match plan {
+            Plan::Free => mcp_common::types::Plan::Free,
+            Plan::Pro => mcp_common::types::Plan::Pro,
+            Plan::Team => mcp_common::types::Plan::Team,
+            Plan::Enterprise => mcp_common::types::Plan::Enterprise,
+        }
+    }
+}

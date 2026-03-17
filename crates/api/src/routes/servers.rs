@@ -117,13 +117,19 @@ pub async fn create(
 ) -> Result<Json<ServerResponse>, AppError> {
     // Validate runtime
     let runtime = body.runtime.clone().unwrap_or_default();
-    if !matches!(runtime, mcp_common::types::Runtime::Node | mcp_common::types::Runtime::Python | mcp_common::types::Runtime::Docker) {
+    if !matches!(runtime,
+        mcp_common::types::Runtime::Node |
+        mcp_common::types::Runtime::Python |
+        mcp_common::types::Runtime::Go |
+        mcp_common::types::Runtime::Rust |
+        mcp_common::types::Runtime::Docker
+    ) {
         return Err(AppError::bad_request(
             "INVALID_RUNTIME",
-            &format!("Unsupported runtime: {:?}. Supported runtimes are: node, python, docker", runtime),
+            &format!("Unsupported runtime: {:?}. Supported runtimes are: node, python, go, rust, docker", runtime),
         ).with_details(json!({
             "provided_runtime": format!("{:?}", runtime),
-            "supported_runtimes": ["node", "python", "docker"]
+            "supported_runtimes": ["node", "python", "go", "rust", "docker"]
         })));
     }
 
@@ -169,6 +175,51 @@ pub async fn create(
             "expected_format": "owner/repo",
             "example": "octocat/my-mcp-server"
         })));
+    }
+    let (owner, repo) = (repo_parts[0], repo_parts[1]);
+    let branch = body.github_branch.clone().unwrap_or_else(|| "main".to_string());
+
+    // Validate MCP repository structure
+    if let (Some(github), Some(installation_id)) = (&state.github, body.github_installation_id) {
+        let runtime_str = match &runtime {
+            mcp_common::types::Runtime::Node => "node",
+            mcp_common::types::Runtime::Python => "python",
+            mcp_common::types::Runtime::Go => "go",
+            mcp_common::types::Runtime::Rust => "rust",
+            mcp_common::types::Runtime::Docker => "docker",
+        };
+
+        match github.validate_mcp_repository(
+            installation_id,
+            owner,
+            repo,
+            &branch,
+            Some(runtime_str),
+        ).await {
+            Ok(validation) => {
+                if !validation.is_valid {
+                    return Err(AppError::bad_request(
+                        "INVALID_MCP_REPOSITORY",
+                        "Repository does not appear to be a valid MCP server",
+                    ).with_details(json!({
+                        "errors": validation.errors,
+                        "warnings": validation.warnings,
+                        "detected_runtime": validation.detected_runtime,
+                        "expected_runtime": runtime_str,
+                        "help": "Make sure your repository contains package.json (Node.js) or requirements.txt/pyproject.toml (Python) with MCP SDK dependencies"
+                    })));
+                }
+
+                // Log warnings if any
+                for warning in &validation.warnings {
+                    tracing::warn!("MCP validation warning for {}/{}: {}", owner, repo, warning);
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to validate MCP repository: {}", e);
+                // Don't block creation, just log warning
+            }
+        }
     }
 
     let server = ServerRepository::create(

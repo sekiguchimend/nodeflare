@@ -1,0 +1,221 @@
+{
+  "common": {
+    "loading": "読み込み中...",
+    "error": "エラーが発生しました",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "create": "作成",
+    "confirm": "確認",
+    "back": "戻る",
+    "next": "次へ",
+    "submit": "送信",
+    "close": "閉じる",
+    "search": "検索",
+    "filter": "フィルター",
+    "all": "すべて",
+    "none": "なし",
+    "yes": "はい",
+    "no": "いいえ"
+  },
+  "nav": {
+    "home": "ホーム",
+    "dashboard": "ダッシュボード",
+    "servers": "サーバー",
+    "apiKeys": "APIキー",
+    "logs": "ログ",
+    "settings": "設定",
+    "docs": "ドキュメント",
+    "blog": "ブログ",
+    "faq": "FAQ",
+    "contact": "お問い合わせ",
+    "login": "ログイン",
+    "logout": "ログアウト",
+    "signup": "新規登録"
+  },
+  "home": {
+    "title": "MCPサーバーのホスティングプラットフォーム",
+    "heroTitle1": "AIツールを、",
+    "heroTitle2": "クラウドで実行",
+    "subtitle": "AIツールを,クラウドで実行",
+    "heroDescription1": "GitHubからワンクリックでデプロイ。",
+    "heroDescription2": "インフラ管理なしで、すぐに本番稼働。",
+    "description": "GitHubリポジトリを接続するだけで、MCPサーバーを自動的にビルド・デプロイ。スケーラブルなインフラを気にすることなく、AI統合に集中できます。",
+    "getStarted": "無料で始める",
+    "startWithGithub": "GitHubで始める",
+    "viewDocs": "ドキュメントを見る",
+    "features": {
+      "title": "特徴",
+      "deploy": {
+        "title": "ワンクリックデプロイ",
+        "description": "GitHubリポジトリを接続するだけで自動デプロイ"
+      },
+      "scale": {
+        "title": "自動スケーリング",
+        "description": "トラフィックに応じて自動的にスケール"
+      },
+      "secure": {
+        "title": "セキュア",
+        "description": "エンドツーエンドの暗号化とアクセス制御"
+      },
+      "monitor": {
+        "title": "リアルタイム監視",
+        "description": "ログとメトリクスをリアルタイムで確認"
+      }
+    }
+  },
+  "dashboard": {
+    "title": "ダッシュボード",
+    "welcome": "おかえりなさい",
+    "overview": "概要",
+    "recentActivity": "最近のアクティビティ",
+    "quickActions": "クイックアクション",
+    "noServers": "サーバーがありません",
+    "createFirstServer": "最初のサーバーを作成"
+  },
+  "servers": {
+    "title": "サーバー",
+    "new": "新規サーバー",
+    "list": "サーバー一覧",
+    "empty": "サーバーがまだありません",
+    "create": {
+      "title": "新規サーバーを作成",
+      "name": "サーバー名",
+      "namePlaceholder": "my-mcp-server",
+      "slug": "スラッグ",
+      "slugPlaceholder": "my-server",
+      "slugHelp": "URLに使用される識別子（小文字とハイフンのみ）",
+      "description": "説明",
+      "descriptionPlaceholder": "サーバーの説明を入力",
+      "githubRepo": "GitHubリポジトリ",
+      "githubRepoPlaceholder": "owner/repo",
+      "githubRepoHelp": "owner/repo形式で入力してください",
+      "branch": "ブランチ",
+      "branchPlaceholder": "main",
+      "runtime": "ランタイム",
+      "runtimeNode": "Node.js",
+      "runtimePython": "Python",
+      "runtimeGo": "Go",
+      "runtimeRust": "Rust",
+      "runtimeDocker": "Docker",
+      "visibility": "公開設定",
+      "visibilityPublic": "公開",
+      "visibilityPrivate": "非公開",
+      "submit": "サーバーを作成"
+    },
+    "detail": {
+      "overview": "概要",
+      "deployments": "デプロイメント",
+      "logs": "ログ",
+      "settings": "設定",
+      "secrets": "シークレット",
+      "endpoint": "エンドポイント",
+      "status": "ステータス",
+      "runtime": "ランタイム",
+      "lastDeployed": "最終デプロイ",
+      "deploy": "デプロイ",
+      "stop": "停止",
+      "restart": "再起動"
+    },
+    "status": {
+      "running": "実行中",
+      "stopped": "停止",
+      "building": "ビルド中",
+      "deploying": "デプロイ中",
+      "failed": "失敗",
+      "pending": "保留中"
+    }
+  },
+  "apiKeys": {
+    "title": "APIキー",
+    "new": "新規APIキー",
+    "empty": "APIキーがまだありません",
+    "create": {
+      "title": "新規APIキーを作成",
+      "name": "キー名",
+      "namePlaceholder": "my-api-key",
+      "submit": "APIキーを作成"
+    },
+    "created": "APIキーが作成されました",
+    "createdWarning": "このキーは一度だけ表示されます。安全な場所に保存してください。",
+    "revoke": "取り消し",
+    "revokeConfirm": "このAPIキーを取り消しますか？この操作は元に戻せません。"
+  },
+  "logs": {
+    "title": "ログ",
+    "empty": "ログがありません",
+    "filter": {
+      "all": "すべて",
+      "info": "情報",
+      "warning": "警告",
+      "error": "エラー"
+    },
+    "realtime": "リアルタイム",
+    "download": "ダウンロード"
+  },
+  "settings": {
+    "title": "設定",
+    "profile": {
+      "title": "プロフィール",
+      "name": "名前",
+      "email": "メールアドレス",
+      "save": "保存"
+    },
+    "workspace": {
+      "title": "ワークスペース",
+      "name": "ワークスペース名",
+      "members": "メンバー",
+      "invite": "招待"
+    },
+    "danger": {
+      "title": "危険なアクション",
+      "deleteAccount": "アカウントを削除",
+      "deleteAccountWarning": "アカウントを削除すると、すべてのデータが完全に削除されます。この操作は元に戻せません。",
+      "deleteWorkspace": "ワークスペースを削除"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "ログイン",
+      "email": "メールアドレス",
+      "password": "パスワード",
+      "submit": "ログイン",
+      "forgotPassword": "パスワードを忘れた方",
+      "noAccount": "アカウントをお持ちでない方",
+      "signup": "新規登録",
+      "withGithub": "GitHubでログイン"
+    },
+    "signup": {
+      "title": "新規登録",
+      "name": "名前",
+      "email": "メールアドレス",
+      "password": "パスワード",
+      "confirmPassword": "パスワード（確認）",
+      "submit": "登録",
+      "hasAccount": "すでにアカウントをお持ちの方",
+      "login": "ログイン",
+      "withGithub": "GitHubで登録"
+    }
+  },
+  "errors": {
+    "required": "必須項目です",
+    "invalidEmail": "有効なメールアドレスを入力してください",
+    "passwordMin": "パスワードは8文字以上で入力してください",
+    "passwordMatch": "パスワードが一致しません",
+    "invalidSlug": "小文字の英数字とハイフンのみ使用できます",
+    "invalidGithubRepo": "owner/repo形式で入力してください",
+    "serverError": "サーバーエラーが発生しました。しばらく経ってからもう一度お試しください。",
+    "networkError": "ネットワークエラーが発生しました。接続を確認してください。",
+    "unauthorized": "認証が必要です。ログインしてください。",
+    "forbidden": "このアクションを実行する権限がありません。",
+    "notFound": "リソースが見つかりませんでした。",
+    "invalidMcpRepository": "有効なMCPサーバーリポジトリではありません。package.json（Node.js）またはrequirements.txt/pyproject.toml（Python）にMCP SDKの依存関係が必要です。"
+  },
+  "footer": {
+    "copyright": "© {year} Nodeflare. All rights reserved.",
+    "terms": "利用規約",
+    "privacy": "プライバシーポリシー",
+    "contact": "お問い合わせ"
+  }
+}

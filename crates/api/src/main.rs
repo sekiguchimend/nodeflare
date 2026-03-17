@@ -14,8 +14,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod error;
 mod extractors;
 mod middleware;
+mod redis_subscriber;
 mod routes;
 mod state;
+mod ws_manager;
 
 use state::AppState;
 
@@ -67,6 +69,14 @@ async fn main() -> Result<()> {
     // Create app state
     let state = Arc::new(AppState::new(config.clone(), db_pool, redis, job_queue, github));
 
+    // Start Redis subscriber for WebSocket events
+    redis_subscriber::start_redis_subscriber(
+        &config.redis.url,
+        Arc::new(state.ws_manager.clone()),
+    )
+    .await;
+    tracing::info!("Redis subscriber started for WebSocket events");
+
     // Build router
     let app = create_router(state);
 
@@ -93,6 +103,8 @@ fn create_router(state: Arc<AppState>) -> Router {
         .route("/ready", get(routes::health::readiness_check))
         // API v1
         .nest("/api/v1", routes::api_router())
+        // WebSocket endpoints
+        .nest("/ws", routes::ws_router())
         // OpenAPI docs
         .merge(routes::openapi::openapi_router())
         // Middleware

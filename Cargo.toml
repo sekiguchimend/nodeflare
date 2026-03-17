@@ -11,6 +11,7 @@ members = [
     "crates/api",
     "crates/proxy",
     "crates/builder",
+    "crates/billing",
 ]
 
 [workspace.package]

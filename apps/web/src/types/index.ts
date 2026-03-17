@@ -14,7 +14,7 @@ export interface Workspace {
   created_at: string;
 }
 
-export type Runtime = 'node' | 'python' | 'docker';
+export type Runtime = 'node' | 'python' | 'go' | 'rust' | 'docker';
 export type Visibility = 'public' | 'private' | 'team';
 export type ServerStatus = 'pending' | 'building' | 'deploying' | 'running' | 'stopped' | 'failed';
 export type DeploymentStatus = 'pending' | 'building' | 'deploying' | 'success' | 'failed';

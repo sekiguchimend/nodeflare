@@ -242,6 +242,8 @@ export default function NewServerPage() {
                 >
                   <option value="node">Node.js</option>
                   <option value="python">Python</option>
+                  <option value="go">Go</option>
+                  <option value="rust">Rust</option>
                   <option value="docker">Docker</option>
                 </Select>
               </div>

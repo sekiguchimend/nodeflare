@@ -1,0 +1,258 @@
+use axum::{
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+    Json,
+};
+use mcp_billing::{BillingService, Plan, WebhookHandler, PLANS};
+use mcp_db::WorkspaceRepository;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use uuid::Uuid;
+
+use crate::extractors::AuthUser;
+use crate::state::AppState;
+
+/// Get available plans
+pub async fn list_plans() -> Json<Vec<PlanResponse>> {
+    let plans: Vec<PlanResponse> = PLANS
+        .iter()
+        .map(|p| PlanResponse {
+            plan: p.plan.to_string(),
+            name: p.name.to_string(),
+            description: p.description.to_string(),
+            price_monthly_usd: p.price_monthly_usd,
+            price_yearly_usd: p.price_yearly_usd,
+            features: p.features.iter().map(|s| s.to_string()).collect(),
+            limits: PlanLimitsResponse {
+                max_servers: p.limits.max_servers,
+                max_deployments_per_month: p.limits.max_deployments_per_month,
+                max_requests_per_month: p.limits.max_requests_per_month,
+                max_team_members: p.limits.max_team_members,
+                log_retention_days: p.limits.log_retention_days,
+                custom_domains: p.limits.custom_domains,
+                priority_support: p.limits.priority_support,
+                sso_enabled: p.limits.sso_enabled,
+            },
+        })
+        .collect();
+
+    Json(plans)
+}
+
+/// Get current subscription status for a workspace
+pub async fn get_subscription(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(workspace_id): Path<Uuid>,
+) -> Result<Json<SubscriptionResponse>, (StatusCode, String)> {
+    // Verify user has access
+    WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
+
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+
+    Ok(Json(SubscriptionResponse {
+        plan: workspace.plan.clone(),
+        status: workspace.subscription_status.unwrap_or_else(|| "none".to_string()),
+        stripe_customer_id: workspace.stripe_customer_id,
+        stripe_subscription_id: workspace.stripe_subscription_id,
+        current_period_end: workspace.current_period_end.map(|d| d.timestamp()),
+    }))
+}
+
+/// Create a checkout session
+pub async fn create_checkout(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(workspace_id): Path<Uuid>,
+    Json(body): Json<CreateCheckoutRequest>,
+) -> Result<Json<CheckoutResponse>, (StatusCode, String)> {
+    // Verify user is owner/admin
+    let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
+
+    if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
+        return Err((StatusCode::FORBIDDEN, "Only owners and admins can manage billing".to_string()));
+    }
+
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+
+    let billing = state.billing.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing not configured".to_string()))?;
+
+    // Get or create Stripe customer
+    let customer_id = if let Some(id) = workspace.stripe_customer_id {
+        id
+    } else {
+        // Get user info to create customer
+        let user = mcp_db::UserRepository::find_by_id(&state.db, auth_user.user_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
+
+        let customer = billing
+            .create_customer(&user.email, &user.name, auth_user.user_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        customer.id.to_string()
+    };
+
+    // Get price ID based on plan and interval
+    let price_id = get_price_id(&body.plan, body.yearly)
+        .ok_or((StatusCode::BAD_REQUEST, "Invalid plan".to_string()))?;
+
+    // Create checkout session
+    let session = billing
+        .create_checkout_session(&customer_id, &price_id, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(CheckoutResponse {
+        checkout_url: session.url.unwrap_or_default(),
+        session_id: session.id.to_string(),
+    }))
+}
+
+/// Create a customer portal session
+pub async fn create_portal_session(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(workspace_id): Path<Uuid>,
+) -> Result<Json<PortalResponse>, (StatusCode, String)> {
+    // Verify user is owner/admin
+    let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
+
+    if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
+        return Err((StatusCode::FORBIDDEN, "Only owners and admins can manage billing".to_string()));
+    }
+
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+
+    let customer_id = workspace
+        .stripe_customer_id
+        .ok_or((StatusCode::BAD_REQUEST, "No billing setup for this workspace".to_string()))?;
+
+    let billing = state.billing.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing not configured".to_string()))?;
+
+    let session = billing
+        .create_portal_session(&customer_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(PortalResponse {
+        portal_url: session.url,
+    }))
+}
+
+/// Handle Stripe webhooks
+pub async fn handle_webhook(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: String,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let signature = headers
+        .get("stripe-signature")
+        .and_then(|v| v.to_str().ok())
+        .ok_or((StatusCode::BAD_REQUEST, "Missing signature".to_string()))?;
+
+    let webhook_handler = state.webhook_handler.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Webhook handler not configured".to_string()))?;
+
+    let event = webhook_handler
+        .verify_event(&body, signature)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    webhook_handler
+        .handle_event(event)
+        .await
+        .map_err(|e| {
+            tracing::error!("Webhook handler error: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
+
+    Ok(StatusCode::OK)
+}
+
+// Helper function to get price ID
+fn get_price_id(plan: &str, yearly: bool) -> Option<String> {
+    let env_key = match (plan, yearly) {
+        ("pro", false) => "STRIPE_PRICE_PRO_MONTHLY",
+        ("pro", true) => "STRIPE_PRICE_PRO_YEARLY",
+        ("team", false) => "STRIPE_PRICE_TEAM_MONTHLY",
+        ("team", true) => "STRIPE_PRICE_TEAM_YEARLY",
+        ("enterprise", false) => "STRIPE_PRICE_ENTERPRISE_MONTHLY",
+        ("enterprise", true) => "STRIPE_PRICE_ENTERPRISE_YEARLY",
+        _ => return None,
+    };
+
+    std::env::var(env_key).ok()
+}
+
+// Request/Response types
+#[derive(Debug, Serialize)]
+pub struct PlanResponse {
+    pub plan: String,
+    pub name: String,
+    pub description: String,
+    pub price_monthly_usd: u32,
+    pub price_yearly_usd: u32,
+    pub features: Vec<String>,
+    pub limits: PlanLimitsResponse,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlanLimitsResponse {
+    pub max_servers: u32,
+    pub max_deployments_per_month: u32,
+    pub max_requests_per_month: u64,
+    pub max_team_members: u32,
+    pub log_retention_days: u32,
+    pub custom_domains: bool,
+    pub priority_support: bool,
+    pub sso_enabled: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubscriptionResponse {
+    pub plan: String,
+    pub status: String,
+    pub stripe_customer_id: Option<String>,
+    pub stripe_subscription_id: Option<String>,
+    pub current_period_end: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCheckoutRequest {
+    pub plan: String,
+    #[serde(default)]
+    pub yearly: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CheckoutResponse {
+    pub checkout_url: String,
+    pub session_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PortalResponse {
+    pub portal_url: String,
+}

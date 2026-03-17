@@ -2,7 +2,7 @@ use anyhow::Result;
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 use mcp_auth::CryptoService;
-use mcp_common::AppConfig;
+use mcp_common::{types::LogStream, AppConfig, EventPublisher};
 use mcp_db::{DeploymentRepository, SecretRepository, ServerRepository, UpdateDeployment};
 use mcp_github::GitHubApp;
 use mcp_queue::{BuildJob, DeployJob, JobQueue};
@@ -19,6 +19,7 @@ struct BuilderContext {
     job_queue: JobQueue,
     crypto: CryptoService,
     github: Option<GitHubApp>,
+    events: EventPublisher,
 }
 
 #[tokio::main]
@@ -52,6 +53,9 @@ async fn main() -> Result<()> {
         tracing::warn!("GitHub App not configured - will use public repos only");
     }
 
+    // Create event publisher for real-time WebSocket updates
+    let events = EventPublisher::new(&config.redis.url);
+
     let context = Arc::new(BuilderContext {
         config: config.clone(),
         db: db_pool,
@@ -59,6 +63,7 @@ async fn main() -> Result<()> {
         job_queue,
         crypto,
         github,
+        events,
     });
 
     // Connect to Redis for job queue
@@ -113,6 +118,18 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
     .await
     .map_err(|e| Error::Failed(Arc::new(e.into())))?;
 
+    // Publish building status via WebSocket
+    ctx.events
+        .publish_deployment_status(
+            job.deployment_id,
+            job.server_id,
+            mcp_common::types::DeploymentStatus::Building,
+            None,
+            Some(10),
+        )
+        .await
+        .ok();
+
     // Parse owner/repo from github_repo
     let parts: Vec<&str> = job.github_repo.split('/').collect();
     if parts.len() != 2 {
@@ -135,40 +152,49 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
 
     let image_tag = format!("mcp-cloud/{}", job.server_id);
 
+    // Helper to log and publish to WebSocket
+    let publish_log = |ctx: &BuilderContext, deployment_id: uuid::Uuid, msg: &str| {
+        let events = ctx.events.clone();
+        let msg = msg.to_string();
+        async move {
+            events.publish_build_log(deployment_id, &msg, LogStream::Stdout).await.ok();
+        }
+    };
+
     // Try to download tarball via GitHub App, fallback to git clone for public repos
     let build_result = if let (Some(github), Some(installation_id)) = (&ctx.github, job.github_installation_id) {
-        DeploymentRepository::append_log(&ctx.db, job.deployment_id, "Downloading source from GitHub...")
-            .await
-            .ok();
+        let log_msg = "Downloading source from GitHub...";
+        DeploymentRepository::append_log(&ctx.db, job.deployment_id, log_msg).await.ok();
+        ctx.events.publish_build_log(job.deployment_id, log_msg, LogStream::Stdout).await.ok();
 
         match github.download_tarball(installation_id, owner, repo, &job.github_branch).await {
             Ok(tarball) => {
-                DeploymentRepository::append_log(&ctx.db, job.deployment_id, &format!("Downloaded {} bytes, building image...", tarball.len()))
-                    .await
-                    .ok();
+                let log_msg = format!("Downloaded {} bytes, building image...", tarball.len());
+                DeploymentRepository::append_log(&ctx.db, job.deployment_id, &log_msg).await.ok();
+                ctx.events.publish_build_log(job.deployment_id, &log_msg, LogStream::Stdout).await.ok();
                 docker::build_image_from_tarball(&ctx.docker, &tarball, &job, &image_tag).await
             }
             Err(e) => {
                 tracing::warn!("GitHub App download failed, falling back to git clone: {}", e);
-                DeploymentRepository::append_log(&ctx.db, job.deployment_id, "Falling back to git clone...")
-                    .await
-                    .ok();
+                let log_msg = "Falling back to git clone...";
+                DeploymentRepository::append_log(&ctx.db, job.deployment_id, log_msg).await.ok();
+                ctx.events.publish_build_log(job.deployment_id, log_msg, LogStream::Stdout).await.ok();
                 docker::build_image(&ctx.docker, &job, &image_tag).await
             }
         }
     } else {
         // No GitHub App or no installation ID - use git clone for public repos
-        DeploymentRepository::append_log(&ctx.db, job.deployment_id, "Cloning public repository...")
-            .await
-            .ok();
+        let log_msg = "Cloning public repository...";
+        DeploymentRepository::append_log(&ctx.db, job.deployment_id, log_msg).await.ok();
+        ctx.events.publish_build_log(job.deployment_id, log_msg, LogStream::Stdout).await.ok();
         docker::build_image(&ctx.docker, &job, &image_tag).await
     };
 
     match build_result {
         Ok(_) => {
-            DeploymentRepository::append_log(&ctx.db, job.deployment_id, "Build successful!")
-                .await
-                .ok();
+            let log_msg = "Build successful!";
+            DeploymentRepository::append_log(&ctx.db, job.deployment_id, log_msg).await.ok();
+            ctx.events.publish_build_log(job.deployment_id, log_msg, LogStream::Stdout).await.ok();
 
             // Update to pushing status
             DeploymentRepository::update(
@@ -182,19 +208,31 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
             .await
             .ok();
 
+            // Publish pushing status
+            ctx.events
+                .publish_deployment_status(
+                    job.deployment_id,
+                    job.server_id,
+                    mcp_common::types::DeploymentStatus::Pushing,
+                    None,
+                    Some(60),
+                )
+                .await
+                .ok();
+
             // Push to Fly.io registry
             let app_name = format!("mcp-{}", job.server_id.to_string().split('-').next().unwrap());
             let registry_url = format!("registry.fly.io/{}", app_name);
 
-            DeploymentRepository::append_log(&ctx.db, job.deployment_id, &format!("Pushing image to {}...", registry_url))
-                .await
-                .ok();
+            let log_msg = format!("Pushing image to {}...", registry_url);
+            DeploymentRepository::append_log(&ctx.db, job.deployment_id, &log_msg).await.ok();
+            ctx.events.publish_build_log(job.deployment_id, &log_msg, LogStream::Stdout).await.ok();
 
             match docker::push_image(&ctx.docker, &image_tag, &registry_url).await {
                 Ok(full_image_url) => {
-                    DeploymentRepository::append_log(&ctx.db, job.deployment_id, "Push successful! Queuing deploy job...")
-                        .await
-                        .ok();
+                    let log_msg = "Push successful! Queuing deploy job...";
+                    DeploymentRepository::append_log(&ctx.db, job.deployment_id, log_msg).await.ok();
+                    ctx.events.publish_build_log(job.deployment_id, log_msg, LogStream::Stdout).await.ok();
 
                     // Get secrets for this server and decrypt them
                     let encrypted_secrets = SecretRepository::list_by_server(&ctx.db, job.server_id)
@@ -243,18 +281,33 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
                 }
                 Err(e) => {
                     tracing::error!("Push failed: {}", e);
+                    let error_msg = format!("Push failed: {}", e);
+
                     DeploymentRepository::update(
                         &ctx.db,
                         job.deployment_id,
                         UpdateDeployment {
                             status: Some(mcp_common::types::DeploymentStatus::Failed),
-                            error_message: Some(format!("Push failed: {}", e)),
+                            error_message: Some(error_msg.clone()),
                             finished_at: Some(chrono::Utc::now()),
                             ..Default::default()
                         },
                     )
                     .await
                     .ok();
+
+                    // Publish failed status
+                    ctx.events
+                        .publish_deployment_status(
+                            job.deployment_id,
+                            job.server_id,
+                            mcp_common::types::DeploymentStatus::Failed,
+                            Some(error_msg.clone()),
+                            Some(100),
+                        )
+                        .await
+                        .ok();
+                    ctx.events.publish_build_log(job.deployment_id, &error_msg, LogStream::Stderr).await.ok();
 
                     ServerRepository::update_status(
                         &ctx.db,
@@ -269,18 +322,33 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
         }
         Err(e) => {
             tracing::error!("Build failed: {}", e);
+            let error_msg = e.to_string();
+
             DeploymentRepository::update(
                 &ctx.db,
                 job.deployment_id,
                 UpdateDeployment {
                     status: Some(mcp_common::types::DeploymentStatus::Failed),
-                    error_message: Some(e.to_string()),
+                    error_message: Some(error_msg.clone()),
                     finished_at: Some(chrono::Utc::now()),
                     ..Default::default()
                 },
             )
             .await
             .ok();
+
+            // Publish failed status
+            ctx.events
+                .publish_deployment_status(
+                    job.deployment_id,
+                    job.server_id,
+                    mcp_common::types::DeploymentStatus::Failed,
+                    Some(error_msg.clone()),
+                    Some(100),
+                )
+                .await
+                .ok();
+            ctx.events.publish_build_log(job.deployment_id, &error_msg, LogStream::Stderr).await.ok();
 
             ServerRepository::update_status(
                 &ctx.db,
@@ -311,6 +379,18 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
     .await
     .map_err(|e| Error::Failed(Arc::new(e.into())))?;
 
+    // Publish deploying status
+    ctx.events
+        .publish_deployment_status(
+            job.deployment_id,
+            job.server_id,
+            mcp_common::types::DeploymentStatus::Deploying,
+            None,
+            Some(80),
+        )
+        .await
+        .ok();
+
     // Deploy to Fly.io
     match flyio::deploy(&ctx.config, &job).await {
         Ok(endpoint_url) => {
@@ -326,6 +406,18 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
             .await
             .ok();
 
+            // Publish succeeded status
+            ctx.events
+                .publish_deployment_status(
+                    job.deployment_id,
+                    job.server_id,
+                    mcp_common::types::DeploymentStatus::Succeeded,
+                    None,
+                    Some(100),
+                )
+                .await
+                .ok();
+
             ServerRepository::update_status(
                 &ctx.db,
                 job.server_id,
@@ -337,18 +429,32 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
         }
         Err(e) => {
             tracing::error!("Deploy failed: {}", e);
+            let error_msg = e.to_string();
+
             DeploymentRepository::update(
                 &ctx.db,
                 job.deployment_id,
                 UpdateDeployment {
                     status: Some(mcp_common::types::DeploymentStatus::Failed),
-                    error_message: Some(e.to_string()),
+                    error_message: Some(error_msg.clone()),
                     finished_at: Some(chrono::Utc::now()),
                     ..Default::default()
                 },
             )
             .await
             .ok();
+
+            // Publish failed status
+            ctx.events
+                .publish_deployment_status(
+                    job.deployment_id,
+                    job.server_id,
+                    mcp_common::types::DeploymentStatus::Failed,
+                    Some(error_msg),
+                    Some(100),
+                )
+                .await
+                .ok();
 
             ServerRepository::update_status(
                 &ctx.db,

@@ -1,0 +1,221 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "close": "Close",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "servers": "Servers",
+    "apiKeys": "API Keys",
+    "logs": "Logs",
+    "settings": "Settings",
+    "docs": "Docs",
+    "blog": "Blog",
+    "faq": "FAQ",
+    "contact": "Contact",
+    "login": "Login",
+    "logout": "Logout",
+    "signup": "Sign Up"
+  },
+  "home": {
+    "title": "MCP Server Hosting Platform",
+    "heroTitle1": "AI Tools,",
+    "heroTitle2": "in the Cloud",
+    "subtitle": "AI Tools,in the Cloud",
+    "heroDescription1": "One-click deploy from GitHub.",
+    "heroDescription2": "Go live instantly without managing infrastructure.",
+    "description": "Simply connect your GitHub repository to automatically build and deploy MCP servers. Focus on AI integration without worrying about scalable infrastructure.",
+    "getStarted": "Get Started Free",
+    "startWithGithub": "Start with GitHub",
+    "viewDocs": "View Documentation",
+    "features": {
+      "title": "Features",
+      "deploy": {
+        "title": "One-Click Deploy",
+        "description": "Connect your GitHub repository for automatic deployment"
+      },
+      "scale": {
+        "title": "Auto Scaling",
+        "description": "Automatically scale based on traffic"
+      },
+      "secure": {
+        "title": "Secure",
+        "description": "End-to-end encryption and access control"
+      },
+      "monitor": {
+        "title": "Real-time Monitoring",
+        "description": "View logs and metrics in real-time"
+      }
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back",
+    "overview": "Overview",
+    "recentActivity": "Recent Activity",
+    "quickActions": "Quick Actions",
+    "noServers": "No servers",
+    "createFirstServer": "Create your first server"
+  },
+  "servers": {
+    "title": "Servers",
+    "new": "New Server",
+    "list": "Server List",
+    "empty": "No servers yet",
+    "create": {
+      "title": "Create New Server",
+      "name": "Server Name",
+      "namePlaceholder": "my-mcp-server",
+      "slug": "Slug",
+      "slugPlaceholder": "my-server",
+      "slugHelp": "Identifier used in URL (lowercase letters and hyphens only)",
+      "description": "Description",
+      "descriptionPlaceholder": "Enter server description",
+      "githubRepo": "GitHub Repository",
+      "githubRepoPlaceholder": "owner/repo",
+      "githubRepoHelp": "Enter in owner/repo format",
+      "branch": "Branch",
+      "branchPlaceholder": "main",
+      "runtime": "Runtime",
+      "runtimeNode": "Node.js",
+      "runtimePython": "Python",
+      "runtimeGo": "Go",
+      "runtimeRust": "Rust",
+      "runtimeDocker": "Docker",
+      "visibility": "Visibility",
+      "visibilityPublic": "Public",
+      "visibilityPrivate": "Private",
+      "submit": "Create Server"
+    },
+    "detail": {
+      "overview": "Overview",
+      "deployments": "Deployments",
+      "logs": "Logs",
+      "settings": "Settings",
+      "secrets": "Secrets",
+      "endpoint": "Endpoint",
+      "status": "Status",
+      "runtime": "Runtime",
+      "lastDeployed": "Last Deployed",
+      "deploy": "Deploy",
+      "stop": "Stop",
+      "restart": "Restart"
+    },
+    "status": {
+      "running": "Running",
+      "stopped": "Stopped",
+      "building": "Building",
+      "deploying": "Deploying",
+      "failed": "Failed",
+      "pending": "Pending"
+    }
+  },
+  "apiKeys": {
+    "title": "API Keys",
+    "new": "New API Key",
+    "empty": "No API keys yet",
+    "create": {
+      "title": "Create New API Key",
+      "name": "Key Name",
+      "namePlaceholder": "my-api-key",
+      "submit": "Create API Key"
+    },
+    "created": "API key created",
+    "createdWarning": "This key will only be shown once. Please save it in a secure location.",
+    "revoke": "Revoke",
+    "revokeConfirm": "Are you sure you want to revoke this API key? This action cannot be undone."
+  },
+  "logs": {
+    "title": "Logs",
+    "empty": "No logs",
+    "filter": {
+      "all": "All",
+      "info": "Info",
+      "warning": "Warning",
+      "error": "Error"
+    },
+    "realtime": "Real-time",
+    "download": "Download"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": {
+      "title": "Profile",
+      "name": "Name",
+      "email": "Email",
+      "save": "Save"
+    },
+    "workspace": {
+      "title": "Workspace",
+      "name": "Workspace Name",
+      "members": "Members",
+      "invite": "Invite"
+    },
+    "danger": {
+      "title": "Danger Zone",
+      "deleteAccount": "Delete Account",
+      "deleteAccountWarning": "Deleting your account will permanently remove all your data. This action cannot be undone.",
+      "deleteWorkspace": "Delete Workspace"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Login",
+      "forgotPassword": "Forgot password?",
+      "noAccount": "Don't have an account?",
+      "signup": "Sign up",
+      "withGithub": "Login with GitHub"
+    },
+    "signup": {
+      "title": "Sign Up",
+      "name": "Name",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "submit": "Sign Up",
+      "hasAccount": "Already have an account?",
+      "login": "Login",
+      "withGithub": "Sign up with GitHub"
+    }
+  },
+  "errors": {
+    "required": "This field is required",
+    "invalidEmail": "Please enter a valid email address",
+    "passwordMin": "Password must be at least 8 characters",
+    "passwordMatch": "Passwords do not match",
+    "invalidSlug": "Only lowercase letters, numbers, and hyphens are allowed",
+    "invalidGithubRepo": "Please enter in owner/repo format",
+    "serverError": "A server error occurred. Please try again later.",
+    "networkError": "A network error occurred. Please check your connection.",
+    "unauthorized": "Authentication required. Please log in.",
+    "forbidden": "You do not have permission to perform this action.",
+    "notFound": "Resource not found.",
+    "invalidMcpRepository": "This is not a valid MCP server repository. package.json (Node.js) or requirements.txt/pyproject.toml (Python) with MCP SDK dependencies is required."
+  },
+  "footer": {
+    "copyright": "© {year} Nodeflare. All rights reserved.",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "contact": "Contact"
+  }
+}
