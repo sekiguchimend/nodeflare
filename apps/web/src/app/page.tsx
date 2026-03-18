@@ -172,18 +172,18 @@ export default function HomePage() {
               <span className="inline-block text-violet-600 text-sm font-medium mb-4">
                 Why Nodeflare?
               </span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">なぜNodeflareなのか</h2>
-              <p className="mt-4 text-gray-500 text-lg">MCPサーバーをAIから使える状態にするのは、意外と面倒</p>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">ローカル運用の限界を超える</h2>
+              <p className="mt-4 text-gray-500 text-lg">MCPサーバーを本番品質で運用するために必要な機能をすべて</p>
             </div>
 
             {/* 吹き出しブロック */}
             <div className="space-y-5">
               {[
-                { title: 'AIからすぐ使える', desc: 'Claude・CursorにURL貼るだけで接続完了', icon: <><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M21.18 8.02A10 10 0 0 0 12 2v10h10a10 10 0 0 0-0.82-3.98z" /></>, align: 'left' },
-                { title: 'ツール権限を制御', desc: '誰がどのツールを使えるか細かく設定', icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></>, align: 'right' },
-                { title: '外部APIキーを安全に', desc: 'Notion・GitHubのキーを暗号化して管理', icon: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>, align: 'left' },
-                { title: 'MCP専用プロキシ', desc: 'レート制限・ログ・認証をプロトコルレベルで最適化', icon: <><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></>, align: 'right' },
-                { title: 'ローカル不要', desc: '常時オンラインでどこからでもAIがアクセス可能', icon: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></>, align: 'left' },
+                { title: 'ゼロコンフィグ', desc: 'MCP SDKで書いたコードをそのままpush。設定ファイル不要', icon: <><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M21.18 8.02A10 10 0 0 0 12 2v10h10a10 10 0 0 0-0.82-3.98z" /></>, align: 'left' },
+                { title: 'ツール単位のACL', desc: '誰がどのツールを呼べるか、メソッドレベルで制御', icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></>, align: 'right' },
+                { title: 'シークレット管理', desc: '環境変数を暗号化保存。チームで安全に共有', icon: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>, align: 'left' },
+                { title: 'プロトコル最適化', desc: 'MCP専用プロキシでレート制限・リトライ・ログを自動化', icon: <><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></>, align: 'right' },
+                { title: '常時オンライン', desc: 'PCを閉じても24時間稼働。ngrok不要', icon: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></>, align: 'left' },
               ].map((item, idx) => (
                 <div key={idx} className={`flex ${item.align === 'right' ? 'justify-end' : 'justify-start'}`}>
                   <div className="relative inline-block max-w-md">
@@ -239,7 +239,7 @@ export default function HomePage() {
                 <div className="space-y-4">
                   {[
                     { icon: '✓', text: 'TypeScript / JavaScript 対応', color: 'text-emerald-600' },
-                    { icon: '◎', text: 'Python（近日公開）', color: 'text-gray-400' },
+                    { icon: '✓', text: 'Python 対応', color: 'text-emerald-600' },
                     { icon: '✓', text: '環境変数の暗号化保存', color: 'text-emerald-600' },
                     { icon: '✓', text: 'カスタムドメイン対応', color: 'text-emerald-600' },
                   ].map((item, idx) => (
@@ -468,9 +468,9 @@ export default function HomePage() {
 
             <div className="space-y-4">
               {[
-                { q: 'Nodeflareとは何ですか？', a: 'NodeflareはMCPサーバーをクラウド上でホスティングするサービスです。MCPサーバーとは、Claude等のAIアシスタントが外部のツールやデータにアクセスするためのサーバーです。GitHubリポジトリを接続するだけで、自動でビルド・デプロイが行われます。' },
+                { q: 'Nodeflareとは何ですか？', a: 'MCP専用のホスティングサービスです。MCP SDKで書いたコードをpushするだけで即デプロイ。アクセス制御・ログ・シークレット管理など、本番運用に必要な機能をすべて備えています。' },
                 { q: '無料プランでどこまで使えますか？', a: '無料プランでは、サーバー3つまで、月間10,000リクエストまでご利用いただけます。個人での利用や小規模なプロジェクトには十分な容量です。' },
-                { q: 'どの言語に対応していますか？', a: '現在、TypeScript / JavaScriptに対応しています。Python対応は近日公開予定です。' },
+                { q: 'どの言語に対応していますか？', a: 'TypeScript / JavaScript、Pythonに対応しています。Go、Rust、Dockerも利用可能です。' },
               ].map((item, idx) => (
                 <div
                   key={idx}

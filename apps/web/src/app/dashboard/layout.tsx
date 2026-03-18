@@ -56,8 +56,9 @@ export default function DashboardLayout({
       <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} border-r bg-card transition-all duration-300`}>
         <div className="p-4 border-b flex items-center justify-between">
           {sidebarOpen && (
-            <Link href="/dashboard" className="text-xl font-bold">
-              Nodeflare
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <img src="/logo.png" alt="Nodeflare" className="h-6 w-auto" />
+              <span className="text-lg font-black">NodeFlare</span>
             </Link>
           )}
           <button

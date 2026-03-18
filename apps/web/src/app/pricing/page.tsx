@@ -1,299 +1,318 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import { useAuth } from '@/hooks/use-auth';
+import { Header, Footer } from '@/components/layout';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import Link from 'next/link';
 
-interface Plan {
-  plan: string;
-  name: string;
-  description: string;
-  price_monthly_usd: number;
-  price_yearly_usd: number;
-  features: string[];
-  limits: {
-    max_servers: number;
-    max_deployments_per_month: number;
-    max_requests_per_month: number;
-    max_team_members: number;
-    log_retention_days: number;
-    custom_domains: boolean;
-    priority_support: boolean;
-    sso_enabled: boolean;
-  };
-}
+const plans = [
+  {
+    name: 'Free',
+    price: 0,
+    description: '個人開発や検証に最適',
+    features: [
+      'サーバー3つまで',
+      '月間10,000リクエスト',
+      'コミュニティサポート',
+      '基本的なログ（7日間保持）',
+    ],
+    cta: '無料で始める',
+    popular: false,
+  },
+  {
+    name: 'Pro',
+    price: 2980,
+    description: '本番運用に必要な全機能',
+    features: [
+      'サーバー無制限',
+      '月間100,000リクエスト',
+      'カスタムドメイン',
+      '優先サポート',
+      '高度な分析',
+      'ログ30日間保持',
+      'チームメンバー5人まで',
+    ],
+    cta: 'Proを始める',
+    popular: true,
+  },
+  {
+    name: 'Team',
+    price: 9800,
+    description: 'チームでの本格運用に',
+    features: [
+      'サーバー無制限',
+      '月間500,000リクエスト',
+      'カスタムドメイン',
+      '優先サポート',
+      '高度な分析',
+      'ログ90日間保持',
+      'チームメンバー無制限',
+      'SSO/SAML対応',
+    ],
+    cta: 'Teamを始める',
+    popular: false,
+  },
+];
+
+const comparisonFeatures = [
+  { name: 'MCPサーバー数', free: '3', pro: '無制限', team: '無制限' },
+  { name: 'リクエスト/月', free: '10,000', pro: '100,000', team: '500,000' },
+  { name: 'チームメンバー', free: '1', pro: '5', team: '無制限' },
+  { name: 'ログ保持期間', free: '7日', pro: '30日', team: '90日' },
+  { name: 'カスタムドメイン', free: false, pro: true, team: true },
+  { name: '優先サポート', free: false, pro: true, team: true },
+  { name: 'SSO/SAML', free: false, pro: false, team: true },
+];
 
 export default function PricingPage() {
-  const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const { user } = useAuth();
-
-  const { data: plans, isLoading } = useQuery<Plan[]>({
-    queryKey: ['billing-plans'],
-    queryFn: () => api.get('/billing/plans'),
-  });
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold">
-            Nodeflare
-          </Link>
-          <nav className="flex items-center gap-4">
-            {user ? (
-              <Link href="/dashboard">
-                <Button>Dashboard</Button>
-              </Link>
-            ) : (
-              <Link href="/api/v1/auth/github">
-                <Button>Get Started</Button>
-              </Link>
-            )}
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="py-20 text-center">
-        <div className="container mx-auto px-4">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Simple, transparent pricing
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-            Start for free, scale as you grow. No hidden fees, no surprises.
-          </p>
-
-          {/* Interval Toggle */}
-          <div className="inline-flex items-center bg-muted rounded-lg p-1">
-            <button
-              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                selectedInterval === 'monthly' ? 'bg-background shadow' : 'text-muted-foreground'
-              }`}
-              onClick={() => setSelectedInterval('monthly')}
-            >
-              Monthly
-            </button>
-            <button
-              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                selectedInterval === 'yearly' ? 'bg-background shadow' : 'text-muted-foreground'
-              }`}
-              onClick={() => setSelectedInterval('yearly')}
-            >
-              Yearly <span className="text-green-600 text-xs ml-1">Save 20%</span>
-            </button>
+      <main>
+        {/* Hero */}
+        <section className="py-20">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+            <h1 className="text-4xl sm:text-5xl font-black text-gray-900 mb-4">
+              料金プラン
+            </h1>
+            <p className="text-xl text-gray-600">
+              小規模なら無料。スケールに合わせてアップグレード。
+            </p>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Plans Grid */}
-      <section className="pb-20">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-            {plans?.map((plan, index) => {
-              const price = selectedInterval === 'yearly' ? plan.price_yearly_usd : plan.price_monthly_usd;
-              const monthlyPrice = selectedInterval === 'yearly' ? Math.round(price / 12) : price;
-              const isPopular = plan.plan === 'pro';
-
-              return (
-                <Card key={plan.plan} className={`relative ${isPopular ? 'border-primary ring-2 ring-primary' : ''}`}>
-                  {isPopular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-full">
-                      Most Popular
-                    </div>
+        {/* Plans */}
+        <section className="pb-20">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="grid md:grid-cols-3 gap-6">
+              {plans.map((plan) => (
+                <div
+                  key={plan.name}
+                  className="relative group"
+                >
+                  {plan.popular && (
+                    <div className="absolute -inset-[1px] bg-violet-500 rounded-2xl" />
                   )}
-                  <CardHeader>
-                    <CardTitle>{plan.name}</CardTitle>
-                    <CardDescription>{plan.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="mb-6">
-                      <span className="text-4xl font-bold">${monthlyPrice}</span>
-                      <span className="text-muted-foreground">/month</span>
-                      {selectedInterval === 'yearly' && price > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          Billed ${price}/year
-                        </p>
+                  <div
+                    className={`relative rounded-2xl p-8 h-full ${
+                      plan.popular
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-white border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all'
+                    }`}
+                  >
+                    <div className={`flex items-center gap-2 mb-2`}>
+                      <span className={`text-sm font-medium ${plan.popular ? 'text-violet-300' : 'text-gray-500'}`}>
+                        {plan.name}
+                      </span>
+                      {plan.popular && (
+                        <span className="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 text-xs font-medium">
+                          おすすめ
+                        </span>
                       )}
                     </div>
 
-                    <ul className="space-y-3">
-                      {plan.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm">
-                          <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <div className="flex items-baseline gap-1 mb-4">
+                      <span className="text-4xl font-bold">¥{plan.price.toLocaleString()}</span>
+                      <span className={plan.popular ? 'text-gray-400' : 'text-gray-500'}>/月</span>
+                    </div>
+
+                    <p className={`mb-6 ${plan.popular ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {plan.description}
+                    </p>
+
+                    <ul className="space-y-3 mb-8">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-center gap-3 text-sm">
+                          <svg
+                            className={`w-5 h-5 flex-shrink-0 ${plan.popular ? 'text-violet-400' : 'text-gray-400'}`}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                          >
+                            <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
-                          {feature}
+                          <span className={plan.popular ? 'text-gray-200' : 'text-gray-700'}>
+                            {feature}
+                          </span>
                         </li>
                       ))}
                     </ul>
-                  </CardContent>
-                  <CardFooter>
-                    {user ? (
-                      <Link href="/dashboard/billing" className="w-full">
-                        <Button className="w-full" variant={isPopular ? 'default' : 'outline'}>
-                          {plan.plan === 'free' ? 'Current Plan' : 'Upgrade'}
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Link href="/api/v1/auth/github" className="w-full">
-                        <Button className="w-full" variant={isPopular ? 'default' : 'outline'}>
-                          Get Started
-                        </Button>
-                      </Link>
-                    )}
-                  </CardFooter>
-                </Card>
-              );
-            })}
+
+                    <a href="/api/v1/auth/github" className="block">
+                      <Button
+                        className={`w-full h-12 ${
+                          plan.popular
+                            ? 'bg-violet-500 hover:bg-violet-400 text-white'
+                            : 'bg-gray-900 text-white hover:bg-gray-800'
+                        }`}
+                      >
+                        {plan.cta}
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Feature Comparison */}
-      <section className="py-20 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Compare Plans</h2>
-          <div className="max-w-5xl mx-auto overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-4 px-4">Feature</th>
-                  {plans?.map((plan) => (
-                    <th key={plan.plan} className="text-center py-4 px-4">{plan.name}</th>
+        {/* Comparison Table */}
+        <section className="py-20 border-t border-gray-200">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <h2 className="text-2xl font-bold text-gray-900 text-center mb-12">
+              プラン比較
+            </h2>
+
+            <div className="overflow-hidden rounded-xl border-2 border-gray-300 shadow-sm">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-100 border-b-2 border-gray-300">
+                    <th className="text-left py-4 px-6 font-semibold text-gray-900">機能</th>
+                    <th className="text-center py-4 px-4 font-semibold text-gray-900 border-l border-gray-300">Free</th>
+                    <th className="text-center py-4 px-4 font-semibold text-gray-900 bg-violet-100 border-l border-gray-300">Pro</th>
+                    <th className="text-center py-4 px-4 font-semibold text-gray-900 border-l border-gray-300">Team</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparisonFeatures.map((feature, idx) => (
+                    <tr key={feature.name} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-t border-gray-200`}>
+                      <td className="py-4 px-6 text-gray-700 font-medium">{feature.name}</td>
+                      <td className="py-4 px-4 text-center border-l border-gray-200">
+                        {typeof feature.free === 'boolean' ? (
+                          feature.free ? (
+                            <svg className="w-5 h-5 text-green-600 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )
+                        ) : (
+                          <span className="text-gray-900 font-medium">{feature.free}</span>
+                        )}
+                      </td>
+                      <td className={`py-4 px-4 text-center border-l border-gray-200 ${idx % 2 === 0 ? 'bg-violet-50' : 'bg-violet-100'}`}>
+                        {typeof feature.pro === 'boolean' ? (
+                          feature.pro ? (
+                            <svg className="w-5 h-5 text-green-600 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )
+                        ) : (
+                          <span className="text-gray-900 font-medium">{feature.pro}</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-center border-l border-gray-200">
+                        {typeof feature.team === 'boolean' ? (
+                          feature.team ? (
+                            <svg className="w-5 h-5 text-green-600 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )
+                        ) : (
+                          <span className="text-gray-900 font-medium">{feature.team}</span>
+                        )}
+                      </td>
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">MCP Servers</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">
-                      {plan.limits.max_servers === 4294967295 ? 'Unlimited' : plan.limits.max_servers}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">Deployments/month</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">
-                      {plan.limits.max_deployments_per_month === 4294967295 ? 'Unlimited' : plan.limits.max_deployments_per_month}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">API Requests/month</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">
-                      {plan.limits.max_requests_per_month > 1e15 ? 'Unlimited' : `${(plan.limits.max_requests_per_month / 1000).toFixed(0)}K`}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">Team Members</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">
-                      {plan.limits.max_team_members === 4294967295 ? 'Unlimited' : plan.limits.max_team_members}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">Log Retention</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">{plan.limits.log_retention_days} days</td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">Custom Domains</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">
-                      {plan.limits.custom_domains ? (
-                        <svg className="w-5 h-5 text-green-500 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-muted-foreground mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">Priority Support</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">
-                      {plan.limits.priority_support ? (
-                        <svg className="w-5 h-5 text-green-500 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-muted-foreground mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-4 px-4 font-medium">SSO/SAML</td>
-                  {plans?.map((plan) => (
-                    <td key={plan.plan} className="text-center py-4 px-4">
-                      {plan.limits.sso_enabled ? (
-                        <svg className="w-5 h-5 text-green-500 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-muted-foreground mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CTA Section */}
-      <section className="py-20">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
-          <p className="text-xl text-muted-foreground mb-8">
-            Start with our free plan and upgrade when you're ready.
-          </p>
-          {user ? (
-            <Link href="/dashboard">
-              <Button size="lg">Go to Dashboard</Button>
-            </Link>
-          ) : (
-            <Link href="/api/v1/auth/github">
-              <Button size="lg">Start for Free</Button>
-            </Link>
-          )}
-        </div>
-      </section>
+        {/* FAQ */}
+        <FAQSection />
+      </main>
 
-      {/* Footer */}
-      <footer className="border-t py-12">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Nodeflare. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
+  );
+}
+
+const faqs = [
+  {
+    q: '無料プランから有料プランへの移行は簡単ですか？',
+    a: 'はい、ダッシュボードからワンクリックでアップグレードできます。データや設定はそのまま引き継がれます。',
+  },
+  {
+    q: '支払い方法は何に対応していますか？',
+    a: 'クレジットカード（Visa、Mastercard、American Express、JCB）に対応しています。',
+  },
+  {
+    q: '解約はいつでもできますか？',
+    a: 'はい、いつでも解約可能です。解約後も請求期間の終了まではサービスをご利用いただけます。',
+  },
+  {
+    q: 'リクエスト数の上限を超えたらどうなりますか？',
+    a: '上限に近づくとメールでお知らせします。上限を超えた場合、追加料金が発生するか、一時的にリクエストが制限されます。',
+  },
+];
+
+function FAQSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  return (
+    <section className="py-20 border-t bg-gray-50">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-12">
+          <span className="inline-block text-violet-600 text-sm font-medium mb-3">FAQ</span>
+          <h2 className="text-2xl font-bold text-gray-900">よくある質問</h2>
+        </div>
+
+        <div className="space-y-3">
+          {faqs.map((faq, idx) => (
+            <div
+              key={idx}
+              className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${
+                openIndex === idx
+                  ? 'border-violet-400 shadow-lg shadow-violet-500/10'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <button
+                onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
+                className="w-full flex items-center gap-4 p-5 text-left"
+              >
+                <span className="flex-1 font-medium text-gray-900">{faq.q}</span>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                    openIndex === idx ? 'bg-violet-100 rotate-180' : 'bg-gray-100'
+                  }`}
+                >
+                  <svg
+                    className={`w-4 h-4 transition-colors ${
+                      openIndex === idx ? 'text-violet-600' : 'text-gray-400'
+                    }`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </div>
+              </button>
+              <div
+                className={`transition-all duration-300 ${
+                  openIndex === idx ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className="px-5 pb-5">
+                  <p className="text-gray-600 leading-relaxed">{faq.a}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

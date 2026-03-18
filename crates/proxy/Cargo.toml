@@ -11,6 +11,7 @@ path = "src/main.rs"
 mcp-common = { path = "../common" }
 mcp-db = { path = "../db" }
 mcp-auth = { path = "../auth" }
+mcp-billing = { path = "../billing" }
 
 # Async
 tokio.workspace = true

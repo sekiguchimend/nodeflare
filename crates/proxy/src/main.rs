@@ -103,10 +103,13 @@ async fn proxy_handler(
         }
     }
 
-    // 4. Check rate limit
+    // 4. Check rate limit (per-minute)
     rate_limit::check(&state, &api_key_record, &server).await?;
 
-    // 5. Forward request to MCP server
+    // 5. Check monthly quota based on workspace plan
+    rate_limit::check_monthly_quota(&state, server.workspace_id).await?;
+
+    // 6. Forward request to MCP server
     let endpoint_url = server
         .endpoint_url
         .as_ref()
@@ -116,10 +119,21 @@ async fn proxy_handler(
     let query = uri.query().map(|q| format!("?{}", q)).unwrap_or_default();
     let target_url = format!("{}{}{}", endpoint_url, path, query);
 
-    // 5. Forward request (includes scope check)
+    // 7. Forward request (includes scope check)
     let (response, mcp_info) = forward_request(&state, &target_url, request, &api_key_record).await?;
 
-    // 6. Log request (async, don't block)
+    // 8. Increment monthly counter on success (async, don't block response)
+    if response.status().is_success() {
+        let state_clone = state.clone();
+        let workspace_id = server.workspace_id;
+        tokio::spawn(async move {
+            if let Err(e) = rate_limit::increment_monthly_counter(&state_clone, workspace_id).await {
+                tracing::warn!("Failed to increment monthly counter: {}", e);
+            }
+        });
+    }
+
+    // 9. Log request (async, don't block)
     let duration_ms = start.elapsed().as_millis() as i32;
     let server_id = server.id;
     let api_key_id = api_key_record.id;
@@ -352,33 +366,42 @@ fn extract_subdomain(host: &str, base_domain: &str) -> Result<String, ProxyError
 }
 
 #[derive(Debug)]
-enum ProxyError {
+pub enum ProxyError {
     Unauthorized(String),
     Forbidden(String),
     NotFound(String),
     BadRequest(String),
     RateLimitExceeded,
+    QuotaExceeded(String),
+    PaymentRequired(String),
     ServiceUnavailable(String),
     Internal(String),
 }
 
 impl IntoResponse for ProxyError {
     fn into_response(self) -> Response {
-        let (status, message) = match self {
-            ProxyError::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m),
-            ProxyError::Forbidden(m) => (StatusCode::FORBIDDEN, m),
-            ProxyError::NotFound(m) => (StatusCode::NOT_FOUND, m),
-            ProxyError::BadRequest(m) => (StatusCode::BAD_REQUEST, m),
+        let (status, message, error_code) = match self {
+            ProxyError::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m, "UNAUTHORIZED"),
+            ProxyError::Forbidden(m) => (StatusCode::FORBIDDEN, m, "FORBIDDEN"),
+            ProxyError::NotFound(m) => (StatusCode::NOT_FOUND, m, "NOT_FOUND"),
+            ProxyError::BadRequest(m) => (StatusCode::BAD_REQUEST, m, "BAD_REQUEST"),
             ProxyError::RateLimitExceeded => {
-                (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string())
+                (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded. Please slow down.".to_string(), "RATE_LIMIT_EXCEEDED")
             }
-            ProxyError::ServiceUnavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m),
-            ProxyError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m),
+            ProxyError::QuotaExceeded(m) => {
+                (StatusCode::TOO_MANY_REQUESTS, m, "MONTHLY_QUOTA_EXCEEDED")
+            }
+            ProxyError::PaymentRequired(m) => {
+                (StatusCode::PAYMENT_REQUIRED, m, "PAYMENT_REQUIRED")
+            }
+            ProxyError::ServiceUnavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m, "SERVICE_UNAVAILABLE"),
+            ProxyError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m, "INTERNAL_ERROR"),
         };
 
         let body = serde_json::json!({
             "error": {
-                "code": status.as_u16(),
+                "code": error_code,
+                "status": status.as_u16(),
                 "message": message
             }
         });

@@ -126,7 +126,21 @@ impl WebhookHandler {
             WorkspaceRepository::update_plan(&self.db, workspace_id, plan.into())
                 .await?;
 
-            tracing::info!("Updated workspace {} to plan {:?}", workspace_id, plan);
+            // Set subscription status and period end
+            let status = subscription.status.to_string();
+            let period_end = chrono::DateTime::from_timestamp(subscription.current_period_end, 0);
+
+            WorkspaceRepository::update_subscription_status(
+                &self.db,
+                workspace_id,
+                &status,
+                period_end,
+            ).await?;
+
+            tracing::info!(
+                "Created subscription for workspace {} with plan {:?}, status {}, period ends: {:?}",
+                workspace_id, plan, status, period_end
+            );
         }
 
         Ok(())
@@ -156,7 +170,21 @@ impl WebhookHandler {
             WorkspaceRepository::update_plan(&self.db, workspace_id, plan.into())
                 .await?;
 
-            tracing::info!("Updated workspace {} to plan {:?}", workspace_id, plan);
+            // Update subscription status and period end
+            let status = subscription.status.to_string();
+            let period_end = chrono::DateTime::from_timestamp(subscription.current_period_end, 0);
+
+            WorkspaceRepository::update_subscription_status(
+                &self.db,
+                workspace_id,
+                &status,
+                period_end,
+            ).await?;
+
+            tracing::info!(
+                "Updated workspace {} to plan {:?} with status {} (period ends: {:?})",
+                workspace_id, plan, status, period_end
+            );
         }
 
         Ok(())
@@ -187,19 +215,6 @@ impl WebhookHandler {
         Ok(())
     }
 
-    async fn handle_invoice_paid(&self, event: Event) -> Result<()> {
-        if let EventObject::Invoice(invoice) = event.data.object {
-            tracing::info!(
-                "Invoice paid: {} for amount {}",
-                invoice.id.as_str(),
-                invoice.amount_paid.unwrap_or(0)
-            );
-            // Could log payment history here
-        }
-
-        Ok(())
-    }
-
     async fn handle_invoice_payment_failed(&self, event: Event) -> Result<()> {
         if let EventObject::Invoice(invoice) = event.data.object {
             tracing::warn!(
@@ -207,8 +222,88 @@ impl WebhookHandler {
                 invoice.id.as_str()
             );
 
-            // Could send notification to user here
-            // Could also suspend service after multiple failures
+            // Get customer ID from invoice
+            if let Some(customer) = invoice.customer {
+                let customer_id = customer.id().to_string();
+
+                // Find workspace by customer ID
+                if let Ok(Some(workspace)) = WorkspaceRepository::find_by_stripe_customer(&self.db, &customer_id).await {
+                    // Get attempt count from invoice
+                    let attempt_count = invoice.attempt_count.unwrap_or(0);
+
+                    // Update subscription status based on attempt count
+                    let new_status = if attempt_count >= 3 {
+                        // After 3 failed attempts, mark as unpaid (service will be blocked)
+                        tracing::warn!(
+                            "Workspace {} marked as unpaid after {} failed payment attempts",
+                            workspace.id,
+                            attempt_count
+                        );
+                        "unpaid"
+                    } else {
+                        // Mark as past_due (grace period, service continues but user warned)
+                        tracing::warn!(
+                            "Workspace {} marked as past_due (attempt {})",
+                            workspace.id,
+                            attempt_count
+                        );
+                        "past_due"
+                    };
+
+                    if let Err(e) = WorkspaceRepository::update_subscription_status(
+                        &self.db,
+                        workspace.id,
+                        new_status,
+                        None,
+                    ).await {
+                        tracing::error!("Failed to update subscription status: {}", e);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_invoice_paid(&self, event: Event) -> Result<()> {
+        if let EventObject::Invoice(invoice) = event.data.object {
+            tracing::info!(
+                "Invoice paid: {} for amount {}",
+                invoice.id.as_str(),
+                invoice.amount_paid.unwrap_or(0)
+            );
+
+            // On successful payment, restore active status
+            if let Some(customer) = invoice.customer {
+                let customer_id = customer.id().to_string();
+
+                if let Ok(Some(workspace)) = WorkspaceRepository::find_by_stripe_customer(&self.db, &customer_id).await {
+                    // Only update if status was past_due or unpaid
+                    if let Some(ref status) = workspace.subscription_status {
+                        if status == "past_due" || status == "unpaid" {
+                            tracing::info!(
+                                "Restoring workspace {} to active status after payment",
+                                workspace.id
+                            );
+
+                            // Get period end from subscription
+                            let period_end = invoice.lines.data.first()
+                                .and_then(|line| line.period.as_ref())
+                                .map(|period| chrono::DateTime::from_timestamp(period.end, 0))
+                                .flatten();
+
+                            if let Err(e) = WorkspaceRepository::update_subscription_status(
+                                &self.db,
+                                workspace.id,
+                                "active",
+                                period_end,
+                            ).await {
+                                tracing::error!("Failed to restore subscription status: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())

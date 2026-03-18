@@ -7,17 +7,11 @@ export function Footer() {
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
-              </div>
-              <span className="font-semibold text-white">Nodeflare</span>
+              <img src="/logo.png" alt="Nodeflare" className="h-8 w-auto" />
+              <span className="font-black text-white">NodeFlare</span>
             </div>
             <p className="text-gray-400 text-sm">
-              MCPサーバーのホスティングプラットフォーム
+              MCP専用ホスティング
             </p>
           </div>
 
