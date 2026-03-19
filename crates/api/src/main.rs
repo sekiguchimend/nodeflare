@@ -2,7 +2,7 @@ use anyhow::Result;
 use axum::{routing::get, Router};
 use fred::interfaces::ClientLike;
 use mcp_common::AppConfig;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::{
     compression::CompressionLayer,
@@ -85,7 +85,11 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     tracing::info!("API server listening on {}", addr);
 
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

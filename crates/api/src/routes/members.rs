@@ -50,12 +50,15 @@ pub async fn list(
 
     let response: Vec<MemberResponse> = members
         .into_iter()
-        .map(|m| MemberResponse {
-            user_id: m.user_id,
-            email: m.email,
-            name: m.name,
-            avatar_url: m.avatar_url,
-            role: m.role(),
+        .map(|m| {
+            let role = m.role();
+            MemberResponse {
+                user_id: m.user_id,
+                email: m.email,
+                name: m.name,
+                avatar_url: m.avatar_url,
+                role,
+            }
         })
         .collect();
 
