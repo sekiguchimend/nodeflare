@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { CreateServerRequest, McpServer, Runtime, Visibility, GitHubRepo } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,8 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
 export default function NewServerPage() {
+  const t = useTranslations('servers');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -92,27 +95,28 @@ export default function NewServerPage() {
     <div className="max-w-2xl mx-auto">
       {isFirstServer && (
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Welcome to Nodeflare</h1>
+          <h1 className="text-3xl font-bold mb-2">{t('create.welcome')}</h1>
           <p className="text-muted-foreground">
-            Deploy your first MCP server in seconds. Connect your GitHub repository and we'll handle the rest.
+            {t('create.welcomeDesc')}
           </p>
         </div>
       )}
-      <h1 className="text-2xl font-bold mb-6">
-        {isFirstServer ? 'Create Your First Server' : 'Create New Server'}
+      <h1 className="text-2xl font-medium mb-6 flex items-center gap-2 text-gray-400">
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></svg>
+        {isFirstServer ? t('create.firstTitle') : t('create.title')}
       </h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Server Configuration</CardTitle>
+          <CardTitle>{t('create.configuration')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{t('create.name')}</Label>
               <Input
                 id="name"
-                placeholder="my-mcp-server"
+                placeholder={t('create.namePlaceholder')}
                 value={formData.name}
                 onChange={(e) => {
                   const name = e.target.value;
@@ -123,10 +127,10 @@ export default function NewServerPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t('create.description')}</Label>
               <Input
                 id="description"
-                placeholder="A brief description of your server"
+                placeholder={t('create.descriptionBrief')}
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
@@ -135,7 +139,7 @@ export default function NewServerPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>GitHub Repository</Label>
+              <Label>{t('create.githubRepo')}</Label>
               {selectedRepo ? (
                 <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
                   <div className="flex items-center gap-3">
@@ -147,7 +151,7 @@ export default function NewServerPage() {
                     <div>
                       <p className="font-medium">{selectedRepo.full_name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {selectedRepo.private ? 'Private' : 'Public'} · {selectedRepo.language || 'Unknown'}
+                        {selectedRepo.private ? t('create.private') : t('create.visibilityPublic')} · {selectedRepo.language || 'Unknown'}
                       </p>
                     </div>
                   </div>
@@ -160,14 +164,14 @@ export default function NewServerPage() {
                       setFormData({ ...formData, github_repo: '', name: '' });
                     }}
                   >
-                    Change
+                    {tCommon('change')}
                   </Button>
                 </div>
               ) : (
                 <div className="border rounded-lg">
                   <div className="p-3 border-b">
                     <Input
-                      placeholder="Search repositories..."
+                      placeholder={t('create.searchRepos')}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="border-0 p-0 h-auto focus-visible:ring-0"
@@ -176,11 +180,11 @@ export default function NewServerPage() {
                   <div className="max-h-64 overflow-y-auto">
                     {reposLoading ? (
                       <div className="p-4 text-center text-muted-foreground">
-                        Loading repositories...
+                        {t('create.loadingRepos')}
                       </div>
                     ) : filteredRepos?.length === 0 ? (
                       <div className="p-4 text-center text-muted-foreground">
-                        No repositories found
+                        {t('create.noRepos')}
                       </div>
                     ) : (
                       filteredRepos?.map((repo) => (
@@ -198,12 +202,12 @@ export default function NewServerPage() {
                           <div className="flex-1 min-w-0">
                             <p className="font-medium truncate">{repo.name}</p>
                             <p className="text-sm text-muted-foreground truncate">
-                              {repo.description || 'No description'}
+                              {repo.description || t('create.noDescription')}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
                             {repo.private && (
-                              <span className="px-1.5 py-0.5 rounded bg-muted">Private</span>
+                              <span className="px-1.5 py-0.5 rounded bg-muted">{t('create.private')}</span>
                             )}
                             {repo.language && <span>{repo.language}</span>}
                           </div>
@@ -216,10 +220,10 @@ export default function NewServerPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="github_branch">Branch</Label>
+              <Label htmlFor="github_branch">{t('create.branch')}</Label>
               <Input
                 id="github_branch"
-                placeholder="main"
+                placeholder={t('create.branchPlaceholder')}
                 value={formData.github_branch}
                 onChange={(e) =>
                   setFormData({ ...formData, github_branch: e.target.value })
@@ -229,7 +233,7 @@ export default function NewServerPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="runtime">Runtime</Label>
+                <Label htmlFor="runtime">{t('create.runtime')}</Label>
                 <Select
                   id="runtime"
                   value={formData.runtime}
@@ -240,16 +244,16 @@ export default function NewServerPage() {
                     })
                   }
                 >
-                  <option value="node">Node.js</option>
-                  <option value="python">Python</option>
-                  <option value="go">Go</option>
-                  <option value="rust">Rust</option>
-                  <option value="docker">Docker</option>
+                  <option value="node">{t('create.runtimeNode')}</option>
+                  <option value="python">{t('create.runtimePython')}</option>
+                  <option value="go">{t('create.runtimeGo')}</option>
+                  <option value="rust">{t('create.runtimeRust')}</option>
+                  <option value="docker">{t('create.runtimeDocker')}</option>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="visibility">Visibility</Label>
+                <Label htmlFor="visibility">{t('create.visibility')}</Label>
                 <Select
                   id="visibility"
                   value={formData.visibility}
@@ -260,9 +264,9 @@ export default function NewServerPage() {
                     })
                   }
                 >
-                  <option value="private">Private</option>
-                  <option value="public">Public</option>
-                  <option value="team">Team</option>
+                  <option value="private">{t('create.visibilityPrivate')}</option>
+                  <option value="public">{t('create.visibilityPublic')}</option>
+                  <option value="team">{t('create.visibilityTeam')}</option>
                 </Select>
               </div>
             </div>
@@ -273,24 +277,24 @@ export default function NewServerPage() {
                 variant="outline"
                 onClick={() => router.back()}
               >
-                Cancel
+                {tCommon('cancel')}
               </Button>
               <Button type="submit" disabled={createMutation.isPending || !workspaceId || !formData.github_repo}>
-                {createMutation.isPending ? 'Creating...' : 'Create Server'}
+                {createMutation.isPending ? t('create.creating') : t('create.submit')}
               </Button>
             </div>
 
             {createMutation.isError && (
               <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20">
                 <p className="text-sm font-medium text-destructive">
-                  {(createMutation.error as Error).message || 'Failed to create server'}
+                  {(createMutation.error as Error).message || t('create.failed')}
                 </p>
                 {(() => {
                   const error = createMutation.error as any;
                   if (error?.details?.suggestion) {
                     return (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Try using slug: <code className="px-1 py-0.5 bg-muted rounded">{error.details.suggestion}</code>
+                        {t('create.trySuggestion')} <code className="px-1 py-0.5 bg-muted rounded">{error.details.suggestion}</code>
                       </p>
                     );
                   }

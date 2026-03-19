@@ -1,4 +1,4 @@
-use crate::models::{CreateWorkspace, UpdateWorkspace, Workspace, WorkspaceMember, WorkspaceWithRole};
+use crate::models::{CreateWorkspace, MemberWithUser, UpdateWorkspace, Workspace, WorkspaceMember, WorkspaceWithRole};
 use mcp_common::types::{Plan, WorkspaceRole};
 use mcp_common::Result;
 use sqlx::PgPool;
@@ -339,6 +339,30 @@ impl WorkspaceRepository {
             FROM workspace_members
             WHERE workspace_id = $1
             ORDER BY created_at
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(members)
+    }
+
+    /// List members with user details in a single query (prevents N+1)
+    pub async fn list_members_with_users(pool: &PgPool, workspace_id: Uuid) -> Result<Vec<MemberWithUser>> {
+        let members = sqlx::query_as::<_, MemberWithUser>(
+            r#"
+            SELECT
+                u.id as user_id,
+                u.email,
+                u.name,
+                u.avatar_url,
+                wm.role,
+                wm.created_at as member_created_at
+            FROM workspace_members wm
+            INNER JOIN users u ON wm.user_id = u.id
+            WHERE wm.workspace_id = $1
+            ORDER BY wm.created_at
             "#,
         )
         .bind(workspace_id)

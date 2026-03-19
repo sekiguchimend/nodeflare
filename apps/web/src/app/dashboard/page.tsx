@@ -1,15 +1,17 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
-import { McpServer } from '@/types';
+import { McpServer, ServerStatsResponse } from '@/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 export default function DashboardPage() {
+  const t = useTranslations('dashboard');
+  const tServers = useTranslations('servers');
   const router = useRouter();
   const { data: servers, isLoading, isSuccess } = useQuery<McpServer[]>({
     queryKey: ['servers'],
@@ -18,7 +20,6 @@ export default function DashboardPage() {
 
   const hasNoServers = isSuccess && (!servers || servers.length === 0);
 
-  // Redirect to create page if no servers
   useEffect(() => {
     if (hasNoServers) {
       router.replace('/dashboard/servers/new');
@@ -26,9 +27,32 @@ export default function DashboardPage() {
   }, [hasNoServers, router]);
 
   const runningServers = servers?.filter((s) => s.status === 'running') ?? [];
-  const recentServers = servers?.slice(0, 5) ?? [];
 
-  // Show loading while checking or redirecting
+  // Fetch stats for all servers
+  const statsQueries = useQueries({
+    queries: (servers ?? []).map((server) => ({
+      queryKey: ['workspaces', server.workspace_id, 'servers', server.id, 'stats'],
+      queryFn: () => api.get<ServerStatsResponse>(`/workspaces/${server.workspace_id}/servers/${server.id}/stats`),
+      enabled: !!server.workspace_id,
+      staleTime: 60000,
+    })),
+  });
+
+  const aggregatedStats = useMemo(() => {
+    let totalRequests = 0;
+    let totalErrors = 0;
+
+    statsQueries.forEach((query) => {
+      if (query.data?.stats) {
+        totalRequests += query.data.stats.total_requests;
+        totalErrors += query.data.stats.error_count;
+      }
+    });
+
+    const isLoadingStats = statsQueries.some((q) => q.isLoading);
+    return { totalRequests, totalErrors, isLoadingStats };
+  }, [statsQueries]);
+
   if (isLoading || hasNoServers) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -39,91 +63,79 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>
+          {t('title')}
+        </h1>
         <Link href="/dashboard/servers/new">
-          <Button>New Server</Button>
+          <Button size="sm">{t('newServer')}</Button>
         </Link>
       </div>
 
-      {/* Stats */}
-      <div className="grid md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Servers
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {servers?.length ?? 0}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Running
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {runningServers.length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Requests (24h)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">-</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Errors (24h)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">-</div>
-          </CardContent>
-        </Card>
+      {/* Stats - simple inline */}
+      <div className="flex items-center gap-8 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">{t('totalServers')}</span>
+          <span className="font-semibold">{servers?.length ?? 0}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">{t('running')}</span>
+          <span className="font-semibold text-green-600">{runningServers.length}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">{t('requests7d')}</span>
+          <span className="font-semibold">
+            {aggregatedStats.isLoadingStats ? '...' : aggregatedStats.totalRequests.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">{t('errors7d')}</span>
+          <span className="font-semibold text-red-600">
+            {aggregatedStats.isLoadingStats ? '...' : aggregatedStats.totalErrors.toLocaleString()}
+          </span>
+        </div>
       </div>
 
-      {/* Recent servers */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Servers</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {recentServers.map((server) => (
-              <Link
-                key={server.id}
-                href={`/dashboard/servers/${server.id}`}
-                className="flex items-center justify-between p-3 rounded-lg hover:bg-accent transition-colors"
-              >
-                <div>
-                  <div className="font-medium">{server.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {server.github_repo}
-                  </div>
-                </div>
-                <StatusBadge status={server.status} />
-              </Link>
+      {/* Servers table */}
+      <div className="border rounded">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('serverName')}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('repository')}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('status')}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('runtime')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {servers?.map((server) => (
+              <tr key={server.id} className="hover:bg-muted/20 transition-colors">
+                <td className="px-4 py-3">
+                  <Link href={`/dashboard/servers/${server.id}`} className="font-medium hover:underline">
+                    {server.name}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-sm text-muted-foreground">
+                  {server.github_repo}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={server.status} t={tServers} />
+                </td>
+                <td className="px-4 py-3 text-sm capitalize">
+                  {server.runtime}
+                </td>
+              </tr>
             ))}
-          </div>
-        </CardContent>
-      </Card>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, t }: { status: string; t: (key: string) => string }) {
   const colors: Record<string, string> = {
     running: 'bg-green-100 text-green-800',
     building: 'bg-yellow-100 text-yellow-800',
@@ -135,11 +147,11 @@ function StatusBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`px-2 py-1 text-xs font-medium rounded-full ${
+      className={`px-2 py-0.5 text-xs font-medium rounded ${
         colors[status] ?? colors.pending
       }`}
     >
-      {status}
+      {t(`status.${status}`)}
     </span>
   );
 }

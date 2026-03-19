@@ -1,0 +1,217 @@
+use axum::{
+    extract::{ConnectInfo, State},
+    Json,
+};
+use mcp_db::{models::CreateContactMessage, repositories::ContactMessageRepository};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::{net::SocketAddr, sync::Arc};
+
+use crate::{error::AppError, state::AppState};
+
+// Constants for validation
+const MAX_NAME_LENGTH: usize = 100;
+const MAX_EMAIL_LENGTH: usize = 254;
+const MAX_MESSAGE_LENGTH: usize = 5000;
+const MIN_MESSAGE_LENGTH: usize = 10;
+const RATE_LIMIT_KEY_PREFIX: &str = "contact_rate:";
+const RATE_LIMIT_WINDOW_SECS: u64 = 3600; // 1 hour
+const RATE_LIMIT_MAX_REQUESTS: i64 = 5; // 5 requests per hour per IP
+
+#[derive(Debug, Deserialize)]
+pub struct ContactRequest {
+    pub name: String,
+    pub email: String,
+    pub message: String,
+    #[serde(default)]
+    pub honeypot: Option<String>, // Hidden field for bot detection
+}
+
+#[derive(Debug, Serialize)]
+pub struct ContactResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// Sanitize input by removing potentially dangerous characters
+fn sanitize_input(input: &str) -> String {
+    input
+        .trim()
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n')
+        .collect::<String>()
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
+/// Validate email format with strict regex
+fn is_valid_email(email: &str) -> bool {
+    let email_regex = Regex::new(
+        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+    ).unwrap();
+
+    email_regex.is_match(email) && email.len() <= MAX_EMAIL_LENGTH
+}
+
+/// Check for spam patterns in message
+fn contains_spam_patterns(message: &str) -> bool {
+    let spam_patterns: &[&str] = &[
+        r"(?i)buy\s+now",
+        r"(?i)click\s+here",
+        r"(?i)free\s+money",
+        r"(?i)winner",
+        r"(?i)congratulations.*won",
+        r"(?i)casino",
+        r"(?i)viagra",
+        r"(?i)cryptocurrency.*invest",
+        r"(?i)bitcoin.*profit",
+    ];
+
+    for pattern in spam_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if re.is_match(message) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Check rate limit using Redis
+async fn check_rate_limit(state: &AppState, ip: &str) -> Result<bool, AppError> {
+    let key = format!("{}{}", RATE_LIMIT_KEY_PREFIX, ip);
+
+    // Get current count
+    let count: Option<i64> = fred::interfaces::KeysInterface::get(&state.redis, &key)
+        .await
+        .ok();
+
+    let current_count = count.unwrap_or(0);
+
+    if current_count >= RATE_LIMIT_MAX_REQUESTS {
+        return Ok(false); // Rate limited
+    }
+
+    // Increment counter
+    let _: () = fred::interfaces::KeysInterface::incr(&state.redis, &key)
+        .await
+        .map_err(|_| AppError::internal("Rate limit check failed"))?;
+
+    // Set expiry if this is the first request
+    if current_count == 0 {
+        let _: () = fred::interfaces::KeysInterface::expire(
+            &state.redis,
+            &key,
+            RATE_LIMIT_WINDOW_SECS as i64,
+        )
+        .await
+        .map_err(|_| AppError::internal("Rate limit check failed"))?;
+    }
+
+    Ok(true)
+}
+
+pub async fn submit_contact(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Json(payload): Json<ContactRequest>,
+) -> Result<Json<ContactResponse>, AppError> {
+    // Honeypot check - if filled, it's likely a bot
+    if let Some(ref honeypot) = payload.honeypot {
+        if !honeypot.is_empty() {
+            tracing::warn!("Honeypot triggered from IP: {}", addr.ip());
+            // Return success to not reveal detection
+            return Ok(Json(ContactResponse {
+                success: true,
+                message: "Thank you for your message.".to_string(),
+            }));
+        }
+    }
+
+    // Rate limiting
+    let ip = addr.ip().to_string();
+    if !check_rate_limit(&state, &ip).await? {
+        tracing::warn!("Rate limit exceeded for IP: {}", ip);
+        return Err(AppError::new(
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            "RATE_LIMITED",
+            "Too many requests. Please try again later.",
+        ));
+    }
+
+    // Sanitize inputs
+    let name = sanitize_input(&payload.name);
+    let email = payload.email.trim().to_lowercase();
+    let message = sanitize_input(&payload.message);
+
+    // Validate name
+    if name.is_empty() {
+        return Err(AppError::bad_request("INVALID_NAME", "Name is required"));
+    }
+    if name.len() > MAX_NAME_LENGTH {
+        return Err(AppError::bad_request(
+            "NAME_TOO_LONG",
+            &format!("Name must be {} characters or less", MAX_NAME_LENGTH),
+        ));
+    }
+
+    // Validate email
+    if !is_valid_email(&email) {
+        return Err(AppError::bad_request(
+            "INVALID_EMAIL",
+            "Please enter a valid email address",
+        ));
+    }
+
+    // Validate message
+    if message.is_empty() {
+        return Err(AppError::bad_request("INVALID_MESSAGE", "Message is required"));
+    }
+    if message.len() < MIN_MESSAGE_LENGTH {
+        return Err(AppError::bad_request(
+            "MESSAGE_TOO_SHORT",
+            &format!("Message must be at least {} characters", MIN_MESSAGE_LENGTH),
+        ));
+    }
+    if message.len() > MAX_MESSAGE_LENGTH {
+        return Err(AppError::bad_request(
+            "MESSAGE_TOO_LONG",
+            &format!("Message must be {} characters or less", MAX_MESSAGE_LENGTH),
+        ));
+    }
+
+    // Spam detection
+    if contains_spam_patterns(&message) {
+        tracing::warn!("Spam pattern detected from IP: {}", ip);
+        // Return success to not reveal detection
+        return Ok(Json(ContactResponse {
+            success: true,
+            message: "Thank you for your message.".to_string(),
+        }));
+    }
+
+    // Save to database
+    ContactMessageRepository::create(
+        &state.db,
+        CreateContactMessage {
+            name,
+            email,
+            message,
+        },
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to save contact message: {}", e);
+        AppError::internal("Failed to save message")
+    })?;
+
+    tracing::info!("Contact message received from IP: {}", ip);
+
+    Ok(Json(ContactResponse {
+        success: true,
+        message: "Thank you for your message. We will get back to you soon.".to_string(),
+    }))
+}

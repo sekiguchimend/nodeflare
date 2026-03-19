@@ -6,6 +6,7 @@ mod tool_repo;
 mod api_key_repo;
 mod secret_repo;
 mod request_log_repo;
+mod contact_message_repo;
 
 pub use user_repo::UserRepository;
 pub use workspace_repo::WorkspaceRepository;
@@ -15,3 +16,4 @@ pub use tool_repo::ToolRepository;
 pub use api_key_repo::ApiKeyRepository;
 pub use secret_repo::SecretRepository;
 pub use request_log_repo::RequestLogRepository;
+pub use contact_message_repo::ContactMessageRepository;

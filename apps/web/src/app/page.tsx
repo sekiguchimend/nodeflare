@@ -13,6 +13,69 @@ export default function HomePage() {
   const [typedText, setTypedText] = useState('');
   const fullText = 'npx mcp-cloud deploy';
 
+  // Contact form state
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactHoneypot, setContactHoneypot] = useState(''); // Bot detection
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactSuccess, setContactSuccess] = useState(false);
+  const [contactError, setContactError] = useState('');
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setContactSubmitting(true);
+    setContactError('');
+    setContactSuccess(false);
+
+    // Client-side validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(contactEmail)) {
+      setContactError('有効なメールアドレスを入力してください');
+      setContactSubmitting(false);
+      return;
+    }
+
+    if (contactMessage.length < 10) {
+      setContactError('メッセージは10文字以上で入力してください');
+      setContactSubmitting(false);
+      return;
+    }
+
+    if (contactMessage.length > 5000) {
+      setContactError('メッセージは5000文字以内で入力してください');
+      setContactSubmitting(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/v1/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: contactName,
+          email: contactEmail,
+          message: contactMessage,
+          honeypot: contactHoneypot, // Hidden field for bot detection
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error?.message || 'Failed to send message');
+      }
+
+      setContactSuccess(true);
+      setContactName('');
+      setContactEmail('');
+      setContactMessage('');
+    } catch (err) {
+      setContactError(err instanceof Error ? err.message : 'Failed to send message');
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     let i = 0;
     const timer = setInterval(() => {
@@ -26,13 +89,49 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, []);
 
+  const features = [
+    { titleKey: 'features.zeroConfig.title', descKey: 'features.zeroConfig.desc', icon: <><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M21.18 8.02A10 10 0 0 0 12 2v10h10a10 10 0 0 0-0.82-3.98z" /></>, align: 'left' },
+    { titleKey: 'features.acl.title', descKey: 'features.acl.desc', icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></>, align: 'right' },
+    { titleKey: 'features.secrets.title', descKey: 'features.secrets.desc', icon: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>, align: 'left' },
+    { titleKey: 'features.protocol.title', descKey: 'features.protocol.desc', icon: <><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></>, align: 'right' },
+    { titleKey: 'features.alwaysOn.title', descKey: 'features.alwaysOn.desc', icon: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></>, align: 'left' },
+  ];
+
+  const devFeatures = [
+    { icon: '✓', textKey: 'devExperience.typescript', color: 'text-emerald-600' },
+    { icon: '✓', textKey: 'devExperience.python', color: 'text-emerald-600' },
+    { icon: '✓', textKey: 'devExperience.envEncryption', color: 'text-emerald-600' },
+    { icon: '✓', textKey: 'devExperience.customDomain', color: 'text-emerald-600' },
+  ];
+
+  const freeFeatures = ['pricing.free.feature1', 'pricing.free.feature2', 'pricing.free.feature3', 'pricing.free.feature4'];
+  const proFeatures = ['pricing.pro.feature1', 'pricing.pro.feature2', 'pricing.pro.feature3', 'pricing.pro.feature4', 'pricing.pro.feature5'];
+
+  const blogPosts = [
+    { titleKey: 'blog.post1.title', dateKey: 'blog.post1.date', thumbnail: '/blog/thumbnail1.png' },
+    { titleKey: 'blog.post2.title', dateKey: 'blog.post2.date', thumbnail: '/blog/thumbnail2.png' },
+    { titleKey: 'blog.post3.title', dateKey: 'blog.post3.date', thumbnail: '/blog/thumbnail3.png' },
+  ];
+
+  const faqItems = [
+    { qKey: 'faq.q1.question', aKey: 'faq.q1.answer' },
+    { qKey: 'faq.q2.question', aKey: 'faq.q2.answer' },
+    { qKey: 'faq.q3.question', aKey: 'faq.q3.answer' },
+  ];
+
+  const servers = [
+    { name: 'notion-sync', domain: 'notion-sync.mcp.run', statusKey: 'dashboard.status.running', color: 'bg-emerald-500', requests: '12.4k', uptime: '99.9%' },
+    { name: 'database-query', domain: 'db-query.mcp.run', statusKey: 'dashboard.status.running', color: 'bg-emerald-500', requests: '8.2k', uptime: '99.8%' },
+    { name: 'file-manager', domain: 'file-mgr.mcp.run', statusKey: 'dashboard.status.deploying', color: 'bg-amber-500', requests: '-', uptime: '-' },
+  ];
+
   return (
     <div className="min-h-screen bg-white">
       <Header />
 
       <main>
         {/* Hero - ドットパターン背景 */}
-        <section className="relative pt-16 pb-20 sm:pt-20 sm:pb-24 overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] bg-[size:20px_20px]">
+        <section className="relative pt-16 pb-20 sm:pt-20 sm:pb-24 overflow-hidden">
           {/* 右側の背景画像 */}
           <div
             className="absolute -right-20 w-[60%] h-[120%] bg-no-repeat bg-top bg-contain pointer-events-none hidden lg:block"
@@ -111,23 +210,19 @@ export default function HomePage() {
                 <div className="p-8">
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h2 className="text-2xl font-bold text-gray-900">サーバー</h2>
-                      <p className="text-gray-500 mt-1">3つ稼働中</p>
+                      <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.servers')}</h2>
+                      <p className="text-gray-500 mt-1">{t('dashboard.serversRunning')}</p>
                     </div>
                     <Button className="bg-violet-600 hover:bg-violet-700 text-white gap-2">
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M12 5v14M5 12h14" strokeLinecap="round" />
                       </svg>
-                      新規作成
+                      {t('dashboard.newServer')}
                     </Button>
                   </div>
 
                   <div className="grid gap-4">
-                    {[
-                      { name: 'notion-sync', domain: 'notion-sync.mcp.run', status: '稼働中', color: 'bg-emerald-500', requests: '12.4k', uptime: '99.9%' },
-                      { name: 'database-query', domain: 'db-query.mcp.run', status: '稼働中', color: 'bg-emerald-500', requests: '8.2k', uptime: '99.8%' },
-                      { name: 'file-manager', domain: 'file-mgr.mcp.run', status: 'デプロイ中', color: 'bg-amber-500', requests: '-', uptime: '-' },
-                    ].map((server, idx) => (
+                    {servers.map((server, idx) => (
                       <div
                         key={server.name}
                         className="group flex items-center justify-between p-5 rounded-xl border border-gray-100 hover:border-violet-200 hover:shadow-lg hover:shadow-violet-500/5 transition-all duration-300 bg-white cursor-pointer"
@@ -144,16 +239,16 @@ export default function HomePage() {
                         </div>
                         <div className="flex items-center gap-8">
                           <div className="text-right hidden sm:block">
-                            <p className="text-sm text-gray-500">リクエスト</p>
+                            <p className="text-sm text-gray-500">{t('dashboard.requests')}</p>
                             <p className="font-semibold text-gray-900">{server.requests}</p>
                           </div>
                           <div className="text-right hidden sm:block">
-                            <p className="text-sm text-gray-500">稼働率</p>
+                            <p className="text-sm text-gray-500">{t('dashboard.uptime')}</p>
                             <p className="font-semibold text-gray-900">{server.uptime}</p>
                           </div>
                           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50">
-                            <span className={`w-2 h-2 rounded-full ${server.color} ${server.status === 'デプロイ中' ? 'animate-pulse' : ''}`} />
-                            <span className="text-sm text-gray-600">{server.status}</span>
+                            <span className={`w-2 h-2 rounded-full ${server.color} ${server.statusKey === 'dashboard.status.deploying' ? 'animate-pulse' : ''}`} />
+                            <span className="text-sm text-gray-600">{t(server.statusKey)}</span>
                           </div>
                         </div>
                       </div>
@@ -166,25 +261,19 @@ export default function HomePage() {
         </section>
 
         {/* Features - 吹き出しブロック */}
-        <section className="py-24">
+        <section className="py-24 bg-[radial-gradient(#d1d5db_2px,transparent_2px)] bg-[size:32px_32px]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="text-center mb-16">
               <span className="inline-block text-violet-600 text-sm font-medium mb-4">
                 Why Nodeflare?
               </span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">ローカル運用の限界を超える</h2>
-              <p className="mt-4 text-gray-500 text-lg">MCPサーバーを本番品質で運用するために必要な機能をすべて</p>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">{t('features.title')}</h2>
+              <p className="mt-4 text-gray-500 text-lg">{t('features.subtitle')}</p>
             </div>
 
             {/* 吹き出しブロック */}
             <div className="space-y-5">
-              {[
-                { title: 'ゼロコンフィグ', desc: 'MCP SDKで書いたコードをそのままpush。設定ファイル不要', icon: <><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M21.18 8.02A10 10 0 0 0 12 2v10h10a10 10 0 0 0-0.82-3.98z" /></>, align: 'left' },
-                { title: 'ツール単位のACL', desc: '誰がどのツールを呼べるか、メソッドレベルで制御', icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></>, align: 'right' },
-                { title: 'シークレット管理', desc: '環境変数を暗号化保存。チームで安全に共有', icon: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>, align: 'left' },
-                { title: 'プロトコル最適化', desc: 'MCP専用プロキシでレート制限・リトライ・ログを自動化', icon: <><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></>, align: 'right' },
-                { title: '常時オンライン', desc: 'PCを閉じても24時間稼働。ngrok不要', icon: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></>, align: 'left' },
-              ].map((item, idx) => (
+              {features.map((item, idx) => (
                 <div key={idx} className={`flex ${item.align === 'right' ? 'justify-end' : 'justify-start'}`}>
                   <div className="relative inline-block max-w-md">
                     {/* 紫の影（ずらした吹き出し） */}
@@ -192,9 +281,9 @@ export default function HomePage() {
                       <div className="px-6 py-5 rounded-lg bg-violet-500" style={{ visibility: 'hidden' }}>
                         <div className="flex items-center gap-3">
                           <span className="w-7 h-7" />
-                          <p className="text-2xl font-bold">{item.title}</p>
+                          <p className="text-2xl font-bold">{t(item.titleKey)}</p>
                         </div>
-                        <p className="mt-3 text-lg">{item.desc}</p>
+                        <p className="mt-3 text-lg">{t(item.descKey)}</p>
                       </div>
                       <div className="absolute inset-0 rounded-lg bg-violet-500" />
                       <div className="absolute -bottom-[8px] left-8 w-4 h-4 rotate-45 bg-violet-500" />
@@ -206,10 +295,10 @@ export default function HomePage() {
                         <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           {item.icon}
                         </svg>
-                        <p className="text-2xl font-bold text-white">{item.title}</p>
+                        <p className="text-2xl font-bold text-white">{t(item.titleKey)}</p>
                       </div>
                       {/* 説明文 */}
-                      <p className="mt-3 text-lg text-gray-300">{item.desc}</p>
+                      <p className="mt-3 text-lg text-gray-300">{t(item.descKey)}</p>
                     </div>
                     {/* 吹き出しの矢印（下向き） */}
                     <div className="absolute -bottom-[8px] left-8 w-4 h-4 rotate-45 bg-gray-900" />
@@ -227,25 +316,20 @@ export default function HomePage() {
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-emerald-700 text-sm font-medium mb-6">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Developer Experience
+                  {t('devExperience.badge')}
                 </div>
                 <h2 className="text-3xl font-bold text-gray-900 mb-5">
-                  書き慣れたコードで<br />すぐにデプロイ
+                  {t('devExperience.title')}
                 </h2>
                 <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-                  MCP SDKで書いたサーバーをそのままpush。特別な設定ファイルは不要です。環境変数もダッシュボードから安全に管理。
+                  {t('devExperience.description')}
                 </p>
 
                 <div className="space-y-4">
-                  {[
-                    { icon: '✓', text: 'TypeScript / JavaScript 対応', color: 'text-emerald-600' },
-                    { icon: '✓', text: 'Python 対応', color: 'text-emerald-600' },
-                    { icon: '✓', text: '環境変数の暗号化保存', color: 'text-emerald-600' },
-                    { icon: '✓', text: 'カスタムドメイン対応', color: 'text-emerald-600' },
-                  ].map((item, idx) => (
+                  {devFeatures.map((item, idx) => (
                     <div key={idx} className="flex items-center gap-3">
                       <span className={`${item.color} font-bold`}>{item.icon}</span>
-                      <span className="text-gray-700">{item.text}</span>
+                      <span className="text-gray-700">{t(item.textKey)}</span>
                     </div>
                   ))}
                 </div>
@@ -302,7 +386,7 @@ export default function HomePage() {
                         <span className="text-purple-400">async</span>
                         <span className="text-gray-300">{" (query) => {"}</span>
                         {"\n"}
-                        <span className="text-gray-500">{"  // Notionのページを検索"}</span>
+                        <span className="text-gray-500">{`  // ${t('devExperience.codeComment')}`}</span>
                         {"\n"}
                         <span className="text-gray-300">{"  "}</span>
                         <span className="text-purple-400">const</span>
@@ -335,33 +419,33 @@ export default function HomePage() {
               <span className="inline-block text-violet-600 text-sm font-medium mb-4">
                 Pricing
               </span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">シンプルな料金</h2>
-              <p className="text-lg text-gray-600">小規模なら無料。スケールに合わせてアップグレード。</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">{t('pricing.title')}</h2>
+              <p className="text-lg text-gray-600">{t('pricing.subtitle')}</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
               {/* Free */}
               <div className="relative group">
                 <div className="relative bg-white rounded-2xl p-8 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all h-full">
-                  <div className="text-sm font-medium text-gray-500 mb-2">Free</div>
+                  <div className="text-sm font-medium text-gray-500 mb-2">{t('pricing.free.name')}</div>
                   <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-5xl font-bold text-gray-900">¥0</span>
-                    <span className="text-gray-500">/月</span>
+                    <span className="text-5xl font-bold text-gray-900">{t('pricing.free.price')}</span>
+                    <span className="text-gray-500">{t('pricing.perMonth')}</span>
                   </div>
-                  <p className="text-gray-600 mb-8">個人開発や検証に最適</p>
+                  <p className="text-gray-600 mb-8">{t('pricing.free.description')}</p>
                   <ul className="space-y-4 mb-8">
-                    {['サーバー3つまで', '月間10,000リクエスト', 'コミュニティサポート', '基本的なログ'].map((item) => (
-                      <li key={item} className="flex items-center gap-3 text-gray-700">
+                    {freeFeatures.map((featureKey) => (
+                      <li key={featureKey} className="flex items-center gap-3 text-gray-700">
                         <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        {item}
+                        {t(featureKey)}
                       </li>
                     ))}
                   </ul>
                   <a href="/api/v1/auth/github" className="block">
                     <Button variant="outline" className="w-full h-12 border-gray-300 hover:bg-gray-50">
-                      無料で始める
+                      {t('pricing.free.cta')}
                     </Button>
                   </a>
                 </div>
@@ -372,27 +456,27 @@ export default function HomePage() {
                 <div className="absolute -inset-[1px] bg-violet-500 rounded-2xl" />
                 <div className="relative bg-gray-900 rounded-2xl p-8 text-white h-full">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-violet-300">Pro</span>
-                    <span className="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 text-xs font-medium">おすすめ</span>
+                    <span className="text-sm font-medium text-violet-300">{t('pricing.pro.name')}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 text-xs font-medium">{t('pricing.pro.badge')}</span>
                   </div>
                   <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-5xl font-bold">¥2,980</span>
-                    <span className="text-gray-400">/月</span>
+                    <span className="text-5xl font-bold">{t('pricing.pro.price')}</span>
+                    <span className="text-gray-400">{t('pricing.perMonth')}</span>
                   </div>
-                  <p className="text-gray-400 mb-8">本番運用に必要な全機能</p>
+                  <p className="text-gray-400 mb-8">{t('pricing.pro.description')}</p>
                   <ul className="space-y-4 mb-8">
-                    {['サーバー無制限', '月間100,000リクエスト', 'カスタムドメイン', '優先サポート', '高度な分析'].map((item) => (
-                      <li key={item} className="flex items-center gap-3">
+                    {proFeatures.map((featureKey) => (
+                      <li key={featureKey} className="flex items-center gap-3">
                         <svg className="w-5 h-5 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        {item}
+                        {t(featureKey)}
                       </li>
                     ))}
                   </ul>
                   <a href="/api/v1/auth/github" className="block">
                     <Button className="w-full h-12 bg-violet-500 hover:bg-violet-400 text-white">
-                      Proを始める
+                      {t('pricing.pro.cta')}
                     </Button>
                   </a>
                 </div>
@@ -409,34 +493,30 @@ export default function HomePage() {
                 <span className="inline-block text-violet-600 text-sm font-medium mb-4">
                   Blog
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">ブログ</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{t('blog.title')}</h2>
               </div>
               <Link href="/blog" className="hidden sm:flex items-center gap-2 text-violet-600 hover:text-violet-700 font-medium group">
-                すべて見る
+                {t('blog.viewAll')}
                 <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </Link>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-              {[
-                { title: 'MCPサーバーの始め方：5分でデプロイする方法', date: '2024年1月15日', thumbnail: '/blog/thumbnail1.png' },
-                { title: 'MCPサーバーの活用事例', date: '2024年1月10日', thumbnail: '/blog/thumbnail2.png' },
-                { title: 'セキュリティベストプラクティス', date: '2024年1月5日', thumbnail: '/blog/thumbnail3.png' },
-              ].map((post, idx) => (
+            <div className="grid md:grid-cols-3 gap-4">
+              {blogPosts.map((post, idx) => (
                 <Link key={idx} href="/blog" className="group">
-                  <div className="h-full rounded-lg border border-gray-200 hover:border-violet-200 hover:shadow-lg transition-all bg-white overflow-hidden">
+                  <div className="h-full rounded-[2px] border border-gray-200 hover:border-violet-200 hover:shadow-lg transition-all bg-white overflow-hidden">
                     <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
-                      <img src={post.thumbnail} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img src={post.thumbnail} alt={t(post.titleKey)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     </div>
-                    <div className="p-6">
-                      <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-violet-600 transition-colors">
-                        {post.title}
+                    <div className="p-3">
+                      <h3 className="text-xl font-bold text-gray-700 mb-2 group-hover:text-violet-600 transition-colors">
+                        {t(post.titleKey)}
                       </h3>
-                      <p className="text-sm text-gray-500 mb-5">{post.date}</p>
+                      <p className="text-sm text-gray-500 mb-3">{t(post.dateKey)}</p>
                       <span className="inline-flex items-center text-sm text-violet-600 font-medium group-hover:gap-2 transition-all">
-                        詳細を見る
+                        {t('blog.readMore')}
                         <svg className="w-4 h-4 ml-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
@@ -449,7 +529,7 @@ export default function HomePage() {
 
             <div className="mt-8 text-center sm:hidden">
               <Link href="/blog">
-                <Button variant="outline" className="border-gray-300">すべての記事を見る</Button>
+                <Button variant="outline" className="border-gray-300">{t('blog.viewAllArticles')}</Button>
               </Link>
             </div>
           </div>
@@ -462,16 +542,12 @@ export default function HomePage() {
               <span className="inline-block text-violet-600 text-sm font-medium mb-4">
                 FAQ
               </span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">よくある質問</h2>
-              <p className="text-lg text-gray-600">はじめての方からよく寄せられる質問</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">{t('faq.title')}</h2>
+              <p className="text-lg text-gray-600">{t('faq.subtitle')}</p>
             </div>
 
             <div className="space-y-4">
-              {[
-                { q: 'Nodeflareとは何ですか？', a: 'MCP専用のホスティングサービスです。MCP SDKで書いたコードをpushするだけで即デプロイ。アクセス制御・ログ・シークレット管理など、本番運用に必要な機能をすべて備えています。' },
-                { q: '無料プランでどこまで使えますか？', a: '無料プランでは、サーバー3つまで、月間10,000リクエストまでご利用いただけます。個人での利用や小規模なプロジェクトには十分な容量です。' },
-                { q: 'どの言語に対応していますか？', a: 'TypeScript / JavaScript、Pythonに対応しています。Go、Rust、Dockerも利用可能です。' },
-              ].map((item, idx) => (
+              {faqItems.map((item, idx) => (
                 <div
                   key={idx}
                   className={`bg-white rounded-2xl border transition-all duration-300 ${openFaq === idx ? 'border-violet-400 shadow-lg shadow-violet-500/5' : 'border-gray-300'}`}
@@ -480,7 +556,7 @@ export default function HomePage() {
                     onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
                     className="w-full flex items-center justify-between p-6 text-left"
                   >
-                    <span className="font-semibold text-gray-900 pr-8">{item.q}</span>
+                    <span className="font-semibold text-gray-900 pr-8">{t(item.qKey)}</span>
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${openFaq === idx ? 'bg-violet-100 rotate-180' : 'bg-gray-100'}`}>
                       <svg className={`w-5 h-5 transition-colors ${openFaq === idx ? 'text-violet-600' : 'text-gray-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M6 9l6 6 6-6" />
@@ -489,7 +565,7 @@ export default function HomePage() {
                   </button>
                   <div className={`overflow-hidden transition-all duration-300 ${openFaq === idx ? 'max-h-96' : 'max-h-0'}`}>
                     <div className="px-6 pb-6">
-                      <p className="text-gray-600 leading-relaxed">{item.a}</p>
+                      <p className="text-gray-600 leading-relaxed">{t(item.aKey)}</p>
                     </div>
                   </div>
                 </div>
@@ -499,7 +575,7 @@ export default function HomePage() {
             <div className="mt-8 text-center">
               <Link href="/faq">
                 <Button variant="ghost" className="hover:bg-gray-100 gap-2">
-                  すべての質問を見る
+                  {t('faq.viewAll')}
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -516,47 +592,102 @@ export default function HomePage() {
               <span className="inline-block text-violet-600 text-sm font-medium mb-4">
                 Contact
               </span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">お問い合わせ</h2>
-              <p className="text-gray-600">ご質問やご相談がありましたらお気軽にどうぞ</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">{t('contact.title')}</h2>
+              <p className="text-gray-600">{t('contact.subtitle')}</p>
             </div>
 
-            <form className="space-y-6">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">お名前</label>
-                <input
-                  type="text"
-                  id="name"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all"
-                  placeholder="山田 太郎"
-                />
+            {contactSuccess ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{t('contact.successTitle')}</h3>
+                <p className="text-gray-600">{t('contact.successMessage')}</p>
               </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">メールアドレス</label>
-                <input
-                  type="email"
-                  id="email"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all"
-                  placeholder="example@email.com"
-                />
-              </div>
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">メッセージ</label>
-                <textarea
-                  id="message"
-                  rows={5}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all resize-none"
-                  placeholder="お問い合わせ内容をご記入ください"
-                />
-              </div>
-              <div className="flex gap-4">
-                <Button type="button" variant="outline" className="flex-1 h-12 border-gray-300 hover:bg-gray-50">
-                  キャンセル
-                </Button>
-                <Button type="submit" className="flex-1 h-12 bg-violet-600 hover:bg-violet-700 text-white">
-                  送信する
-                </Button>
-              </div>
-            </form>
+            ) : (
+              <form onSubmit={handleContactSubmit} className="space-y-6">
+                {/* Honeypot field - hidden from users, visible to bots */}
+                <div className="absolute left-[-9999px]" aria-hidden="true">
+                  <input
+                    type="text"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={contactHoneypot}
+                    onChange={(e) => setContactHoneypot(e.target.value)}
+                  />
+                </div>
+                {contactError && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {contactError}
+                  </div>
+                )}
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">{t('contact.name')}</label>
+                  <input
+                    type="text"
+                    id="name"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    required
+                    maxLength={100}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all"
+                    placeholder={t('contact.namePlaceholder')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">{t('contact.email')}</label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    required
+                    maxLength={254}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all"
+                    placeholder={t('contact.emailPlaceholder')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">{t('contact.message')}</label>
+                  <textarea
+                    id="message"
+                    rows={5}
+                    value={contactMessage}
+                    onChange={(e) => setContactMessage(e.target.value)}
+                    required
+                    minLength={10}
+                    maxLength={5000}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all resize-none"
+                    placeholder={t('contact.messagePlaceholder')}
+                  />
+                </div>
+                <div className="flex gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-12 border-gray-300 hover:bg-gray-50"
+                    onClick={() => {
+                      setContactName('');
+                      setContactEmail('');
+                      setContactMessage('');
+                      setContactError('');
+                    }}
+                  >
+                    {t('contact.cancel')}
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={contactSubmitting}
+                    className="flex-1 h-12 bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50"
+                  >
+                    {contactSubmitting ? t('contact.sending') : t('contact.submit')}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
         </section>
 

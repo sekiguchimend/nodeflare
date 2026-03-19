@@ -26,23 +26,18 @@ pub async fn list_all(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
 ) -> Result<Json<Vec<ServerResponse>>, (StatusCode, String)> {
-    // Get all workspaces the user is a member of
-    let workspaces = WorkspaceRepository::list_by_user(&state.db, auth_user.user_id)
+    // Use single JOIN query to prevent N+1 problem
+    let servers = ServerRepository::list_all_by_user(&state.db, auth_user.user_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut all_servers = Vec::new();
-
-    for workspace in workspaces {
-        let servers = ServerRepository::list_by_workspace(&state.db, workspace.id, 100, 0)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-        for s in servers {
+    let response: Vec<ServerResponse> = servers
+        .into_iter()
+        .map(|s| {
             let runtime = s.runtime();
             let visibility = s.visibility();
             let status = s.status();
-            all_servers.push(ServerResponse {
+            ServerResponse {
                 id: s.id,
                 workspace_id: s.workspace_id,
                 name: s.name,
@@ -56,11 +51,11 @@ pub async fn list_all(
                 endpoint_url: s.endpoint_url,
                 created_at: s.created_at,
                 updated_at: s.updated_at,
-            });
-        }
-    }
+            }
+        })
+        .collect();
 
-    Ok(Json(all_servers))
+    Ok(Json(response))
 }
 
 pub async fn list(

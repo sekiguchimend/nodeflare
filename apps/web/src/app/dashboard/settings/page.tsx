@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -8,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 export default function SettingsPage() {
+  const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
   const { user, logout } = useAuth();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -24,7 +27,7 @@ export default function SettingsPage() {
       logout();
     } catch (err) {
       console.error('Failed to delete account:', err);
-      setError('Failed to delete account. Please try again.');
+      setError(t('danger.deleteFailed'));
     } finally {
       setIsDeleting(false);
     }
@@ -37,15 +40,19 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
+    <div className="space-y-6 max-w-3xl">
+      <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+        {t('title')}
+      </h1>
 
-      {/* Profile */}
+      {/* Account */}
       <Card>
         <CardHeader>
-          <CardTitle>Profile</CardTitle>
+          <CardTitle>{t('account.title')}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Profile */}
           <div className="flex items-center space-x-4">
             {user?.avatar_url && (
               <img
@@ -59,64 +66,52 @@ export default function SettingsPage() {
               <div className="text-muted-foreground">{user?.email}</div>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Account */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Account</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <h4 className="font-medium mb-2">GitHub Connection</h4>
+          <div className="border-t pt-4">
+            <h4 className="font-medium mb-2">{t('account.githubConnection')}</h4>
             <p className="text-sm text-muted-foreground">
-              Connected as @{user?.name}
+              {t('account.connectedAs', { name: user?.name ?? '' })}
             </p>
           </div>
 
           <div className="border-t pt-4">
-            <h4 className="font-medium mb-2">Sign Out</h4>
+            <h4 className="font-medium mb-2">{t('account.signOut')}</h4>
             <p className="text-sm text-muted-foreground mb-4">
-              Sign out of your account on this device.
+              {t('account.signOutDesc')}
             </p>
             <Button variant="outline" onClick={() => logout()}>
-              Sign Out
+              {t('account.signOut')}
             </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Danger Zone */}
-      <Card className="border-destructive">
-        <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <h2 className="text-lg font-medium mb-2">{t('danger.title')}</h2>
+      <Card className="border-destructive/50 -mt-4">
+        <CardContent className="pt-6">
           <div>
-            <h4 className="font-medium mb-2">Delete Account</h4>
+            <h4 className="font-medium mb-2">{t('danger.deleteAccount')}</h4>
             <p className="text-sm text-muted-foreground mb-4">
-              Permanently delete your account and all associated data. This
-              action cannot be undone.
+              {t('danger.deleteAccountDetail')}
             </p>
 
             {!showDeleteConfirm ? (
               <Button
-                variant="destructive"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => setShowDeleteConfirm(true)}
               >
-                Delete Account
+                {t('danger.deleteAccount')}
               </Button>
             ) : (
               <div className="space-y-4 p-4 border border-destructive rounded-lg bg-destructive/5">
                 <p className="text-sm font-medium text-destructive">
-                  Are you absolutely sure? This will permanently delete your
-                  account, all your workspaces, servers, and deployments.
+                  {t('danger.deleteConfirm')}
                 </p>
                 <div>
                   <p className="text-sm mb-2">
-                    Type <span className="font-mono font-bold">DELETE</span> to
-                    confirm:
+                    {t('danger.typeDelete')}
                   </p>
                   <Input
                     value={confirmText}
@@ -132,10 +127,10 @@ export default function SettingsPage() {
                     onClick={handleDeleteAccount}
                     disabled={confirmText !== 'DELETE' || isDeleting}
                   >
-                    {isDeleting ? 'Deleting...' : 'Permanently Delete'}
+                    {isDeleting ? t('danger.deleting') : t('danger.permanentlyDelete')}
                   </Button>
                   <Button variant="outline" onClick={cancelDelete}>
-                    Cancel
+                    {tCommon('cancel')}
                   </Button>
                 </div>
               </div>

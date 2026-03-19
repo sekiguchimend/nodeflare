@@ -287,10 +287,11 @@ impl WebhookHandler {
                             );
 
                             // Get period end from subscription
-                            let period_end = invoice.lines.data.first()
+                            let period_end = invoice.lines.as_ref()
+                                .and_then(|lines| lines.data.first())
                                 .and_then(|line| line.period.as_ref())
-                                .map(|period| chrono::DateTime::from_timestamp(period.end, 0))
-                                .flatten();
+                                .and_then(|period| period.end)
+                                .and_then(|end| chrono::DateTime::from_timestamp(end, 0));
 
                             if let Err(e) = WorkspaceRepository::update_subscription_status(
                                 &self.db,

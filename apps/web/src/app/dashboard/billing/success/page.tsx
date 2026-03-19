@@ -2,11 +2,13 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 export default function BillingSuccessPage() {
+  const t = useTranslations('billing.success');
   const router = useRouter();
 
   useEffect(() => {
@@ -26,17 +28,17 @@ export default function BillingSuccessPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <CardTitle className="text-2xl">Payment Successful!</CardTitle>
+          <CardTitle className="text-2xl">{t('title')}</CardTitle>
           <CardDescription>
-            Thank you for your subscription. Your account has been upgraded.
+            {t('description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center space-y-4">
           <p className="text-sm text-muted-foreground">
-            You will be redirected to the billing page in a few seconds.
+            {t('redirect')}
           </p>
           <Link href="/dashboard/billing">
-            <Button>Go to Billing</Button>
+            <Button>{t('goToBilling')}</Button>
           </Link>
         </CardContent>
       </Card>

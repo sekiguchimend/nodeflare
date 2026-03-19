@@ -161,3 +161,20 @@ export interface GitHubRepo {
   updated_at: string;
   language: string | null;
 }
+
+export interface RequestLogStats {
+  total_requests: number;
+  success_count: number;
+  error_count: number;
+  avg_duration_ms: number | null;
+}
+
+export interface ToolUsageStats {
+  tool_name: string;
+  call_count: number;
+}
+
+export interface ServerStatsResponse {
+  stats: RequestLogStats;
+  tool_usage: ToolUsageStats[];
+}

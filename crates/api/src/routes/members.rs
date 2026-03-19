@@ -43,25 +43,21 @@ pub async fn list(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
 
-    let members = WorkspaceRepository::list_members(&state.db, workspace_id)
+    // Use JOIN query to prevent N+1 problem
+    let members = WorkspaceRepository::list_members_with_users(&state.db, workspace_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut response = Vec::new();
-    for member in members {
-        if let Some(user) = UserRepository::find_by_id(&state.db, member.user_id)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        {
-            response.push(MemberResponse {
-                user_id: user.id,
-                email: user.email,
-                name: user.name,
-                avatar_url: user.avatar_url,
-                role: member.role(),
-            });
-        }
-    }
+    let response: Vec<MemberResponse> = members
+        .into_iter()
+        .map(|m| MemberResponse {
+            user_id: m.user_id,
+            email: m.email,
+            name: m.name,
+            avatar_url: m.avatar_url,
+            role: m.role(),
+        })
+        .collect();
 
     Ok(Json(response))
 }

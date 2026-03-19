@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod billing;
+pub mod contact;
 pub mod github;
 pub mod health;
 pub mod openapi;
@@ -139,6 +140,8 @@ pub fn api_router() -> Router<Arc<AppState>> {
         )
         // Stripe webhook (no auth required)
         .route("/webhooks/stripe", post(billing::handle_webhook))
+        // Contact (no auth required)
+        .route("/contact", post(contact::submit_contact))
 }
 
 /// WebSocket router for real-time updates

@@ -17,7 +17,16 @@
     "all": "すべて",
     "none": "なし",
     "yes": "はい",
-    "no": "いいえ"
+    "no": "いいえ",
+    "add": "追加",
+    "copy": "コピー",
+    "dismiss": "閉じる",
+    "change": "変更",
+    "enabled": "有効",
+    "disabled": "無効",
+    "previous": "前へ",
+    "showing": "{from}から{to}件を表示（全{total}件）",
+    "notFound": "見つかりませんでした"
   },
   "nav": {
     "home": "ホーム",
@@ -32,37 +41,138 @@
     "contact": "お問い合わせ",
     "login": "ログイン",
     "logout": "ログアウト",
-    "signup": "新規登録"
+    "signup": "新規登録",
+    "overview": "概要",
+    "billing": "請求"
   },
   "home": {
     "title": "MCP専用ホスティング - Nodeflare",
     "heroTitle1": "MCP専用",
     "heroTitle2": "ホスティング",
-    "subtitle": "MCP専用ホスティング",
     "heroDescription1": "デプロイは1コマンド。",
     "heroDescription2": "権限・ログ・認証は、ダッシュボードで思いのままに。",
-    "description": "MCP SDKで書いたコードをそのままpush。設定ファイル不要で即デプロイ。アクセス制御からログ分析まで、本番運用に必要な機能をすべて備えています。",
-    "getStarted": "無料で始める",
     "startWithGithub": "GitHubで始める",
-    "viewDocs": "ドキュメントを見る",
-    "features": {
-      "title": "特徴",
-      "deploy": {
-        "title": "ワンクリックデプロイ",
-        "description": "GitHubリポジトリを接続するだけで自動デプロイ"
-      },
-      "scale": {
-        "title": "自動スケーリング",
-        "description": "トラフィックに応じて自動的にスケール"
-      },
-      "secure": {
-        "title": "セキュア",
-        "description": "エンドツーエンドの暗号化とアクセス制御"
-      },
-      "monitor": {
-        "title": "リアルタイム監視",
-        "description": "ログとメトリクスをリアルタイムで確認"
+    "dashboard": {
+      "servers": "サーバー",
+      "serversRunning": "3つ稼働中",
+      "newServer": "新規作成",
+      "requests": "リクエスト",
+      "uptime": "稼働率",
+      "status": {
+        "running": "稼働中",
+        "deploying": "デプロイ中"
       }
+    },
+    "features": {
+      "title": "ローカル運用の限界を超える",
+      "subtitle": "MCPサーバーを本番品質で運用するために必要な機能をすべて",
+      "zeroConfig": {
+        "title": "ゼロコンフィグ",
+        "desc": "MCP SDKで書いたコードをそのままpush。設定ファイル不要"
+      },
+      "acl": {
+        "title": "ツール単位のACL",
+        "desc": "誰がどのツールを呼べるか、メソッドレベルで制御"
+      },
+      "secrets": {
+        "title": "シークレット管理",
+        "desc": "環境変数を暗号化保存。チームで安全に共有"
+      },
+      "protocol": {
+        "title": "プロトコル最適化",
+        "desc": "MCP専用プロキシでレート制限・リトライ・ログを自動化"
+      },
+      "alwaysOn": {
+        "title": "常時オンライン",
+        "desc": "PCを閉じても24時間稼働。ngrok不要"
+      }
+    },
+    "devExperience": {
+      "badge": "Developer Experience",
+      "title": "書き慣れたコードで\nすぐにデプロイ",
+      "description": "MCP SDKで書いたサーバーをそのままpush。特別な設定ファイルは不要です。環境変数もダッシュボードから安全に管理。",
+      "typescript": "TypeScript / JavaScript 対応",
+      "python": "Python 対応",
+      "envEncryption": "環境変数の暗号化保存",
+      "customDomain": "カスタムドメイン対応",
+      "codeComment": "Notionのページを検索"
+    },
+    "pricing": {
+      "title": "シンプルな料金",
+      "subtitle": "小規模なら無料。スケールに合わせてアップグレード。",
+      "perMonth": "/月",
+      "free": {
+        "name": "Free",
+        "price": "¥0",
+        "description": "個人開発や検証に最適",
+        "feature1": "サーバー3つまで",
+        "feature2": "月間10,000リクエスト",
+        "feature3": "コミュニティサポート",
+        "feature4": "基本的なログ",
+        "cta": "無料で始める"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "¥2,980",
+        "badge": "おすすめ",
+        "description": "本番運用に必要な全機能",
+        "feature1": "サーバー無制限",
+        "feature2": "月間100,000リクエスト",
+        "feature3": "カスタムドメイン",
+        "feature4": "優先サポート",
+        "feature5": "高度な分析",
+        "cta": "Proを始める"
+      }
+    },
+    "blog": {
+      "title": "ブログ",
+      "viewAll": "すべて見る",
+      "viewAllArticles": "すべての記事を見る",
+      "readMore": "詳細を見る",
+      "post1": {
+        "title": "MCPサーバーの始め方：5分でデプロイする方法",
+        "date": "2024年1月15日"
+      },
+      "post2": {
+        "title": "MCPサーバーの活用事例",
+        "date": "2024年1月10日"
+      },
+      "post3": {
+        "title": "セキュリティベストプラクティス",
+        "date": "2024年1月5日"
+      }
+    },
+    "faq": {
+      "title": "よくある質問",
+      "subtitle": "はじめての方からよく寄せられる質問",
+      "viewAll": "すべての質問を見る",
+      "q1": {
+        "question": "Nodeflareとは何ですか？",
+        "answer": "MCP専用のホスティングサービスです。MCP SDKで書いたコードをpushするだけで即デプロイ。アクセス制御・ログ・シークレット管理など、本番運用に必要な機能をすべて備えています。"
+      },
+      "q2": {
+        "question": "無料プランでどこまで使えますか？",
+        "answer": "無料プランでは、サーバー3つまで、月間10,000リクエストまでご利用いただけます。個人での利用や小規模なプロジェクトには十分な容量です。"
+      },
+      "q3": {
+        "question": "どの言語に対応していますか？",
+        "answer": "TypeScript / JavaScript、Pythonに対応しています。Go、Rust、Dockerも利用可能です。"
+      }
+    },
+    "contact": {
+      "title": "お問い合わせ",
+      "subtitle": "ご質問やご相談がありましたらお気軽にどうぞ",
+      "name": "お名前",
+      "email": "メールアドレス",
+      "message": "メッセージ",
+      "namePlaceholder": "山田 太郎",
+      "emailPlaceholder": "example@email.com",
+      "messagePlaceholder": "お問い合わせ内容をご記入ください",
+      "cancel": "キャンセル",
+      "submit": "送信する",
+      "sending": "送信中...",
+      "successTitle": "送信完了",
+      "successMessage": "お問い合わせを受け付けました。担当者より折り返しご連絡いたします。"
     }
   },
   "dashboard": {
@@ -72,15 +182,33 @@
     "recentActivity": "最近のアクティビティ",
     "quickActions": "クイックアクション",
     "noServers": "サーバーがありません",
-    "createFirstServer": "最初のサーバーを作成"
+    "createFirstServer": "最初のサーバーを作成",
+    "newServer": "新規サーバー",
+    "totalServers": "サーバー数",
+    "running": "実行中",
+    "requests7d": "リクエスト (7日間)",
+    "errors7d": "エラー (7日間)",
+    "recentServers": "最近のサーバー",
+    "serverName": "サーバー",
+    "repository": "リポジトリ",
+    "status": "ステータス",
+    "runtime": "ランタイム"
   },
   "servers": {
     "title": "サーバー",
     "new": "新規サーバー",
     "list": "サーバー一覧",
     "empty": "サーバーがまだありません",
+    "createFirst": "最初のサーバーを作成",
+    "repo": "リポジトリ",
+    "runtime": "ランタイム",
+    "visibility": "公開設定",
     "create": {
       "title": "新規サーバーを作成",
+      "firstTitle": "最初のサーバーを作成",
+      "welcome": "Nodeflareへようこそ",
+      "welcomeDesc": "MCPサーバーを数秒でデプロイできます。GitHubリポジトリを接続するだけで、残りはお任せください。",
+      "configuration": "サーバー設定",
       "name": "サーバー名",
       "namePlaceholder": "my-mcp-server",
       "slug": "スラッグ",
@@ -88,9 +216,15 @@
       "slugHelp": "URLに使用される識別子（小文字とハイフンのみ）",
       "description": "説明",
       "descriptionPlaceholder": "サーバーの説明を入力",
+      "descriptionBrief": "サーバーの簡単な説明",
       "githubRepo": "GitHubリポジトリ",
       "githubRepoPlaceholder": "owner/repo",
       "githubRepoHelp": "owner/repo形式で入力してください",
+      "searchRepos": "リポジトリを検索...",
+      "loadingRepos": "リポジトリを読み込み中...",
+      "noRepos": "リポジトリが見つかりません",
+      "noDescription": "説明なし",
+      "private": "プライベート",
       "branch": "ブランチ",
       "branchPlaceholder": "main",
       "runtime": "ランタイム",
@@ -102,7 +236,11 @@
       "visibility": "公開設定",
       "visibilityPublic": "公開",
       "visibilityPrivate": "非公開",
-      "submit": "サーバーを作成"
+      "visibilityTeam": "チーム",
+      "submit": "サーバーを作成",
+      "creating": "作成中...",
+      "failed": "サーバーの作成に失敗しました",
+      "trySuggestion": "スラッグを試す:"
     },
     "detail": {
       "overview": "概要",
@@ -110,13 +248,29 @@
       "logs": "ログ",
       "settings": "設定",
       "secrets": "シークレット",
+      "tools": "ツール",
       "endpoint": "エンドポイント",
       "status": "ステータス",
       "runtime": "ランタイム",
       "lastDeployed": "最終デプロイ",
       "deploy": "デプロイ",
+      "deploying": "デプロイ中...",
       "stop": "停止",
-      "restart": "再起動"
+      "restart": "再起動",
+      "deleteServer": "サーバーを削除",
+      "deleteConfirm": "このサーバーを削除してもよろしいですか？",
+      "repository": "リポジトリ",
+      "publicUrl": "公開URL (サブドメイン)",
+      "publicUrlDesc": "Claude、ChatGPT、その他のAIクライアントから接続するにはこのURLを使用してください",
+      "noDeployments": "デプロイメントがまだありません",
+      "pending": "保留中",
+      "noTools": "ツールが検出されていません。サーバーをデプロイしてツールを検出してください。",
+      "addSecret": "シークレットを追加",
+      "keyPlaceholder": "KEY",
+      "valuePlaceholder": "Value",
+      "noSecrets": "シークレットが設定されていません",
+      "serverSettings": "サーバー設定",
+      "settingsComingSoon": "設定機能は近日公開予定です。"
     },
     "status": {
       "running": "実行中",
@@ -124,55 +278,194 @@
       "building": "ビルド中",
       "deploying": "デプロイ中",
       "failed": "失敗",
-      "pending": "保留中"
+      "pending": "保留中",
+      "success": "成功"
     }
   },
   "apiKeys": {
     "title": "APIキー",
     "new": "新規APIキー",
     "empty": "APIキーがまだありません",
+    "yourKeys": "あなたのAPIキー",
+    "created": "APIキーが作成されました",
+    "createdWarning": "このキーは一度だけ表示されます。安全な場所に保存してください。",
+    "revoke": "取り消し",
+    "revokeConfirm": "このAPIキーを取り消しますか？この操作は元に戻せません。",
+    "customScope": "カスタムスコープ（オプション）",
+    "customScopeExamples": "例: tools:call:get_weather, resources:read:file://data",
+    "rateLimit": "レート制限（リクエスト/時間）",
+    "rate": "レート: {rate}/時間",
+    "lastUsed": "最終使用: {date}",
     "create": {
       "title": "新規APIキーを作成",
       "name": "キー名",
       "namePlaceholder": "my-api-key",
-      "submit": "APIキーを作成"
+      "submit": "APIキーを作成",
+      "creating": "作成中..."
     },
-    "created": "APIキーが作成されました",
-    "createdWarning": "このキーは一度だけ表示されます。安全な場所に保存してください。",
-    "revoke": "取り消し",
-    "revokeConfirm": "このAPIキーを取り消しますか？この操作は元に戻せません。"
+    "scopes": {
+      "title": "スコープ（権限）",
+      "selected": "選択されたスコープ",
+      "fullAccess": "フルアクセス",
+      "fullAccessDesc": "すべての権限（ツール、リソース、プロンプト）",
+      "toolsAll": "ツール - すべて",
+      "toolsAllDesc": "ツールの一覧取得と呼び出し",
+      "toolsList": "ツール - 一覧のみ",
+      "toolsListDesc": "利用可能なツールの一覧のみ",
+      "toolsCall": "ツール - 呼び出し",
+      "toolsCallDesc": "任意のツールを呼び出し可能（一覧含む）",
+      "resourcesAll": "リソース - すべて",
+      "resourcesAllDesc": "リソースの一覧取得と読み取り",
+      "resourcesList": "リソース - 一覧のみ",
+      "resourcesListDesc": "リソースの一覧のみ",
+      "resourcesRead": "リソース - 読み取り",
+      "resourcesReadDesc": "任意のリソースを読み取り可能",
+      "promptsAll": "プロンプト - すべて",
+      "promptsAllDesc": "プロンプトの一覧取得と取得",
+      "promptsList": "プロンプト - 一覧のみ",
+      "promptsListDesc": "プロンプトの一覧のみ",
+      "promptsGet": "プロンプト - 取得",
+      "promptsGetDesc": "任意のプロンプト内容を取得可能",
+      "noPermissions": "権限なし"
+    }
   },
   "logs": {
     "title": "ログ",
+    "requestLogs": "リクエストログ",
+    "recentRequests": "最近のリクエスト",
     "empty": "ログがありません",
+    "noLogs": "リクエストログがまだありません",
+    "realtime": "リアルタイム",
+    "download": "ダウンロード",
     "filter": {
       "all": "すべて",
       "info": "情報",
       "warning": "警告",
       "error": "エラー"
     },
-    "realtime": "リアルタイム",
-    "download": "ダウンロード"
+    "table": {
+      "time": "時間",
+      "method": "メソッド",
+      "path": "パス",
+      "tool": "ツール",
+      "status": "ステータス",
+      "duration": "所要時間"
+    },
+    "noServers": "サーバーが見つかりません。先にサーバーを作成してください。",
+    "status": {
+      "pending": "保留中",
+      "building": "ビルド中",
+      "deploying": "デプロイ中",
+      "running": "稼働中",
+      "stopped": "停止",
+      "failed": "失敗"
+    }
+  },
+  "billing": {
+    "title": "請求と購読",
+    "subtitle": "購読と請求設定を管理",
+    "currentPlan": "現在のプラン",
+    "currentPlanDesc": "現在の購読状況",
+    "plan": "{plan}プラン",
+    "status": "ステータス",
+    "periodEnd": "現在の期間終了日",
+    "manageSubscription": "購読を管理",
+    "cancelSubscription": "購読をキャンセル",
+    "cancelling": "キャンセル中...",
+    "cancelTitle": "購読のキャンセル",
+    "cancelDesc": "購読をキャンセルしてもよろしいですか？現在の請求期間が終了するまでアクセスは継続し、その後アカウントは無料プランにダウングレードされます。",
+    "keepSubscription": "購読を維持",
+    "confirmCancel": "はい、購読をキャンセル",
+    "upgrade": "アップグレード",
+    "downgrade": "ダウングレード",
+    "perMonth": "/月",
+    "billedYearly": "年額 ${price}",
+    "planLimits": "プラン上限",
+    "planLimitsDesc": "現在のプランに基づく使用上限",
+    "limit": "上限",
+    "interval": {
+      "monthly": "月額",
+      "yearly": "年額",
+      "save": "20%お得"
+    },
+    "limits": {
+      "mcpServers": "MCPサーバー",
+      "deploymentsMonth": "デプロイメント/月",
+      "requestsMonth": "APIリクエスト/月",
+      "teamMembers": "チームメンバー",
+      "logRetention": "ログ保持",
+      "customDomains": "カスタムドメイン",
+      "prioritySupport": "優先サポート",
+      "sso": "SSO/SAML",
+      "unlimited": "無制限",
+      "days": "{days}日"
+    },
+    "faq": {
+      "title": "請求FAQ",
+      "cancelQuestion": "購読をキャンセルするには？",
+      "cancelAnswer": "「購読を管理」をクリックして請求ポータルにアクセスし、購読をキャンセルできます。請求期間終了まではアクセスが継続します。",
+      "changeQuestion": "プランを変更できますか？",
+      "changeAnswer": "はい！いつでもプランのアップグレードまたはダウングレードが可能です。アップグレード時は日割り料金が請求されます。ダウングレードは現在の請求期間終了時に適用されます。",
+      "paymentQuestion": "どの支払い方法に対応していますか？",
+      "paymentAnswer": "安全な決済プロセッサであるStripeを通じて、主要なクレジットカード（Visa、Mastercard、American Express）に対応しています。"
+    },
+    "success": {
+      "title": "支払いが完了しました！",
+      "description": "ご購読いただきありがとうございます。アカウントがアップグレードされました。",
+      "redirect": "数秒後に請求ページにリダイレクトされます。",
+      "goToBilling": "請求ページへ"
+    },
+    "cancel": {
+      "title": "支払いがキャンセルされました",
+      "description": "支払いはキャンセルされました。料金は発生していません。",
+      "help": "ご質問やサポートが必要な場合は、サポートチームまでお問い合わせください。",
+      "backToBilling": "請求に戻る",
+      "viewPlans": "プランを見る"
+    },
+    "plans": {
+      "free": {
+        "name": "Free",
+        "description": "個人プロジェクト向け",
+        "features": ["サーバー3つまで", "デプロイ50回/月", "リクエスト10,000回/月", "ログ保持7日間"]
+      },
+      "pro": {
+        "name": "Pro",
+        "description": "プロフェッショナル開発者向け",
+        "features": ["サーバー10個まで", "デプロイ500回/月", "リクエスト100,000回/月", "ログ保持30日間", "カスタムドメイン", "優先サポート"]
+      },
+      "team": {
+        "name": "Team",
+        "description": "チーム・組織向け",
+        "features": ["サーバー50個まで", "デプロイ無制限", "リクエスト1,000,000回/月", "ログ保持90日間", "カスタムドメイン", "優先サポート", "チームメンバー"]
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "description": "大規模組織向け",
+        "features": ["サーバー無制限", "デプロイ無制限", "リクエスト無制限", "ログ保持1年間", "カスタムドメイン", "優先サポート", "チームメンバー無制限", "SSO/SAML"]
+      }
+    }
   },
   "settings": {
     "title": "設定",
     "profile": {
-      "title": "プロフィール",
-      "name": "名前",
-      "email": "メールアドレス",
-      "save": "保存"
+      "title": "プロフィール"
     },
-    "workspace": {
-      "title": "ワークスペース",
-      "name": "ワークスペース名",
-      "members": "メンバー",
-      "invite": "招待"
+    "account": {
+      "title": "アカウント",
+      "githubConnection": "GitHub接続",
+      "connectedAs": "@{name}として接続中",
+      "signOut": "サインアウト",
+      "signOutDesc": "このデバイスからサインアウトします。"
     },
     "danger": {
       "title": "危険なアクション",
       "deleteAccount": "アカウントを削除",
-      "deleteAccountWarning": "アカウントを削除すると、すべてのデータが完全に削除されます。この操作は元に戻せません。",
-      "deleteWorkspace": "ワークスペースを削除"
+      "deleteAccountDetail": "アカウントとすべての関連データを完全に削除します。この操作は元に戻せません。",
+      "deleteConfirm": "本当によろしいですか？この操作はアカウント、すべてのワークスペース、サーバー、デプロイメントを完全に削除します。",
+      "typeDelete": "確認するには DELETE と入力してください:",
+      "permanentlyDelete": "完全に削除",
+      "deleting": "削除中...",
+      "deleteFailed": "アカウントの削除に失敗しました。もう一度お試しください。"
     }
   },
   "auth": {
@@ -210,7 +503,8 @@
     "unauthorized": "認証が必要です。ログインしてください。",
     "forbidden": "このアクションを実行する権限がありません。",
     "notFound": "リソースが見つかりませんでした。",
-    "invalidMcpRepository": "有効なMCPサーバーリポジトリではありません。package.json（Node.js）またはrequirements.txt/pyproject.toml（Python）にMCP SDKの依存関係が必要です。"
+    "invalidMcpRepository": "有効なMCPサーバーリポジトリではありません。package.json（Node.js）またはrequirements.txt/pyproject.toml（Python）にMCP SDKの依存関係が必要です。",
+    "serverNotFound": "サーバーが見つかりませんでした"
   },
   "footer": {
     "copyright": "© {year} Nodeflare. All rights reserved.",

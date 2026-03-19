@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { McpServer } from '@/types';
 import Link from 'next/link';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default function ServersPage() {
+  const t = useTranslations('servers');
   const { data: servers, isLoading } = useQuery<McpServer[]>({
     queryKey: ['servers'],
     queryFn: () => api.get('/servers'),
@@ -16,9 +18,12 @@ export default function ServersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Servers</h1>
+        <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></svg>
+          {t('title')}
+        </h1>
         <Link href="/dashboard/servers/new">
-          <Button>New Server</Button>
+          <Button>{t('new')}</Button>
         </Link>
       </div>
 
@@ -31,16 +36,16 @@ export default function ServersPage() {
       ) : servers?.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <p className="text-muted-foreground mb-4">No servers yet</p>
+            <p className="text-muted-foreground mb-4">{t('empty')}</p>
             <Link href="/dashboard/servers/new">
-              <Button>Create your first server</Button>
+              <Button>{t('createFirst')}</Button>
             </Link>
           </CardContent>
         </Card>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {servers?.map((server) => (
-            <ServerCard key={server.id} server={server} />
+            <ServerCard key={server.id} server={server} t={t} />
           ))}
         </div>
       )}
@@ -48,7 +53,7 @@ export default function ServersPage() {
   );
 }
 
-function ServerCard({ server }: { server: McpServer }) {
+function ServerCard({ server, t }: { server: McpServer; t: (key: string) => string }) {
   const statusColors: Record<string, string> = {
     running: 'bg-green-500',
     building: 'bg-yellow-500',
@@ -73,23 +78,23 @@ function ServerCard({ server }: { server: McpServer }) {
                   statusColors[server.status] ?? statusColors.pending
                 }`}
               />
-              <span className="text-xs text-muted-foreground capitalize">
-                {server.status}
+              <span className="text-xs text-muted-foreground">
+                {t(`status.${server.status}`)}
               </span>
             </div>
           </div>
 
           <div className="space-y-2 text-sm">
             <div className="flex items-center text-muted-foreground">
-              <span className="mr-2">Repo:</span>
+              <span className="mr-2">{t('repo')}:</span>
               <span className="truncate">{server.github_repo}</span>
             </div>
             <div className="flex items-center text-muted-foreground">
-              <span className="mr-2">Runtime:</span>
+              <span className="mr-2">{t('runtime')}:</span>
               <span className="capitalize">{server.runtime}</span>
             </div>
             <div className="flex items-center text-muted-foreground">
-              <span className="mr-2">Visibility:</span>
+              <span className="mr-2">{t('visibility')}:</span>
               <span className="capitalize">{server.visibility}</span>
             </div>
           </div>

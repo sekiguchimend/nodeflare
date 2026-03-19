@@ -2,27 +2,61 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
-import { ApiKey, CreateApiKeyRequest, CreateApiKeyResponse } from '@/types';
+import { ApiKey, CreateApiKeyRequest, CreateApiKeyResponse, Workspace } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function ApiKeysPage() {
+  const t = useTranslations('apiKeys');
+  const tCommon = useTranslations('common');
   const [showCreate, setShowCreate] = useState(false);
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
 
-  const { data: apiKeys, isLoading } = useQuery<ApiKey[]>({
-    queryKey: ['api-keys'],
-    queryFn: () => api.get('/api-keys'),
+  // Fetch workspaces first
+  const { data: workspaces, isLoading: isLoadingWorkspaces } = useQuery<Workspace[]>({
+    queryKey: ['workspaces'],
+    queryFn: () => api.get('/workspaces'),
   });
+
+  // Auto-select first workspace if not selected
+  const workspaceId = selectedWorkspaceId || workspaces?.[0]?.id;
+
+  const { data: apiKeys, isLoading: isLoadingKeys } = useQuery<ApiKey[]>({
+    queryKey: ['workspaces', workspaceId, 'api-keys'],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/api-keys`),
+    enabled: !!workspaceId,
+  });
+
+  const isLoading = isLoadingWorkspaces || isLoadingKeys;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">API Keys</h1>
-        <Button onClick={() => setShowCreate(true)}>Create API Key</Button>
+        <div className="flex items-center space-x-4">
+          <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" /></svg>
+            {t('title')}
+          </h1>
+          {workspaces && workspaces.length > 1 && (
+            <select
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+              value={workspaceId || ''}
+              onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+            >
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <Button onClick={() => setShowCreate(true)} disabled={!workspaceId}>{t('new')}</Button>
       </div>
 
       {newKeyValue && (
@@ -31,11 +65,10 @@ export default function ApiKeysPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-green-800">
-                  API Key created successfully!
+                  {t('created')}
                 </p>
                 <p className="text-sm text-green-700 mt-1">
-                  Make sure to copy this key now. You won&apos;t be able to see
-                  it again.
+                  {t('createdWarning')}
                 </p>
                 <code className="mt-2 block bg-white p-2 rounded border text-sm">
                   {newKeyValue}
@@ -47,7 +80,7 @@ export default function ApiKeysPage() {
                   navigator.clipboard.writeText(newKeyValue);
                 }}
               >
-                Copy
+                {tCommon('copy')}
               </Button>
             </div>
             <Button
@@ -56,25 +89,28 @@ export default function ApiKeysPage() {
               className="mt-2"
               onClick={() => setNewKeyValue(null)}
             >
-              Dismiss
+              {tCommon('dismiss')}
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {showCreate && (
+      {showCreate && workspaceId && (
         <CreateApiKeyForm
+          workspaceId={workspaceId}
           onClose={() => setShowCreate(false)}
           onCreated={(key) => {
             setNewKeyValue(key);
             setShowCreate(false);
           }}
+          t={t}
+          tCommon={tCommon}
         />
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Your API Keys</CardTitle>
+          <CardTitle>{t('yourKeys')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -85,12 +121,12 @@ export default function ApiKeysPage() {
             </div>
           ) : apiKeys?.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
-              No API keys yet
+              {t('empty')}
             </div>
           ) : (
             <div className="divide-y">
               {apiKeys?.map((apiKey) => (
-                <ApiKeyRow key={apiKey.id} apiKey={apiKey} />
+                <ApiKeyRow key={apiKey.id} apiKey={apiKey} workspaceId={workspaceId!} t={t} tCommon={tCommon} />
               ))}
             </div>
           )}
@@ -100,26 +136,18 @@ export default function ApiKeysPage() {
   );
 }
 
-// Predefined scopes with descriptions
-const PREDEFINED_SCOPES = [
-  { value: '*', label: 'Full Access', description: 'All permissions (tools, resources, prompts)' },
-  { value: 'tools:*', label: 'Tools - All', description: 'List and call any tool' },
-  { value: 'tools:list', label: 'Tools - List Only', description: 'Only list available tools' },
-  { value: 'tools:call', label: 'Tools - Call Any', description: 'Call any tool (includes list)' },
-  { value: 'resources:*', label: 'Resources - All', description: 'List and read any resource' },
-  { value: 'resources:list', label: 'Resources - List Only', description: 'Only list resources' },
-  { value: 'resources:read', label: 'Resources - Read Any', description: 'Read any resource' },
-  { value: 'prompts:*', label: 'Prompts - All', description: 'List and get any prompt' },
-  { value: 'prompts:list', label: 'Prompts - List Only', description: 'Only list prompts' },
-  { value: 'prompts:get', label: 'Prompts - Get Any', description: 'Get any prompt content' },
-] as const;
-
 function CreateApiKeyForm({
+  workspaceId,
   onClose,
   onCreated,
+  t,
+  tCommon,
 }: {
+  workspaceId: string;
   onClose: () => void;
   onCreated: (key: string) => void;
+  t: (key: string) => string;
+  tCommon: (key: string) => string;
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
@@ -127,22 +155,33 @@ function CreateApiKeyForm({
   const [selectedScopes, setSelectedScopes] = useState<string[]>(['*']);
   const [customScope, setCustomScope] = useState('');
 
+  const PREDEFINED_SCOPES = [
+    { value: '*', labelKey: 'scopes.fullAccess', descKey: 'scopes.fullAccessDesc' },
+    { value: 'tools:*', labelKey: 'scopes.toolsAll', descKey: 'scopes.toolsAllDesc' },
+    { value: 'tools:list', labelKey: 'scopes.toolsList', descKey: 'scopes.toolsListDesc' },
+    { value: 'tools:call', labelKey: 'scopes.toolsCall', descKey: 'scopes.toolsCallDesc' },
+    { value: 'resources:*', labelKey: 'scopes.resourcesAll', descKey: 'scopes.resourcesAllDesc' },
+    { value: 'resources:list', labelKey: 'scopes.resourcesList', descKey: 'scopes.resourcesListDesc' },
+    { value: 'resources:read', labelKey: 'scopes.resourcesRead', descKey: 'scopes.resourcesReadDesc' },
+    { value: 'prompts:*', labelKey: 'scopes.promptsAll', descKey: 'scopes.promptsAllDesc' },
+    { value: 'prompts:list', labelKey: 'scopes.promptsList', descKey: 'scopes.promptsListDesc' },
+    { value: 'prompts:get', labelKey: 'scopes.promptsGet', descKey: 'scopes.promptsGetDesc' },
+  ];
+
   const createMutation = useMutation({
     mutationFn: (data: CreateApiKeyRequest) =>
-      api.post<CreateApiKeyResponse>('/api-keys', data),
+      api.post<CreateApiKeyResponse>(`/workspaces/${workspaceId}/api-keys`, data),
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'api-keys'] });
       onCreated(response.key);
     },
   });
 
   const toggleScope = (scope: string) => {
     if (scope === '*') {
-      // If selecting full access, clear other scopes
       setSelectedScopes(['*']);
     } else {
       setSelectedScopes((prev) => {
-        // Remove '*' if selecting specific scopes
         const filtered = prev.filter((s) => s !== '*');
         if (filtered.includes(scope)) {
           const result = filtered.filter((s) => s !== scope);
@@ -183,15 +222,15 @@ function CreateApiKeyForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create New API Key</CardTitle>
+        <CardTitle>{t('create.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t('create.name')}</Label>
             <Input
               id="name"
-              placeholder="My API Key"
+              placeholder={t('create.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -199,7 +238,7 @@ function CreateApiKeyForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Scopes (Permissions)</Label>
+            <Label>{t('scopes.title')}</Label>
             <div className="grid grid-cols-2 gap-2">
               {PREDEFINED_SCOPES.map((scope) => (
                 <label
@@ -217,9 +256,9 @@ function CreateApiKeyForm({
                     className="mt-1"
                   />
                   <div>
-                    <div className="font-medium text-sm">{scope.label}</div>
+                    <div className="font-medium text-sm">{t(scope.labelKey)}</div>
                     <div className="text-xs text-muted-foreground">
-                      {scope.description}
+                      {t(scope.descKey)}
                     </div>
                   </div>
                 </label>
@@ -228,7 +267,7 @@ function CreateApiKeyForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="customScope">Custom Scope (Optional)</Label>
+            <Label htmlFor="customScope">{t('customScope')}</Label>
             <div className="flex space-x-2">
               <Input
                 id="customScope"
@@ -237,17 +276,17 @@ function CreateApiKeyForm({
                 onChange={(e) => setCustomScope(e.target.value)}
               />
               <Button type="button" variant="outline" onClick={addCustomScope}>
-                Add
+                {tCommon('add')}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Examples: <code>tools:call:get_weather</code>, <code>resources:read:file://data</code>
+              {t('customScopeExamples')}
             </p>
           </div>
 
           {selectedScopes.length > 0 && !selectedScopes.includes('*') && (
             <div className="space-y-2">
-              <Label>Selected Scopes</Label>
+              <Label>{t('scopes.selected')}</Label>
               <div className="flex flex-wrap gap-2">
                 {selectedScopes.map((scope) => (
                   <span
@@ -269,7 +308,7 @@ function CreateApiKeyForm({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="rateLimit">Rate Limit (requests/hour)</Label>
+            <Label htmlFor="rateLimit">{t('rateLimit')}</Label>
             <Input
               id="rateLimit"
               type="number"
@@ -282,10 +321,10 @@ function CreateApiKeyForm({
 
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Creating...' : 'Create'}
+              {createMutation.isPending ? t('create.creating') : t('create.submit')}
             </Button>
           </div>
 
@@ -300,22 +339,15 @@ function CreateApiKeyForm({
   );
 }
 
-function ApiKeyRow({ apiKey }: { apiKey: ApiKey }) {
+function ApiKeyRow({ apiKey, workspaceId, t, tCommon }: { apiKey: ApiKey; workspaceId: string; t: (key: string, values?: Record<string, string | number>) => string; tCommon: (key: string) => string }) {
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/api-keys/${apiKey.id}`),
+    mutationFn: () => api.delete(`/workspaces/${workspaceId}/api-keys/${apiKey.id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'api-keys'] });
     },
   });
-
-  const formatScopes = (scopes: string[]) => {
-    if (scopes.includes('*')) return 'Full Access';
-    if (scopes.length === 0) return 'No permissions';
-    if (scopes.length <= 2) return scopes.join(', ');
-    return `${scopes.slice(0, 2).join(', ')} +${scopes.length - 2} more`;
-  };
 
   return (
     <div className="p-4 flex items-center justify-between">
@@ -324,11 +356,11 @@ function ApiKeyRow({ apiKey }: { apiKey: ApiKey }) {
         <div className="text-sm text-muted-foreground">
           <code>{apiKey.key_prefix}...</code>
           <span className="mx-2">•</span>
-          {apiKey.rate_limit && <>Rate: {apiKey.rate_limit}/hr</>}
+          {apiKey.rate_limit && <>{t('rate', { rate: apiKey.rate_limit })}</>}
           {apiKey.last_used_at && (
             <>
               <span className="mx-2">•</span>
-              Last used: {new Date(apiKey.last_used_at).toLocaleDateString()}
+              {t('lastUsed', { date: new Date(apiKey.last_used_at).toLocaleDateString() })}
             </>
           )}
         </div>
@@ -339,7 +371,7 @@ function ApiKeyRow({ apiKey }: { apiKey: ApiKey }) {
               className="inline-flex items-center px-1.5 py-0.5 text-xs bg-secondary rounded"
               title={scope}
             >
-              {scope === '*' ? 'Full Access' : scope}
+              {scope === '*' ? t('scopes.fullAccess') : scope}
             </span>
           ))}
         </div>
@@ -348,12 +380,12 @@ function ApiKeyRow({ apiKey }: { apiKey: ApiKey }) {
         variant="ghost"
         size="sm"
         onClick={() => {
-          if (confirm('Are you sure you want to delete this API key?')) {
+          if (confirm(t('revokeConfirm'))) {
             deleteMutation.mutate();
           }
         }}
       >
-        Delete
+        {t('revoke')}
       </Button>
     </div>
   );

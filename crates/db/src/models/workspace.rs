@@ -99,3 +99,28 @@ impl WorkspaceWithRole {
         }
     }
 }
+
+/// Member with user details (for N+1 problem prevention)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct MemberWithUser {
+    // User fields
+    pub user_id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    // Member fields
+    pub role: String,
+    pub member_created_at: DateTime<Utc>,
+}
+
+impl MemberWithUser {
+    pub fn role(&self) -> WorkspaceRole {
+        match self.role.as_str() {
+            "owner" => WorkspaceRole::Owner,
+            "admin" => WorkspaceRole::Admin,
+            "member" => WorkspaceRole::Member,
+            "viewer" => WorkspaceRole::Viewer,
+            _ => WorkspaceRole::Viewer,
+        }
+    }
+}

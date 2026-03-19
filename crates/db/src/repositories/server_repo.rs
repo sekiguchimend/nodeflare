@@ -223,4 +223,26 @@ impl ServerRepository {
 
         Ok(())
     }
+
+    /// List all servers for a user across all workspaces (prevents N+1)
+    pub async fn list_all_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<McpServer>> {
+        let servers = sqlx::query_as::<_, McpServer>(
+            r#"
+            SELECT DISTINCT
+                s.id, s.workspace_id, s.name, s.slug, s.description,
+                s.github_repo, s.github_branch, s.github_installation_id,
+                s.runtime, s.visibility, s.status, s.endpoint_url,
+                s.rate_limit_per_minute, s.created_at, s.updated_at
+            FROM mcp_servers s
+            INNER JOIN workspace_members wm ON s.workspace_id = wm.workspace_id
+            WHERE wm.user_id = $1
+            ORDER BY s.created_at DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(servers)
+    }
 }
