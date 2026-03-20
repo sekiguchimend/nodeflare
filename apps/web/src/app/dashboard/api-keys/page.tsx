@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { ApiKey, CreateApiKeyRequest, CreateApiKeyResponse, Workspace } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -16,14 +15,13 @@ export default function ApiKeysPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
 
-  // Fetch workspaces first
   const { data: workspaces, isLoading: isLoadingWorkspaces } = useQuery<Workspace[]>({
     queryKey: ['workspaces'],
     queryFn: () => api.get('/workspaces'),
   });
 
-  // Auto-select first workspace if not selected
   const workspaceId = selectedWorkspaceId || workspaces?.[0]?.id;
 
   const { data: apiKeys, isLoading: isLoadingKeys } = useQuery<ApiKey[]>({
@@ -34,68 +32,83 @@ export default function ApiKeysPage() {
 
   const isLoading = isLoadingWorkspaces || isLoadingKeys;
 
+  const handleCopyKey = () => {
+    if (newKeyValue) {
+      navigator.clipboard.writeText(newKeyValue);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-4xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-4">
           <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" /></svg>
             {t('title')}
           </h1>
           {workspaces && workspaces.length > 1 && (
-            <select
-              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
-              value={workspaceId || ''}
-              onChange={(e) => setSelectedWorkspaceId(e.target.value)}
-            >
-              {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id}>
-                  {ws.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200">
+              <svg className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <select
+                className="bg-transparent text-sm font-medium text-gray-700 focus:outline-none cursor-pointer pr-6 appearance-none"
+                value={workspaceId || ''}
+                onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0 center' }}
+              >
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>{ws.name}</option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
-        <Button onClick={() => setShowCreate(true)} disabled={!workspaceId}>{t('new')}</Button>
       </div>
 
+      {/* New Key Success Banner */}
       {newKeyValue && (
-        <Card className="border-green-500 bg-green-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-green-800">
-                  {t('created')}
-                </p>
-                <p className="text-sm text-green-700 mt-1">
-                  {t('createdWarning')}
-                </p>
-                <code className="mt-2 block bg-white p-2 rounded border text-sm">
+        <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-emerald-800">{t('created')}</p>
+              <p className="text-sm text-emerald-700 mt-1">{t('createdWarning')}</p>
+              <div className="mt-3 flex items-center gap-2">
+                <code className="flex-1 px-3 py-2 bg-white rounded-lg border border-emerald-200 text-sm font-mono text-gray-800 truncate">
                   {newKeyValue}
                 </code>
+                <Button
+                  size="sm"
+                  variant={copiedKey ? "default" : "outline"}
+                  className={copiedKey ? "bg-emerald-600 hover:bg-emerald-600" : ""}
+                  onClick={handleCopyKey}
+                >
+                  {copiedKey ? "Copied!" : tCommon('copy')}
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  navigator.clipboard.writeText(newKeyValue);
-                }}
-              >
-                {tCommon('copy')}
-              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2"
+            <button
               onClick={() => setNewKeyValue(null)}
+              className="text-emerald-400 hover:text-emerald-600 transition-colors"
             >
-              {tCommon('dismiss')}
-            </Button>
-          </CardContent>
-        </Card>
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
       )}
 
-      {showCreate && workspaceId && (
+      {/* Create Form */}
+      {showCreate && workspaceId ? (
         <CreateApiKeyForm
           workspaceId={workspaceId}
           onClose={() => setShowCreate(false)}
@@ -106,32 +119,55 @@ export default function ApiKeysPage() {
           t={t}
           tCommon={tCommon}
         />
+      ) : (
+        <button
+          onClick={() => setShowCreate(true)}
+          disabled={!workspaceId}
+          className="mb-8 px-6 py-3 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50/50 hover:bg-violet-100/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-center justify-center gap-2 text-violet-600">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="font-medium">{t('new')}</span>
+          </div>
+        </button>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('yourKeys')}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-2">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-12 bg-muted animate-pulse rounded" />
-              ))}
+      {/* API Keys List */}
+      <div>
+        <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('yourKeys')}</h2>
+
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-100 animate-pulse rounded-xl" />
+            ))}
+          </div>
+        ) : apiKeys?.length === 0 ? (
+          <div className="py-16 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
-          ) : apiKeys?.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              {t('empty')}
-            </div>
-          ) : (
-            <div className="divide-y">
-              {apiKeys?.map((apiKey) => (
-                <ApiKeyRow key={apiKey.id} apiKey={apiKey} workspaceId={workspaceId!} t={t} tCommon={tCommon} />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <p className="text-gray-500">{t('empty')}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {apiKeys?.map((apiKey, index) => (
+              <ApiKeyRow
+                key={apiKey.id}
+                apiKey={apiKey}
+                workspaceId={workspaceId!}
+                t={t}
+                tCommon={tCommon}
+                index={index}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -220,95 +256,101 @@ function CreateApiKeyForm({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('create.title')}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">{t('create.name')}</Label>
-            <Input
-              id="name"
-              placeholder={t('create.namePlaceholder')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
+    <div className="mb-8 p-6 rounded-2xl bg-gray-50 border border-gray-200">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-semibold text-gray-900">{t('create.title')}</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
 
-          <div className="space-y-2">
-            <Label>{t('scopes.title')}</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {PREDEFINED_SCOPES.map((scope) => (
-                <label
-                  key={scope.value}
-                  className={`flex items-start space-x-2 p-2 rounded border cursor-pointer transition-colors ${
-                    selectedScopes.includes(scope.value)
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
-                  }`}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <Label htmlFor="name" className="text-gray-700">{t('create.name')}</Label>
+          <Input
+            id="name"
+            placeholder={t('create.namePlaceholder')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="mt-2 bg-white"
+          />
+        </div>
+
+        <div>
+          <Label className="text-gray-700 mb-3 block">{t('scopes.title')}</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {PREDEFINED_SCOPES.map((scope) => (
+              <label
+                key={scope.value}
+                className={`flex items-start space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  selectedScopes.includes(scope.value)
+                    ? 'border-violet-500 bg-violet-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedScopes.includes(scope.value)}
+                  onChange={() => toggleScope(scope.value)}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium text-sm">{t(scope.labelKey)}</div>
+                  <div className="text-xs text-gray-500">{t(scope.descKey)}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="customScope" className="text-gray-700">{t('customScope')}</Label>
+          <div className="flex gap-2 mt-2">
+            <Input
+              id="customScope"
+              placeholder="tools:call:specific_tool_name"
+              value={customScope}
+              onChange={(e) => setCustomScope(e.target.value)}
+              className="bg-white"
+            />
+            <Button type="button" variant="outline" onClick={addCustomScope}>
+              {tCommon('add')}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">{t('customScopeExamples')}</p>
+        </div>
+
+        {selectedScopes.length > 0 && !selectedScopes.includes('*') && (
+          <div>
+            <Label className="text-gray-700 mb-2 block">{t('scopes.selected')}</Label>
+            <div className="flex flex-wrap gap-2">
+              {selectedScopes.map((scope) => (
+                <span
+                  key={scope}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-violet-100 text-violet-700 rounded-full"
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedScopes.includes(scope.value)}
-                    onChange={() => toggleScope(scope.value)}
-                    className="mt-1"
-                  />
-                  <div>
-                    <div className="font-medium text-sm">{t(scope.labelKey)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {t(scope.descKey)}
-                    </div>
-                  </div>
-                </label>
+                  <code className="text-xs">{scope}</code>
+                  <button
+                    type="button"
+                    onClick={() => removeScope(scope)}
+                    className="ml-1 text-violet-400 hover:text-violet-600"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </span>
               ))}
             </div>
           </div>
+        )}
 
-          <div className="space-y-2">
-            <Label htmlFor="customScope">{t('customScope')}</Label>
-            <div className="flex space-x-2">
-              <Input
-                id="customScope"
-                placeholder="tools:call:specific_tool_name"
-                value={customScope}
-                onChange={(e) => setCustomScope(e.target.value)}
-              />
-              <Button type="button" variant="outline" onClick={addCustomScope}>
-                {tCommon('add')}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {t('customScopeExamples')}
-            </p>
-          </div>
-
-          {selectedScopes.length > 0 && !selectedScopes.includes('*') && (
-            <div className="space-y-2">
-              <Label>{t('scopes.selected')}</Label>
-              <div className="flex flex-wrap gap-2">
-                {selectedScopes.map((scope) => (
-                  <span
-                    key={scope}
-                    className="inline-flex items-center px-2 py-1 text-xs bg-secondary rounded"
-                  >
-                    <code>{scope}</code>
-                    <button
-                      type="button"
-                      onClick={() => removeScope(scope)}
-                      className="ml-1 text-muted-foreground hover:text-foreground"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="rateLimit">{t('rateLimit')}</Label>
+        <div>
+          <Label htmlFor="rateLimit" className="text-gray-700">{t('rateLimit')}</Label>
+          <div className="flex items-center gap-2 mt-2">
             <Input
               id="rateLimit"
               type="number"
@@ -316,31 +358,44 @@ function CreateApiKeyForm({
               onChange={(e) => setRateLimit(e.target.value)}
               min="1"
               max="100000"
+              className="bg-white w-32"
             />
+            <span className="text-sm text-gray-500">requests / hour</span>
           </div>
+        </div>
 
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              {tCommon('cancel')}
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? t('create.creating') : t('create.submit')}
-            </Button>
-          </div>
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            {tCommon('cancel')}
+          </Button>
+          <Button type="submit" disabled={createMutation.isPending} className="bg-violet-600 hover:bg-violet-700">
+            {createMutation.isPending ? t('create.creating') : t('create.submit')}
+          </Button>
+        </div>
 
-          {createMutation.isError && (
-            <p className="text-sm text-destructive">
-              {(createMutation.error as Error).message}
-            </p>
-          )}
-        </form>
-      </CardContent>
-    </Card>
+        {createMutation.isError && (
+          <p className="text-sm text-red-600">{(createMutation.error as Error).message}</p>
+        )}
+      </form>
+    </div>
   );
 }
 
-function ApiKeyRow({ apiKey, workspaceId, t, tCommon }: { apiKey: ApiKey; workspaceId: string; t: (key: string, values?: Record<string, string | number>) => string; tCommon: (key: string) => string }) {
+function ApiKeyRow({
+  apiKey,
+  workspaceId,
+  t,
+  tCommon,
+  index
+}: {
+  apiKey: ApiKey;
+  workspaceId: string;
+  t: (key: string, values?: Record<string, string | number>) => string;
+  tCommon: (key: string) => string;
+  index: number;
+}) {
   const queryClient = useQueryClient();
+  const [isHovered, setIsHovered] = useState(false);
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/workspaces/${workspaceId}/api-keys/${apiKey.id}`),
@@ -349,44 +404,74 @@ function ApiKeyRow({ apiKey, workspaceId, t, tCommon }: { apiKey: ApiKey; worksp
     },
   });
 
+  const colors = [
+    'from-violet-400 to-purple-500',
+    'from-blue-400 to-cyan-500',
+    'from-emerald-400 to-teal-500',
+    'from-amber-400 to-orange-500',
+    'from-pink-400 to-rose-500',
+  ];
+
   return (
-    <div className="p-4 flex items-center justify-between">
-      <div className="space-y-1">
-        <div className="font-medium">{apiKey.name}</div>
-        <div className="text-sm text-muted-foreground">
-          <code>{apiKey.key_prefix}...</code>
-          <span className="mx-2">•</span>
-          {apiKey.rate_limit && <>{t('rate', { rate: apiKey.rate_limit })}</>}
-          {apiKey.last_used_at && (
-            <>
-              <span className="mx-2">•</span>
-              {t('lastUsed', { date: new Date(apiKey.last_used_at).toLocaleDateString() })}
-            </>
-          )}
+    <div
+      className="group p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-md transition-all"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="flex items-center gap-4">
+        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${colors[index % colors.length]} flex items-center justify-center flex-shrink-0`}>
+          <span className="text-white font-bold text-sm">{apiKey.name.charAt(0).toUpperCase()}</span>
         </div>
-        <div className="flex flex-wrap gap-1 mt-1">
-          {apiKey.scopes?.map((scope) => (
-            <span
-              key={scope}
-              className="inline-flex items-center px-1.5 py-0.5 text-xs bg-secondary rounded"
-              title={scope}
-            >
-              {scope === '*' ? t('scopes.fullAccess') : scope}
-            </span>
-          ))}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900">{apiKey.name}</span>
+            <code className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{apiKey.key_prefix}...</code>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+            {apiKey.rate_limit && (
+              <span className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t('rate', { rate: apiKey.rate_limit })}
+              </span>
+            )}
+            {apiKey.last_used_at && (
+              <span className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t('lastUsed', { date: new Date(apiKey.last_used_at).toLocaleDateString() })}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {apiKey.scopes?.map((scope) => (
+              <span
+                key={scope}
+                className="inline-flex items-center px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full"
+              >
+                {scope === '*' ? t('scopes.fullAccess') : scope}
+              </span>
+            ))}
+          </div>
         </div>
+
+        <button
+          onClick={() => {
+            if (confirm(t('revokeConfirm'))) {
+              deleteMutation.mutate();
+            }
+          }}
+          className={`px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-all ${
+            isHovered ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          {t('revoke')}
+        </button>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          if (confirm(t('revokeConfirm'))) {
-            deleteMutation.mutate();
-          }
-        }}
-      >
-        {t('revoke')}
-      </Button>
     </div>
   );
 }

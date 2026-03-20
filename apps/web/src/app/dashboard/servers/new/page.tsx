@@ -7,10 +7,9 @@ import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { CreateServerRequest, McpServer, Runtime, Visibility, GitHubRepo } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { SiNodedotjs, SiPython, SiGo, SiRust, SiDocker } from 'react-icons/si';
 
 export default function NewServerPage() {
   const t = useTranslations('servers');
@@ -91,29 +90,169 @@ export default function NewServerPage() {
     createMutation.mutate(formData);
   };
 
+  const runtimes = [
+    { value: 'node', label: t('create.runtimeNode'), color: 'bg-green-600', icon: <SiNodedotjs className="w-5 h-5" /> },
+    { value: 'python', label: t('create.runtimePython'), color: 'bg-blue-500', icon: <SiPython className="w-5 h-5" /> },
+    { value: 'go', label: t('create.runtimeGo'), color: 'bg-cyan-500', icon: <SiGo className="w-6 h-6" /> },
+    { value: 'rust', label: t('create.runtimeRust'), color: 'bg-orange-600', icon: <SiRust className="w-5 h-5" /> },
+    { value: 'docker', label: t('create.runtimeDocker'), color: 'bg-sky-500', icon: <SiDocker className="w-5 h-5" /> },
+  ];
+
+  const visibilities = [
+    { value: 'private', label: t('create.visibilityPrivate'), desc: 'あなただけがアクセス可能', icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+    )},
+    { value: 'team', label: t('create.visibilityTeam'), desc: 'チームメンバーがアクセス可能', icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+    )},
+    { value: 'public', label: t('create.visibilityPublic'), desc: '誰でもアクセス可能', icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+    )},
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl">
+      {/* Welcome message for first server */}
       {isFirstServer && (
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">{t('create.welcome')}</h1>
-          <p className="text-muted-foreground">
-            {t('create.welcomeDesc')}
-          </p>
+        <div className="text-center mb-10 py-8 px-6 rounded-2xl bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="2" width="20" height="8" rx="2" />
+              <rect x="2" y="14" width="20" height="8" rx="2" />
+              <line x1="6" y1="6" x2="6.01" y2="6" />
+              <line x1="6" y1="18" x2="6.01" y2="18" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('create.welcome')}</h1>
+          <p className="text-gray-600">{t('create.welcomeDesc')}</p>
         </div>
       )}
-      <h1 className="text-2xl font-medium mb-6 flex items-center gap-2 text-gray-400">
+
+      {/* Header */}
+      <h1 className="text-2xl font-medium mb-8 flex items-center gap-2 text-gray-400">
         <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></svg>
         {isFirstServer ? t('create.firstTitle') : t('create.title')}
       </h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('create.configuration')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="name">{t('create.name')}</Label>
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* GitHub Repository Selection */}
+        <section>
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('create.githubRepo')}</h2>
+
+          {selectedRepo ? (
+            <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gray-900 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{selectedRepo.full_name}</p>
+                  <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+                    {selectedRepo.private ? (
+                      <span className="inline-flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                        Private
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /></svg>
+                        Public
+                      </span>
+                    )}
+                    {selectedRepo.language && (
+                      <>
+                        <span>·</span>
+                        <span>{selectedRepo.language}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRepo(null);
+                  setFormData({ ...formData, github_repo: '', name: '', slug: '' });
+                }}
+                className="text-sm text-violet-600 hover:text-violet-700 font-medium"
+              >
+                {tCommon('change')}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div className="p-3 border-b border-gray-100">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">
+                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder={t('create.searchRepos')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex-1 bg-transparent text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {reposLoading ? (
+                  <div className="p-8 text-center">
+                    <div className="w-8 h-8 mx-auto mb-3 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+                    <p className="text-sm text-gray-500">{t('create.loadingRepos')}</p>
+                  </div>
+                ) : filteredRepos?.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z" />
+                    </svg>
+                    {t('create.noRepos')}
+                  </div>
+                ) : (
+                  filteredRepos?.map((repo) => (
+                    <button
+                      key={repo.id}
+                      type="button"
+                      onClick={() => handleSelectRepo(repo)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-violet-50 transition-colors text-left border-b border-gray-50 last:border-b-0"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{repo.name}</p>
+                        <p className="text-sm text-gray-500 truncate">
+                          {repo.description || t('create.noDescription')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {repo.private && (
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">Private</span>
+                        )}
+                        {repo.language && (
+                          <span className="text-xs text-gray-400">{repo.language}</span>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Server Details */}
+        <section>
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('create.configuration')}</h2>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="name" className="text-gray-700">{t('create.name')}</Label>
               <Input
                 id="name"
                 placeholder={t('create.namePlaceholder')}
@@ -123,195 +262,158 @@ export default function NewServerPage() {
                   setFormData({ ...formData, name, slug: generateSlug(name) });
                 }}
                 required
+                className="mt-2"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">{t('create.description')}</Label>
+            <div>
+              <Label htmlFor="description" className="text-gray-700">{t('create.description')}</Label>
               <Input
                 id="description"
                 placeholder={t('create.descriptionBrief')}
                 value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="mt-2"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>{t('create.githubRepo')}</Label>
-              {selectedRepo ? (
-                <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-medium">{selectedRepo.full_name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedRepo.private ? t('create.private') : t('create.visibilityPublic')} · {selectedRepo.language || 'Unknown'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedRepo(null);
-                      setFormData({ ...formData, github_repo: '', name: '' });
-                    }}
-                  >
-                    {tCommon('change')}
-                  </Button>
-                </div>
-              ) : (
-                <div className="border rounded-lg">
-                  <div className="p-3 border-b">
-                    <Input
-                      placeholder={t('create.searchRepos')}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="border-0 p-0 h-auto focus-visible:ring-0"
-                    />
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {reposLoading ? (
-                      <div className="p-4 text-center text-muted-foreground">
-                        {t('create.loadingRepos')}
-                      </div>
-                    ) : filteredRepos?.length === 0 ? (
-                      <div className="p-4 text-center text-muted-foreground">
-                        {t('create.noRepos')}
-                      </div>
-                    ) : (
-                      filteredRepos?.map((repo) => (
-                        <button
-                          key={repo.id}
-                          type="button"
-                          onClick={() => handleSelectRepo(repo)}
-                          className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left border-b last:border-b-0"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                            <svg className="w-4 h-4 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-                            </svg>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{repo.name}</p>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {repo.description || t('create.noDescription')}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
-                            {repo.private && (
-                              <span className="px-1.5 py-0.5 rounded bg-muted">{t('create.private')}</span>
-                            )}
-                            {repo.language && <span>{repo.language}</span>}
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="github_branch">{t('create.branch')}</Label>
-              <Input
-                id="github_branch"
-                placeholder={t('create.branchPlaceholder')}
-                value={formData.github_branch}
-                onChange={(e) =>
-                  setFormData({ ...formData, github_branch: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="runtime">{t('create.runtime')}</Label>
-                <Select
-                  id="runtime"
-                  value={formData.runtime}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      runtime: e.target.value as Runtime,
-                    })
-                  }
-                >
-                  <option value="node">{t('create.runtimeNode')}</option>
-                  <option value="python">{t('create.runtimePython')}</option>
-                  <option value="go">{t('create.runtimeGo')}</option>
-                  <option value="rust">{t('create.runtimeRust')}</option>
-                  <option value="docker">{t('create.runtimeDocker')}</option>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="visibility">{t('create.visibility')}</Label>
-                <Select
-                  id="visibility"
-                  value={formData.visibility}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      visibility: e.target.value as Visibility,
-                    })
-                  }
-                >
-                  <option value="private">{t('create.visibilityPrivate')}</option>
-                  <option value="public">{t('create.visibilityPublic')}</option>
-                  <option value="team">{t('create.visibilityTeam')}</option>
-                </Select>
+            <div>
+              <Label htmlFor="github_branch" className="text-gray-700">{t('create.branch')}</Label>
+              <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white">
+                <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
+                </svg>
+                <input
+                  id="github_branch"
+                  type="text"
+                  placeholder={t('create.branchPlaceholder')}
+                  value={formData.github_branch}
+                  onChange={(e) => setFormData({ ...formData, github_branch: e.target.value })}
+                  className="flex-1 bg-transparent text-sm focus:outline-none"
+                />
               </div>
             </div>
+          </div>
+        </section>
 
-            <div className="flex justify-end space-x-4">
-              <Button
+        {/* Runtime Selection */}
+        <section>
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('create.runtime')}</h2>
+
+          <div className="grid grid-cols-5 gap-2">
+            {runtimes.map((runtime) => (
+              <button
+                key={runtime.value}
                 type="button"
-                variant="outline"
-                onClick={() => router.back()}
+                onClick={() => setFormData({ ...formData, runtime: runtime.value as Runtime })}
+                className={`p-3 rounded-xl text-center transition-all ${
+                  formData.runtime === runtime.value
+                    ? 'bg-violet-100 border-2 border-violet-400 shadow-sm'
+                    : 'bg-white border-2 border-gray-100 hover:border-gray-200'
+                }`}
               >
-                {tCommon('cancel')}
-              </Button>
-              <Button type="submit" disabled={createMutation.isPending || !workspaceId || !formData.github_repo}>
-                {createMutation.isPending ? t('create.creating') : t('create.submit')}
-              </Button>
-            </div>
+                <div className={`w-10 h-10 mx-auto mb-2 rounded-lg ${runtime.color} flex items-center justify-center text-white`}>
+                  {runtime.icon}
+                </div>
+                <span className="text-xs font-medium text-gray-700">{runtime.label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
 
-            {createMutation.isError && (
-              <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20">
-                <p className="text-sm font-medium text-destructive">
+        {/* Visibility Selection */}
+        <section>
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('create.visibility')}</h2>
+
+          <div className="space-y-2">
+            {visibilities.map((vis) => (
+              <button
+                key={vis.value}
+                type="button"
+                onClick={() => setFormData({ ...formData, visibility: vis.value as Visibility })}
+                className={`w-full flex items-center gap-4 p-4 rounded-xl text-left transition-all ${
+                  formData.visibility === vis.value
+                    ? 'bg-violet-50 border-2 border-violet-400'
+                    : 'bg-white border-2 border-gray-100 hover:border-gray-200'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  formData.visibility === vis.value ? 'bg-violet-100 text-violet-600' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {vis.icon}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">{vis.label}</p>
+                  <p className="text-sm text-gray-500">{vis.desc}</p>
+                </div>
+                {formData.visibility === vis.value && (
+                  <svg className="w-5 h-5 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Error Message */}
+        {createMutation.isError && (
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M15 9l-6 6M9 9l6 6" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-medium text-red-800">
                   {(createMutation.error as Error).message || t('create.failed')}
                 </p>
                 {(() => {
                   const error = createMutation.error as any;
                   if (error?.details?.suggestion) {
                     return (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {t('create.trySuggestion')} <code className="px-1 py-0.5 bg-muted rounded">{error.details.suggestion}</code>
-                      </p>
-                    );
-                  }
-                  if (error?.details?.supported_runtimes) {
-                    return (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Supported runtimes: {error.details.supported_runtimes.join(', ')}
+                      <p className="text-sm text-red-600 mt-1">
+                        {t('create.trySuggestion')} <code className="px-1.5 py-0.5 bg-red-100 rounded text-xs">{error.details.suggestion}</code>
                       </p>
                     );
                   }
                   return null;
                 })()}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+          <Button type="button" variant="outline" onClick={() => router.back()}>
+            {tCommon('cancel')}
+          </Button>
+          <Button
+            type="submit"
+            disabled={createMutation.isPending || !workspaceId || !formData.github_repo}
+            className="bg-violet-600 hover:bg-violet-700 gap-2"
+          >
+            {createMutation.isPending ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
+                </svg>
+                {t('create.creating')}
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t('create.submit')}
+              </>
             )}
-          </form>
-        </CardContent>
-      </Card>
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }
