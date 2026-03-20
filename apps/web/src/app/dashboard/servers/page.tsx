@@ -8,6 +8,20 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
+interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+}
+
+interface Plan {
+  plan: string;
+  limits: {
+    max_servers: number;
+  };
+}
+
 export default function ServersPage() {
   const t = useTranslations('servers');
   const { data: servers, isLoading } = useQuery<McpServer[]>({
@@ -15,17 +29,67 @@ export default function ServersPage() {
     queryFn: () => api.get('/servers'),
   });
 
+  const { data: workspaces } = useQuery<Workspace[]>({
+    queryKey: ['workspaces'],
+    queryFn: () => api.get('/workspaces'),
+  });
+
+  const { data: plans } = useQuery<Plan[]>({
+    queryKey: ['billing-plans'],
+    queryFn: () => api.get('/billing/plans'),
+  });
+
+  const currentWorkspace = workspaces?.[0];
+  const currentPlanLimits = plans?.find(p => p.plan === (currentWorkspace?.plan || 'free'))?.limits;
+  const maxServers = currentPlanLimits?.max_servers || 3;
+  const currentServerCount = servers?.length || 0;
+  const isAtLimit = currentServerCount >= maxServers;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
-          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></svg>
-          {t('title')}
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></svg>
+            {t('title')}
+          </h1>
+          {/* Usage Badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-sm">
+            <svg className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="2" width="20" height="8" rx="2" />
+              <rect x="2" y="14" width="20" height="8" rx="2" />
+            </svg>
+            <span className="text-gray-700">
+              {t('usage', { current: currentServerCount, max: maxServers === 4294967295 ? '∞' : maxServers })}
+            </span>
+          </div>
+        </div>
         <Link href="/dashboard/servers/new">
-          <Button>{t('new')}</Button>
+          <Button disabled={isAtLimit}>{t('new')}</Button>
         </Link>
       </div>
+
+      {/* Upgrade Banner when at limit */}
+      {isAtLimit && currentWorkspace?.plan !== 'enterprise' && (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-amber-800">{t('upgrade.title')}</p>
+              <p className="text-sm text-amber-700 mt-1">{t('upgrade.serverLimit')}</p>
+            </div>
+            <Link href="/dashboard/billing">
+              <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-100">
+                {t('upgrade.cta')}
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">

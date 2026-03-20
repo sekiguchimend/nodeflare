@@ -106,3 +106,19 @@ impl From<anyhow::Error> for AppError {
         Self::internal("An internal error occurred")
     }
 }
+
+impl From<mcp_common::Error> for AppError {
+    fn from(e: mcp_common::Error) -> Self {
+        let status = match e.status_code() {
+            401 => StatusCode::UNAUTHORIZED,
+            403 => StatusCode::FORBIDDEN,
+            404 => StatusCode::NOT_FOUND,
+            409 => StatusCode::CONFLICT,
+            400 => StatusCode::BAD_REQUEST,
+            429 => StatusCode::TOO_MANY_REQUESTS,
+            503 => StatusCode::SERVICE_UNAVAILABLE,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::new(status, e.error_code(), e.to_string())
+    }
+}

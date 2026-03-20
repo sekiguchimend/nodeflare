@@ -33,6 +33,7 @@
     "dashboard": "ダッシュボード",
     "servers": "サーバー",
     "apiKeys": "APIキー",
+    "team": "チーム",
     "logs": "ログ",
     "settings": "設定",
     "docs": "ドキュメント",
@@ -203,6 +204,13 @@
     "repo": "リポジトリ",
     "runtime": "ランタイム",
     "visibility": "公開設定",
+    "usage": "{current} / {max} サーバー",
+    "upgrade": {
+      "title": "アップグレードが必要です",
+      "serverLimit": "プランのサーバー上限に達しました。新しいサーバーを作成するにはアップグレードしてください。",
+      "deployLimit": "今月のデプロイ上限に達しました。デプロイを続けるにはアップグレードしてください。",
+      "cta": "プランを見る"
+    },
     "create": {
       "title": "新規サーバーを作成",
       "firstTitle": "最初のサーバーを作成",
@@ -255,6 +263,7 @@
       "lastDeployed": "最終デプロイ",
       "deploy": "デプロイ",
       "deploying": "デプロイ中...",
+      "deployUsage": "{current} / {max} デプロイ（今月）",
       "stop": "停止",
       "restart": "再起動",
       "deleteServer": "サーバーを削除",
@@ -275,6 +284,7 @@
     "status": {
       "running": "実行中",
       "stopped": "停止",
+      "inactive": "非アクティブ",
       "building": "ビルド中",
       "deploying": "デプロイ中",
       "failed": "失敗",
@@ -359,6 +369,36 @@
       "running": "稼働中",
       "stopped": "停止",
       "failed": "失敗"
+    }
+  },
+  "team": {
+    "title": "チームメンバー",
+    "usage": "{current} / {max} メンバー",
+    "addMember": "メンバーを追加",
+    "empty": "メンバーはあなただけです",
+    "roles": {
+      "owner": "オーナー",
+      "admin": "管理者",
+      "member": "メンバー",
+      "viewer": "閲覧者"
+    },
+    "add": {
+      "title": "チームメンバーを追加",
+      "email": "メールアドレス",
+      "role": "役割",
+      "submit": "招待を送信"
+    },
+    "remove": {
+      "confirm": "{name}をこのワークスペースから削除しますか？"
+    },
+    "errors": {
+      "userNotFound": "このメールアドレスのユーザーが見つかりません",
+      "alreadyMember": "このユーザーは既にメンバーです",
+      "limitReached": "プランのメンバー上限に達しました"
+    },
+    "upgrade": {
+      "title": "メンバーを追加するにはアップグレード",
+      "cta": "プランを見る"
     }
   },
   "billing": {

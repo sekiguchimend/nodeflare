@@ -187,7 +187,6 @@ function CreateApiKeyForm({
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
-  const [rateLimit, setRateLimit] = useState('1000');
   const [selectedScopes, setSelectedScopes] = useState<string[]>(['*']);
   const [customScope, setCustomScope] = useState('');
 
@@ -251,7 +250,6 @@ function CreateApiKeyForm({
     createMutation.mutate({
       name,
       scopes: selectedScopes,
-      rate_limit: parseInt(rateLimit, 10),
     });
   };
 
@@ -348,22 +346,6 @@ function CreateApiKeyForm({
           </div>
         )}
 
-        <div>
-          <Label htmlFor="rateLimit" className="text-gray-700">{t('rateLimit')}</Label>
-          <div className="flex items-center gap-2 mt-2">
-            <Input
-              id="rateLimit"
-              type="number"
-              value={rateLimit}
-              onChange={(e) => setRateLimit(e.target.value)}
-              min="1"
-              max="100000"
-              className="bg-white w-32"
-            />
-            <span className="text-sm text-gray-500">requests / hour</span>
-          </div>
-        </div>
-
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button type="button" variant="ghost" onClick={onClose}>
             {tCommon('cancel')}
@@ -429,14 +411,6 @@ function ApiKeyRow({
             <code className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{apiKey.key_prefix}...</code>
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-            {apiKey.rate_limit && (
-              <span className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                {t('rate', { rate: apiKey.rate_limit })}
-              </span>
-            )}
             {apiKey.last_used_at && (
               <span className="flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -378,6 +378,22 @@ pub enum ProxyError {
     Internal(String),
 }
 
+impl std::fmt::Display for ProxyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProxyError::Unauthorized(m) => write!(f, "Unauthorized: {}", m),
+            ProxyError::Forbidden(m) => write!(f, "Forbidden: {}", m),
+            ProxyError::NotFound(m) => write!(f, "Not found: {}", m),
+            ProxyError::BadRequest(m) => write!(f, "Bad request: {}", m),
+            ProxyError::RateLimitExceeded => write!(f, "Rate limit exceeded"),
+            ProxyError::QuotaExceeded(m) => write!(f, "Quota exceeded: {}", m),
+            ProxyError::PaymentRequired(m) => write!(f, "Payment required: {}", m),
+            ProxyError::ServiceUnavailable(m) => write!(f, "Service unavailable: {}", m),
+            ProxyError::Internal(m) => write!(f, "Internal error: {}", m),
+        }
+    }
+}
+
 impl IntoResponse for ProxyError {
     fn into_response(self) -> Response {
         let (status, message, error_code) = match self {

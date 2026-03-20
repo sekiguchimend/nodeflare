@@ -24,13 +24,11 @@ const plans = [
     price: 2980,
     description: '本番運用に必要な全機能',
     features: [
-      'サーバー無制限',
-      '月間100,000リクエスト',
+      'サーバー20個まで',
+      '月間500,000リクエスト',
       'カスタムドメイン',
-      '優先サポート',
-      '高度な分析',
       'ログ30日間保持',
-      'チームメンバー5人まで',
+      'メールサポート',
     ],
     cta: 'Proを始める',
     popular: true,
@@ -40,14 +38,12 @@ const plans = [
     price: 9800,
     description: 'チームでの本格運用に',
     features: [
-      'サーバー無制限',
-      '月間500,000リクエスト',
+      'サーバー100個まで',
+      '月間5,000,000リクエスト',
       'カスタムドメイン',
       '優先サポート',
-      '高度な分析',
       'ログ90日間保持',
-      'チームメンバー無制限',
-      'SSO/SAML対応',
+      'チームメンバー10人まで',
     ],
     cta: 'Teamを始める',
     popular: false,
@@ -55,13 +51,12 @@ const plans = [
 ];
 
 const comparisonFeatures = [
-  { name: 'MCPサーバー数', free: '3', pro: '無制限', team: '無制限' },
-  { name: 'リクエスト/月', free: '10,000', pro: '100,000', team: '500,000' },
-  { name: 'チームメンバー', free: '1', pro: '5', team: '無制限' },
+  { name: 'MCPサーバー数', free: '3', pro: '20', team: '100' },
+  { name: 'リクエスト/月', free: '10,000', pro: '500,000', team: '5,000,000' },
+  { name: 'チームメンバー', free: '1', pro: '1', team: '10' },
   { name: 'ログ保持期間', free: '7日', pro: '30日', team: '90日' },
   { name: 'カスタムドメイン', free: false, pro: true, team: true },
-  { name: '優先サポート', free: false, pro: true, team: true },
-  { name: 'SSO/SAML', free: false, pro: false, team: true },
+  { name: '優先サポート', free: false, pro: false, team: true },
 ];
 
 export default function PricingPage() {

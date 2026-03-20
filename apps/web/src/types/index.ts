@@ -18,6 +18,7 @@ export type Runtime = 'node' | 'python' | 'go' | 'rust' | 'docker';
 export type Visibility = 'public' | 'private' | 'team';
 export type ServerStatus = 'pending' | 'building' | 'deploying' | 'running' | 'stopped' | 'failed';
 export type DeploymentStatus = 'pending' | 'building' | 'deploying' | 'success' | 'failed';
+export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export interface McpServer {
   id: string;
@@ -61,11 +62,11 @@ export interface Tool {
 
 export interface ApiKey {
   id: string;
-  workspace_id: string;
+  workspace_id?: string;
   name: string;
   key_prefix: string;
   scopes: string[];
-  rate_limit: number;
+  server_id?: string;
   expires_at: string | null;
   last_used_at: string | null;
   created_at: string;
@@ -135,14 +136,17 @@ export interface UpdateServerRequest {
 
 export interface CreateApiKeyRequest {
   name: string;
-  scopes: string[];
-  rate_limit?: number;
-  expires_at?: string;
+  server_id?: string;
+  scopes?: string[];
+  expires_in_days?: number;
 }
 
 export interface CreateApiKeyResponse {
-  api_key: ApiKey;
+  id: string;
+  name: string;
   key: string;
+  key_prefix: string;
+  created_at: string;
 }
 
 export interface CreateSecretRequest {
@@ -177,4 +181,22 @@ export interface ToolUsageStats {
 export interface ServerStatsResponse {
   stats: RequestLogStats;
   tool_usage: ToolUsageStats[];
+}
+
+// Team member types
+export interface TeamMember {
+  user_id: string;
+  email: string;
+  name: string;
+  avatar_url: string | null;
+  role: WorkspaceRole;
+}
+
+export interface AddMemberRequest {
+  email: string;
+  role?: WorkspaceRole;
+}
+
+export interface UpdateMemberRequest {
+  role: WorkspaceRole;
 }

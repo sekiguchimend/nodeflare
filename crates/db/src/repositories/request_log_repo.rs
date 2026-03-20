@@ -91,10 +91,10 @@ impl RequestLogRepository {
         let stats = sqlx::query_as::<_, RequestLogStats>(
             r#"
             SELECT
-                COUNT(*) as total_requests,
-                COUNT(*) FILTER (WHERE response_status = 'success') as success_count,
-                COUNT(*) FILTER (WHERE response_status != 'success') as error_count,
-                COALESCE(AVG(duration_ms), 0) as avg_duration_ms
+                COUNT(*)::BIGINT as total_requests,
+                COUNT(*) FILTER (WHERE response_status = 'success')::BIGINT as success_count,
+                COUNT(*) FILTER (WHERE response_status != 'success')::BIGINT as error_count,
+                COALESCE(AVG(duration_ms)::FLOAT8, 0.0) as avg_duration_ms
             FROM request_logs
             WHERE server_id = $1 AND created_at > $2
             "#,
@@ -116,9 +116,9 @@ impl RequestLogRepository {
             r#"
             SELECT
                 COALESCE(tool_name, 'unknown') as tool_name,
-                COUNT(*) as call_count,
-                COUNT(*) FILTER (WHERE response_status != 'success') as error_count,
-                COALESCE(AVG(duration_ms), 0) as avg_duration_ms
+                COUNT(*)::BIGINT as call_count,
+                COUNT(*) FILTER (WHERE response_status != 'success')::BIGINT as error_count,
+                COALESCE(AVG(duration_ms)::FLOAT8, 0.0) as avg_duration_ms
             FROM request_logs
             WHERE server_id = $1 AND created_at > $2
             GROUP BY tool_name
