@@ -45,6 +45,7 @@ export default function ServerDetailPage() {
   const queryClient = useQueryClient();
   const serverId = params.id as string;
   const [activeTab, setActiveTab] = useState<'deployments' | 'tools' | 'secrets' | 'settings'>('deployments');
+  const [showDeployInfo, setShowDeployInfo] = useState(false);
 
   const { data: servers, isLoading: isLoadingServers } = useQuery<McpServer[]>({
     queryKey: ['servers'],
@@ -179,12 +180,23 @@ export default function ServerDetailPage() {
           <Button
             onClick={() => deployMutation.mutate()}
             disabled={deployMutation.isPending || isAtDeployLimit}
-            className="bg-gray-900 hover:bg-gray-800 text-white"
+            className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-lg shadow-violet-500/25"
           >
-            {deployMutation.isPending ? t('detail.deploying') : t('detail.deploy')}
-            <span className="ml-2 text-gray-400 text-xs">
-              {deploymentsThisMonth}/{maxDeployments === 4294967295 ? '∞' : maxDeployments}
-            </span>
+            {deployMutation.isPending ? (
+              <>
+                <svg className="w-4 h-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
+                </svg>
+                {t('detail.deploying')}
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                </svg>
+                Pull & Deploy
+              </>
+            )}
           </Button>
 
           {/* Delete Button */}
@@ -251,6 +263,39 @@ export default function ServerDetailPage() {
           <span className="text-gray-500">{t('create.branch')}</span>
           <span className="ml-1.5 font-medium text-gray-900 font-mono">{server.github_branch}</span>
         </span>
+        <div className="relative">
+          <button
+            onClick={() => setShowDeployInfo(!showDeployInfo)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+          >
+            <span className="text-gray-500">デプロイ</span>
+            <span className="font-medium text-gray-900">{deploymentsThisMonth}/{maxDeployments === 4294967295 ? '∞' : maxDeployments}</span>
+            <svg className="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+            </svg>
+          </button>
+          {showDeployInfo && (
+            <div className="absolute top-full left-0 mt-2 w-72 p-4 rounded-xl bg-white border border-gray-200 shadow-xl z-50">
+              <p className="font-medium text-gray-900 mb-2">今月のデプロイ</p>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-2xl font-bold text-violet-600">{deploymentsThisMonth}</span>
+                <span className="text-gray-400">/</span>
+                <span className="text-lg text-gray-500">{maxDeployments === 4294967295 ? '∞' : maxDeployments}</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                現在のプランでは月{maxDeployments === 4294967295 ? '無制限' : `${maxDeployments}回`}までデプロイできます。
+              </p>
+              <Link
+                href="/dashboard/billing"
+                className="inline-flex items-center gap-1 text-sm text-violet-600 hover:text-violet-700 mt-3 font-medium"
+                onClick={() => setShowDeployInfo(false)}
+              >
+                プランを確認 →
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Endpoint */}
@@ -532,14 +577,12 @@ function SecretsTab({
       ) : (
         <button
           onClick={() => setIsAdding(true)}
-          className="w-full px-6 py-3 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50/50 hover:bg-violet-100/50 transition-all"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-300 bg-violet-50 hover:bg-violet-100 text-violet-600 transition-all"
         >
-          <div className="flex items-center justify-center gap-2 text-violet-600">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="font-medium">{t('detail.addSecret')}</span>
-          </div>
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-sm font-medium">{t('detail.addSecret')}</span>
         </button>
       )}
 
@@ -676,8 +719,8 @@ function SettingsTab({
       </div>
 
       <div className="pt-4 border-t border-gray-200">
-        <Button onClick={handleSave} disabled={isSaving} className="bg-violet-600 hover:bg-violet-700">
-          {isSaving ? tCommon('loading') : tCommon('save')}
+        <Button onClick={handleSave} disabled={isSaving} className="bg-violet-600 hover:bg-violet-700 px-6">
+          {isSaving ? tCommon('loading') : '保存する'}
         </Button>
       </div>
     </div>
