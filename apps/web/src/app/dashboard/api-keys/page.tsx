@@ -67,6 +67,19 @@ export default function ApiKeysPage() {
             </div>
           )}
         </div>
+        {!showCreate && (
+          <Button
+            size="sm"
+            onClick={() => setShowCreate(true)}
+            disabled={!workspaceId}
+            className="h-7 text-xs px-2.5 bg-violet-600 hover:bg-violet-700 text-white"
+          >
+            <svg className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {t('new')}
+          </Button>
+        )}
       </div>
 
       {/* New Key Success Banner */}
@@ -108,7 +121,7 @@ export default function ApiKeysPage() {
       )}
 
       {/* Create Form */}
-      {showCreate && workspaceId ? (
+      {showCreate && workspaceId && (
         <CreateApiKeyForm
           workspaceId={workspaceId}
           onClose={() => setShowCreate(false)}
@@ -119,19 +132,6 @@ export default function ApiKeysPage() {
           t={t}
           tCommon={tCommon}
         />
-      ) : (
-        <button
-          onClick={() => setShowCreate(true)}
-          disabled={!workspaceId}
-          className="mb-8 px-6 py-3 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50/50 hover:bg-violet-100/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center justify-center gap-2 text-violet-600">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="font-medium">{t('new')}</span>
-          </div>
-        </button>
       )}
 
       {/* API Keys List */}

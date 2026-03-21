@@ -7,6 +7,7 @@ import { McpServer } from '@/types';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { SiNodedotjs, SiPython, SiGo, SiRust, SiDocker } from 'react-icons/si';
 
 interface Workspace {
   id: string;
@@ -65,7 +66,12 @@ export default function ServersPage() {
           </div>
         </div>
         <Link href="/dashboard/servers/new">
-          <Button disabled={isAtLimit}>{t('new')}</Button>
+          <Button size="sm" disabled={isAtLimit} className="h-7 text-xs px-2.5">
+            <svg className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {t('new')}
+          </Button>
         </Link>
       </div>
 
@@ -117,6 +123,14 @@ export default function ServersPage() {
   );
 }
 
+const runtimeStyles: Record<string, { icon: React.ReactNode; iconColor: string; cardBg: string; textColor: string }> = {
+  node: { icon: <SiNodedotjs className="w-5 h-5" />, iconColor: 'text-white', cardBg: 'bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-600', textColor: 'text-white' },
+  python: { icon: <SiPython className="w-5 h-5" />, iconColor: 'text-white', cardBg: 'bg-gradient-to-br from-blue-500 to-indigo-600 border-blue-600', textColor: 'text-white' },
+  go: { icon: <SiGo className="w-6 h-6" />, iconColor: 'text-white', cardBg: 'bg-gradient-to-br from-cyan-500 to-sky-600 border-cyan-600', textColor: 'text-white' },
+  rust: { icon: <SiRust className="w-5 h-5" />, iconColor: 'text-white', cardBg: 'bg-gradient-to-br from-orange-500 to-amber-600 border-orange-600', textColor: 'text-white' },
+  docker: { icon: <SiDocker className="w-5 h-5" />, iconColor: 'text-white', cardBg: 'bg-gradient-to-br from-sky-500 to-blue-600 border-sky-600', textColor: 'text-white' },
+};
+
 function ServerCard({ server, t }: { server: McpServer; t: (key: string) => string }) {
   const statusColors: Record<string, string> = {
     running: 'bg-green-500',
@@ -127,45 +141,48 @@ function ServerCard({ server, t }: { server: McpServer; t: (key: string) => stri
     pending: 'bg-gray-500',
   };
 
+  const runtime = runtimeStyles[server.runtime] || runtimeStyles.node;
+
   return (
     <Link href={`/dashboard/servers/${server.id}`}>
-      <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+      <Card className={`hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer ${runtime.cardBg} shadow-lg rounded-[5px]`}>
         <CardContent className="p-6">
           <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="font-semibold">{server.name}</h3>
-              <p className="text-sm text-muted-foreground">{server.slug}</p>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm">
+                <span className={runtime.iconColor}>{runtime.icon}</span>
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">{server.name}</h3>
+                <p className="text-sm text-white/70">{server.slug}</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-white/20">
               <div
                 className={`w-2 h-2 rounded-full ${
                   statusColors[server.status] ?? statusColors.pending
                 }`}
               />
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-white font-medium">
                 {t(`status.${server.status}`)}
               </span>
             </div>
           </div>
 
           <div className="space-y-2 text-sm">
-            <div className="flex items-center text-muted-foreground">
+            <div className="flex items-center text-white/80">
               <span className="mr-2">{t('repo')}:</span>
               <span className="truncate">{server.github_repo}</span>
             </div>
-            <div className="flex items-center text-muted-foreground">
-              <span className="mr-2">{t('runtime')}:</span>
-              <span className="capitalize">{server.runtime}</span>
-            </div>
-            <div className="flex items-center text-muted-foreground">
+            <div className="flex items-center text-white/80">
               <span className="mr-2">{t('visibility')}:</span>
               <span className="capitalize">{server.visibility}</span>
             </div>
           </div>
 
           {server.endpoint_url && (
-            <div className="mt-4 pt-4 border-t">
-              <code className="text-xs text-muted-foreground break-all">
+            <div className="mt-4 pt-4 border-t border-white/20">
+              <code className="text-xs text-white/70 break-all">
                 {server.endpoint_url}
               </code>
             </div>

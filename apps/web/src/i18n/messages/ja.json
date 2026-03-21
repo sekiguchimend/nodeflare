@@ -31,11 +31,11 @@
   "nav": {
     "home": "ホーム",
     "dashboard": "ダッシュボード",
-    "servers": "サーバー",
-    "apiKeys": "APIキー",
-    "team": "チーム",
-    "logs": "ログ",
-    "settings": "設定",
+    "servers": "サーバー管理",
+    "apiKeys": "APIキー管理",
+    "team": "チームメンバー",
+    "logs": "ログ履歴",
+    "settings": "アカウント設定",
     "docs": "ドキュメント",
     "blog": "ブログ",
     "faq": "FAQ",
@@ -43,8 +43,8 @@
     "login": "ログイン",
     "logout": "ログアウト",
     "signup": "新規登録",
-    "overview": "概要",
-    "billing": "請求"
+    "overview": "ダッシュボード",
+    "billing": "プランと請求"
   },
   "home": {
     "title": "MCP専用ホスティング - Nodeflare",
@@ -398,7 +398,8 @@
     },
     "upgrade": {
       "title": "メンバーを追加するにはアップグレード",
-      "cta": "プランを見る"
+      "limitMessage": "メンバー上限に達しました。追加するにはプランをアップグレードしてください。",
+      "cta": "アップグレード"
     }
   },
   "billing": {

@@ -101,61 +101,55 @@ export default function TeamPage() {
             </div>
           )}
         </div>
-        {/* Usage Badge */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-sm">
-          <svg className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="9" cy="7" r="4" />
-          </svg>
-          <span className="text-gray-700">
-            {t('usage', { current: currentMemberCount, max: maxMembers === 4294967295 ? '∞' : maxMembers })}
-          </span>
+        <div className="flex items-center gap-3">
+          {/* Usage Badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-sm">
+            <svg className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="9" cy="7" r="4" />
+            </svg>
+            <span className="text-gray-700">
+              {t('usage', { current: currentMemberCount, max: maxMembers === 4294967295 ? '∞' : maxMembers })}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setShowCreate(true)}
+            disabled={!workspaceId || isAtLimit}
+            className="h-7 text-xs px-2.5"
+          >
+            <svg className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {t('addMember')}
+          </Button>
         </div>
       </div>
 
       {/* Upgrade Banner (when at limit and not on enterprise) */}
       {isAtLimit && currentWorkspace?.plan !== 'enterprise' && (
-        <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="font-medium text-amber-800">{t('upgrade.title')}</p>
-              <p className="text-sm text-amber-700 mt-1">{t('errors.limitReached')}</p>
-            </div>
-            <Link href="/dashboard/billing">
-              <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-100">
-                {t('upgrade.cta')}
-              </Button>
-            </Link>
+        <div className="mb-8 flex items-center gap-3 text-sm text-gray-500">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+            <span>{t('upgrade.limitMessage')}</span>
           </div>
+          <Link
+            href="/dashboard/billing"
+            className="text-violet-600 hover:text-violet-700 font-medium hover:underline"
+          >
+            {t('upgrade.cta')} →
+          </Link>
         </div>
       )}
 
       {/* Create Form */}
-      {showCreate && workspaceId ? (
+      {showCreate && workspaceId && (
         <AddMemberForm
           workspaceId={workspaceId}
           onClose={() => setShowCreate(false)}
           t={t}
           tCommon={tCommon}
         />
-      ) : (
-        <button
-          onClick={() => setShowCreate(true)}
-          disabled={!workspaceId || isAtLimit}
-          className="mb-8 px-6 py-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 hover:bg-blue-100/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center justify-center gap-2 text-blue-600">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="font-medium">{t('addMember')}</span>
-          </div>
-        </button>
       )}
 
       {/* Members List */}
@@ -273,7 +267,7 @@ function AddMemberForm({
                 key={r}
                 className={`flex items-center justify-center p-3 rounded-lg border cursor-pointer transition-colors ${
                   role === r
-                    ? 'border-blue-500 bg-blue-50'
+                    ? 'border-violet-500 bg-violet-50'
                     : 'border-gray-200 hover:border-gray-300 bg-white'
                 }`}
               >
@@ -299,7 +293,7 @@ function AddMemberForm({
           <Button type="button" variant="ghost" onClick={onClose}>
             {tCommon('cancel')}
           </Button>
-          <Button type="submit" disabled={createMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
+          <Button type="submit" disabled={createMutation.isPending} className="bg-violet-600 hover:bg-violet-700">
             {createMutation.isPending ? tCommon('loading') : t('add.submit')}
           </Button>
         </div>
@@ -392,7 +386,7 @@ function MemberRow({
               value={selectedRole}
               onChange={(e) => handleRoleChange(e.target.value as WorkspaceRole)}
               disabled={updateMutation.isPending}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
             >
               <option value="admin">{t('roles.admin')}</option>
               <option value="member">{t('roles.member')}</option>

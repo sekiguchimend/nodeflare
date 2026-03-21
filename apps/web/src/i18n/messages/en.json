@@ -31,10 +31,10 @@
   "nav": {
     "home": "Home",
     "dashboard": "Dashboard",
-    "servers": "Servers",
+    "servers": "MCP Servers",
     "apiKeys": "API Keys",
-    "team": "Team",
-    "logs": "Logs",
+    "team": "Team Members",
+    "logs": "Request Logs",
     "settings": "Settings",
     "docs": "Docs",
     "blog": "Blog",
@@ -43,8 +43,8 @@
     "login": "Login",
     "logout": "Logout",
     "signup": "Sign Up",
-    "overview": "Overview",
-    "billing": "Billing"
+    "overview": "Dashboard",
+    "billing": "Plans & Billing"
   },
   "home": {
     "title": "MCP Hosting - Nodeflare",
@@ -398,7 +398,8 @@
     },
     "upgrade": {
       "title": "Upgrade to add members",
-      "cta": "View Plans"
+      "limitMessage": "Member limit reached. Upgrade to add more.",
+      "cta": "Upgrade"
     }
   },
   "billing": {

@@ -325,32 +325,22 @@ export default function NewServerPage() {
         <section>
           <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('create.visibility')}</h2>
 
-          <div className="space-y-2">
+          <div className="flex gap-2">
             {visibilities.map((vis) => (
               <button
                 key={vis.value}
                 type="button"
                 onClick={() => setFormData({ ...formData, visibility: vis.value as Visibility })}
-                className={`w-full flex items-center gap-4 p-4 rounded-xl text-left transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all ${
                   formData.visibility === vis.value
-                    ? 'bg-violet-50 border-2 border-violet-400'
-                    : 'bg-white border-2 border-gray-100 hover:border-gray-200'
+                    ? 'bg-violet-100 border-2 border-violet-400 text-violet-700'
+                    : 'bg-white border-2 border-gray-100 hover:border-gray-200 text-gray-600'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  formData.visibility === vis.value ? 'bg-violet-100 text-violet-600' : 'bg-gray-100 text-gray-500'
-                }`}>
+                <span className={formData.visibility === vis.value ? 'text-violet-600' : 'text-gray-400'}>
                   {vis.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{vis.label}</p>
-                  <p className="text-sm text-gray-500">{vis.desc}</p>
-                </div>
-                {formData.visibility === vis.value && (
-                  <svg className="w-5 h-5 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
+                </span>
+                <span className="text-sm font-medium">{vis.label}</span>
               </button>
             ))}
           </div>
