@@ -101,6 +101,7 @@ impl Default for AuthConfig {
 pub struct GithubConfig {
     pub client_id: String,
     pub client_secret: String,
+    pub redirect_uri: String,
     pub app_id: String,
     pub app_private_key: String,
     pub webhook_secret: String,
@@ -111,6 +112,7 @@ impl Default for GithubConfig {
         Self {
             client_id: String::new(),
             client_secret: String::new(),
+            redirect_uri: String::new(),
             app_id: String::new(),
             app_private_key: String::new(),
             webhook_secret: String::new(),
@@ -189,6 +191,7 @@ impl AppConfig {
             github: GithubConfig {
                 client_id: env::var("GITHUB_CLIENT_ID").unwrap_or_default(),
                 client_secret: env::var("GITHUB_CLIENT_SECRET").unwrap_or_default(),
+                redirect_uri: env::var("GITHUB_REDIRECT_URI").unwrap_or_default(),
                 app_id: env::var("GITHUB_APP_ID").unwrap_or_default(),
                 app_private_key: env::var("GITHUB_APP_PRIVATE_KEY").unwrap_or_default(),
                 webhook_secret: env::var("GITHUB_WEBHOOK_SECRET").unwrap_or_default(),

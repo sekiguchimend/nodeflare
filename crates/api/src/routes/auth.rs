@@ -20,12 +20,16 @@ pub struct GitHubCallbackQuery {
 }
 
 pub async fn github_login(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let redirect_url = format!(
-        "{}://{}:{}/api/v1/auth/github/callback",
-        if state.config.is_production() { "https" } else { "http" },
-        state.config.server.host,
-        state.config.server.port
-    );
+    let redirect_url = if state.config.github.redirect_uri.is_empty() {
+        format!(
+            "{}://{}:{}/api/v1/auth/github/callback",
+            if state.config.is_production() { "https" } else { "http" },
+            state.config.server.host,
+            state.config.server.port
+        )
+    } else {
+        state.config.github.redirect_uri.clone()
+    };
 
     match GitHubOAuth::new(&state.config, &redirect_url) {
         Ok(oauth) => {
@@ -44,12 +48,16 @@ pub async fn github_callback(
     State(state): State<Arc<AppState>>,
     Query(query): Query<GitHubCallbackQuery>,
 ) -> Result<Redirect, (StatusCode, String)> {
-    let redirect_url = format!(
-        "{}://{}:{}/api/v1/auth/github/callback",
-        if state.config.is_production() { "https" } else { "http" },
-        state.config.server.host,
-        state.config.server.port
-    );
+    let redirect_url = if state.config.github.redirect_uri.is_empty() {
+        format!(
+            "{}://{}:{}/api/v1/auth/github/callback",
+            if state.config.is_production() { "https" } else { "http" },
+            state.config.server.host,
+            state.config.server.port
+        )
+    } else {
+        state.config.github.redirect_uri.clone()
+    };
 
     let oauth = GitHubOAuth::new(&state.config, &redirect_url)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
