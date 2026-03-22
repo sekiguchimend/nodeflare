@@ -246,6 +246,44 @@ pub async fn get_current_user(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateProfileRequest {
+    pub name: Option<String>,
+}
+
+pub async fn update_profile(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Json(body): Json<UpdateProfileRequest>,
+) -> Result<Json<UserResponse>, (StatusCode, String)> {
+    let user = UserRepository::find_by_id(&state.db, auth_user.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
+
+    let name = body.name.unwrap_or(user.name.clone());
+
+    if name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Name cannot be empty".to_string()));
+    }
+
+    if name.len() > 100 {
+        return Err((StatusCode::BAD_REQUEST, "Name too long".to_string()));
+    }
+
+    let updated_user = UserRepository::update_name(&state.db, auth_user.user_id, &name)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(UserResponse {
+        id: updated_user.id,
+        email: updated_user.email,
+        name: updated_user.name,
+        avatar_url: updated_user.avatar_url,
+        created_at: updated_user.created_at,
+    }))
+}
+
 pub async fn delete_account(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,

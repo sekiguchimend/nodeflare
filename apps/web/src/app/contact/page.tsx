@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Header, Footer } from '@/components/layout';
+import { api } from '@/lib/api';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -12,13 +13,34 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSubmitting(false);
-    setIsSubmitted(true);
+    setError(null);
+
+    try {
+      await api.post('/contact', {
+        name: formData.name,
+        email: formData.email,
+        message: formData.message,
+      });
+      setIsSubmitted(true);
+    } catch (err: any) {
+      const errorCode = err?.response?.data?.error?.code;
+      if (errorCode === 'RATE_LIMITED') {
+        setError('送信回数が上限に達しました。しばらくしてからお試しください。');
+      } else if (errorCode === 'INVALID_EMAIL') {
+        setError('有効なメールアドレスを入力してください。');
+      } else if (errorCode === 'MESSAGE_TOO_SHORT') {
+        setError('メッセージは10文字以上で入力してください。');
+      } else {
+        setError('送信に失敗しました。もう一度お試しください。');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -91,6 +113,12 @@ export default function ContactPage() {
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
               />
             </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                {error}
+              </div>
+            )}
 
             <Button
               type="submit"

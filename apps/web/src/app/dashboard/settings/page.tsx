@@ -3,18 +3,80 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+interface NotificationSettings {
+  email_deploy_success: boolean;
+  email_deploy_failure: boolean;
+  email_server_down: boolean;
+  email_weekly_report: boolean;
+}
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
+  const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Profile editing state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Notification settings
+  const { data: notificationSettings } = useQuery<NotificationSettings>({
+    queryKey: ['notificationSettings'],
+    queryFn: () => api.get('/user/notifications'),
+    initialData: {
+      email_deploy_success: true,
+      email_deploy_failure: true,
+      email_server_down: true,
+      email_weekly_report: false,
+    },
+  });
+
+  const notificationMutation = useMutation({
+    mutationFn: (settings: Partial<NotificationSettings>) =>
+      api.patch('/user/notifications', settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificationSettings'] });
+    },
+  });
+
+  const handleSaveProfile = async () => {
+    if (!profileName.trim()) return;
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      await api.patch('/auth/profile', { name: profileName.trim() });
+      refreshUser?.();
+      setIsEditingProfile(false);
+    } catch (err: any) {
+      setProfileError(err?.response?.data?.error?.message || 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleNotificationToggle = (key: keyof NotificationSettings) => {
+    if (!notificationSettings) return;
+    notificationMutation.mutate({
+      [key]: !notificationSettings[key],
+    });
+  };
+
+  const handleReconnectGithub = () => {
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || ''}/auth/github?reconnect=true`;
+  };
 
   const handleDeleteAccount = async () => {
     if (confirmText !== 'DELETE') return;
@@ -49,27 +111,66 @@ export default function SettingsPage() {
       <section className="mb-10">
         <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('account.title')}</h2>
 
-        <div className="flex items-center gap-5 p-5 rounded-2xl bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-100">
-          {user?.avatar_url ? (
-            <img
-              src={user.avatar_url}
-              alt={user.name}
-              className="w-16 h-16 rounded-2xl ring-4 ring-white shadow-lg"
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center ring-4 ring-white shadow-lg">
-              <span className="text-white font-bold text-xl">{user?.name?.charAt(0) || '?'}</span>
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-100">
+          <div className="flex items-center gap-5 mb-4">
+            {user?.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.name}
+                className="w-16 h-16 rounded-2xl ring-4 ring-white shadow-lg"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center ring-4 ring-white shadow-lg">
+                <span className="text-white font-bold text-xl">{user?.name?.charAt(0) || '?'}</span>
+              </div>
+            )}
+            <div className="flex-1">
+              {isEditingProfile ? (
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="profileName" className="text-xs text-gray-500">{t('account.name')}</Label>
+                    <Input
+                      id="profileName"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      className="mt-1"
+                      placeholder={t('account.namePlaceholder')}
+                    />
+                  </div>
+                  {profileError && (
+                    <p className="text-sm text-red-600">{profileError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleSaveProfile} disabled={profileSaving}>
+                      {profileSaving ? tCommon('loading') : tCommon('save')}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => {
+                      setIsEditingProfile(false);
+                      setProfileName(user?.name || '');
+                      setProfileError(null);
+                    }}>
+                      {tCommon('cancel')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="font-semibold text-lg text-gray-900">{user?.name}</div>
+                  <div className="text-gray-500">{user?.email}</div>
+                </>
+              )}
             </div>
-          )}
-          <div className="flex-1">
-            <div className="font-semibold text-lg text-gray-900">{user?.name}</div>
-            <div className="text-gray-500">{user?.email}</div>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-gray-200">
-            <svg className="w-4 h-4 text-gray-700" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-            </svg>
-            <span className="text-sm text-gray-600">GitHub</span>
+            {!isEditingProfile && (
+              <button
+                onClick={() => setIsEditingProfile(true)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -90,10 +191,54 @@ export default function SettingsPage() {
               <div className="text-sm text-gray-500">{t('account.connectedAs', { name: user?.name ?? '' })}</div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span className="text-sm text-emerald-600 font-medium">Connected</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span className="text-sm text-emerald-600 font-medium">{t('account.connected')}</span>
+            </div>
+            <button
+              onClick={handleReconnectGithub}
+              className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              {t('account.reconnect')}
+            </button>
           </div>
+        </div>
+      </section>
+
+      {/* Email Notifications */}
+      <section className="mb-10">
+        <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('notifications.title')}</h2>
+
+        <div className="space-y-3">
+          <NotificationToggle
+            label={t('notifications.deploySuccess')}
+            description={t('notifications.deploySuccessDesc')}
+            checked={notificationSettings?.email_deploy_success ?? true}
+            onChange={() => handleNotificationToggle('email_deploy_success')}
+            disabled={notificationMutation.isPending}
+          />
+          <NotificationToggle
+            label={t('notifications.deployFailure')}
+            description={t('notifications.deployFailureDesc')}
+            checked={notificationSettings?.email_deploy_failure ?? true}
+            onChange={() => handleNotificationToggle('email_deploy_failure')}
+            disabled={notificationMutation.isPending}
+          />
+          <NotificationToggle
+            label={t('notifications.serverDown')}
+            description={t('notifications.serverDownDesc')}
+            checked={notificationSettings?.email_server_down ?? true}
+            onChange={() => handleNotificationToggle('email_server_down')}
+            disabled={notificationMutation.isPending}
+          />
+          <NotificationToggle
+            label={t('notifications.weeklyReport')}
+            description={t('notifications.weeklyReportDesc')}
+            checked={notificationSettings?.email_weekly_report ?? false}
+            onChange={() => handleNotificationToggle('email_weekly_report')}
+            disabled={notificationMutation.isPending}
+          />
         </div>
       </section>
 
@@ -200,6 +345,42 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function NotificationToggle({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between p-4 rounded-xl bg-white border border-gray-200">
+      <div>
+        <div className="font-medium text-gray-900">{label}</div>
+        <div className="text-sm text-gray-500">{description}</div>
+      </div>
+      <button
+        onClick={onChange}
+        disabled={disabled}
+        className={`relative w-11 h-6 rounded-full transition-colors ${
+          checked ? 'bg-violet-600' : 'bg-gray-300'
+        } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
     </div>
   );
 }

@@ -45,7 +45,7 @@ const faqs = [
     questions: [
       {
         q: 'どの言語に対応していますか？',
-        a: '現在、TypeScript / JavaScriptに対応しています。Python対応は近日公開予定です。',
+        a: 'TypeScript / JavaScript、Python、Go、Rust に対応しています。Dockerfileを使ったカスタムコンテナも利用可能です。',
       },
       {
         q: 'デプロイにかかる時間は？',

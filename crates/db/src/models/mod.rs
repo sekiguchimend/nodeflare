@@ -21,3 +21,9 @@ pub use request_log::*;
 pub use contact_message::*;
 pub use announcement::*;
 pub use user_preferences::*;
+
+mod notification_settings;
+pub use notification_settings::*;
+
+mod deploy_webhook;
+pub use deploy_webhook::*;

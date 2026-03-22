@@ -16,6 +16,7 @@ interface UseWebSocketOptions {
 // WebSocket message types matching backend
 export type WsMessageType =
   | 'DeploymentStatus'
+  | 'ServerStatus'
   | 'BuildLog'
   | 'ServerLog'
   | 'Error'
@@ -30,6 +31,22 @@ export interface DeploymentStatusUpdate {
   progress?: number;
   timestamp: string;
 }
+
+export interface ServerStatusUpdate {
+  server_id: string;
+  status: ServerStatus;
+  endpoint_url?: string;
+  error_message?: string;
+  timestamp: string;
+}
+
+export type ServerStatus =
+  | 'inactive'
+  | 'building'
+  | 'deploying'
+  | 'running'
+  | 'failed'
+  | 'stopped';
 
 export interface BuildLogLine {
   deployment_id: string;
@@ -56,6 +73,7 @@ export type DeploymentStatus =
 
 export type WebSocketMessage =
   | { type: 'DeploymentStatus'; data: DeploymentStatusUpdate }
+  | { type: 'ServerStatus'; data: ServerStatusUpdate }
   | { type: 'BuildLog'; data: BuildLogLine }
   | { type: 'ServerLog'; data: ServerLogLine }
   | { type: 'Error'; data: { code: string; message: string } }
@@ -216,6 +234,22 @@ export function useServerLogsWebSocket(workspaceId: string, serverId: string, op
     onMessage: (message) => {
       if (message.type === 'ServerLog') {
         options?.onLog?.(message.data);
+      }
+    },
+  });
+}
+
+export function useServerStatusWebSocket(workspaceId: string, serverId: string, options?: {
+  onStatusUpdate?: (status: ServerStatusUpdate) => void;
+}) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/workspaces/${workspaceId}/servers/${serverId}/status`;
+
+  return useWebSocket({
+    url: wsUrl,
+    onMessage: (message) => {
+      if (message.type === 'ServerStatus') {
+        options?.onStatusUpdate?.(message.data);
       }
     },
   });

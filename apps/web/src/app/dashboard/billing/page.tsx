@@ -22,8 +22,8 @@ interface Plan {
   plan: string;
   name: string;
   description: string;
-  price_monthly_usd: number;
-  price_yearly_usd: number;
+  price_monthly_jpy: number;
+  price_yearly_jpy: number;
   features: string[];
   limits: {
     max_servers: number;
@@ -52,6 +52,18 @@ interface Workspace {
   plan: string;
 }
 
+interface Invoice {
+  id: string;
+  number: string | null;
+  status: string | null;
+  amount_due: number;
+  amount_paid: number;
+  currency: string;
+  created: number;
+  hosted_invoice_url: string | null;
+  invoice_pdf: string | null;
+}
+
 export default function BillingPage() {
   const t = useTranslations('billing');
   const tCommon = useTranslations('common');
@@ -74,6 +86,12 @@ export default function BillingPage() {
     queryKey: ['subscription', currentWorkspace?.id],
     queryFn: () => api.get(`/workspaces/${currentWorkspace?.id}/billing/subscription`),
     enabled: !!currentWorkspace?.id,
+  });
+
+  const { data: invoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({
+    queryKey: ['invoices', currentWorkspace?.id],
+    queryFn: () => api.get(`/workspaces/${currentWorkspace?.id}/billing/invoices`),
+    enabled: !!currentWorkspace?.id && !!subscription?.stripe_customer_id,
   });
 
   const checkoutMutation = useMutation({
@@ -211,11 +229,102 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {/* Invoice History */}
+      {subscription?.stripe_customer_id && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
+            <h2 className="text-sm font-medium text-gray-500">{t('invoiceHistory')}</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {invoicesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600" />
+              </div>
+            ) : invoices.length === 0 ? (
+              <div className="px-5 py-8 text-center text-gray-500 text-sm">
+                {t('noInvoices')}
+              </div>
+            ) : (
+              invoices.map((invoice) => (
+                <div key={invoice.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {invoice.number || invoice.id.slice(0, 14)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(invoice.created * 1000).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="font-medium text-gray-900">
+                        ¥{invoice.amount_paid.toLocaleString()}
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        invoice.status === 'paid'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : invoice.status === 'open'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {invoice.status || 'unknown'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {invoice.hosted_invoice_url && (
+                        <a
+                          href={invoice.hosted_invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          title={t('viewInvoice')}
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M15 3h6v6" strokeLinecap="round" strokeLinejoin="round" />
+                            <line x1="10" y1="14" x2="21" y2="3" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </a>
+                      )}
+                      {invoice.invoice_pdf && (
+                        <a
+                          href={invoice.invoice_pdf}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          title={t('downloadPdf')}
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M7 10l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                            <line x1="12" y1="15" x2="12" y2="3" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Plans Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {plans?.map((plan) => {
           const isCurrent = currentPlan === plan.plan;
-          const price = selectedInterval === 'yearly' ? plan.price_yearly_usd : plan.price_monthly_usd;
+          const price = selectedInterval === 'yearly' ? plan.price_yearly_jpy : plan.price_monthly_jpy;
           const monthlyPrice = selectedInterval === 'yearly' ? Math.round(price / 12) : price;
           const planKey = plan.plan as 'free' | 'pro' | 'team' | 'enterprise';
           const features = t.raw(`plans.${planKey}.features`) as string[];
@@ -233,11 +342,11 @@ export default function BillingPage() {
               </CardHeader>
               <CardContent>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold">${monthlyPrice}</span>
+                  <span className="text-4xl font-bold">¥{monthlyPrice.toLocaleString()}</span>
                   <span className="text-muted-foreground">{t('perMonth')}</span>
                   {selectedInterval === 'yearly' && price > 0 && (
                     <p className="text-sm text-muted-foreground">
-                      {t('billedYearly', { price })}
+                      年額 ¥{price.toLocaleString()}
                     </p>
                   )}
                 </div>

@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use stripe::{
     CheckoutSession, CheckoutSessionMode, Client, CreateCheckoutSession,
     CreateCheckoutSessionLineItems, CreateCustomer, CreateBillingPortalSession,
-    Customer, CustomerId, Subscription, SubscriptionId,
+    Customer, CustomerId, Subscription, SubscriptionId, Invoice, ListInvoices,
 };
 use uuid::Uuid;
 
@@ -127,6 +127,19 @@ impl BillingService {
             .and_then(|price| price.id.as_str().parse().ok())
             .and_then(|price_id: String| get_plan_by_price_id(&price_id))
             .unwrap_or(Plan::Free)
+    }
+
+    /// List invoices for a customer
+    pub async fn list_invoices(&self, customer_id: &str, limit: i64) -> Result<Vec<Invoice>> {
+        let customer_id: CustomerId = customer_id.parse().map_err(|_| anyhow!("Invalid customer ID"))?;
+        let mut params = ListInvoices::new();
+        params.customer = Some(customer_id);
+        params.limit = Some(limit as u64);
+
+        Invoice::list(&self.client, &params)
+            .await
+            .map(|list| list.data)
+            .map_err(|e| anyhow!("Failed to list invoices: {}", e))
     }
 }
 

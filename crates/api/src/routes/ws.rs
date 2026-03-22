@@ -63,6 +63,46 @@ pub async fn deployment_ws(
     Ok(ws.on_upgrade(move |socket| handle_deployment_socket(socket, rx, deployment_id)))
 }
 
+/// WebSocket handler for server status updates
+pub async fn server_status_ws(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Path((workspace_id, server_id)): Path<(Uuid, Uuid)>,
+    Query(auth): Query<WsAuthQuery>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Verify JWT token
+    let claims = state
+        .jwt
+        .verify_token(&auth.token)
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".to_string()))?;
+
+    let user_id = claims
+        .user_id()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".to_string()))?;
+
+    // Verify server exists and belongs to workspace
+    let server = ServerRepository::find_by_id(&state.db, server_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+
+    if server.workspace_id != workspace_id {
+        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+    }
+
+    // Verify user has access to the workspace
+    WorkspaceRepository::get_member(&state.db, workspace_id, user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::FORBIDDEN, "Access denied".to_string()))?;
+
+    // Subscribe to server status updates
+    let channel = format!("server:{}:status", server_id);
+    let rx = state.ws_manager.subscribe(&channel).await;
+
+    Ok(ws.on_upgrade(move |socket| handle_server_status_socket(socket, rx, server_id)))
+}
+
 /// WebSocket handler for server logs streaming
 pub async fn server_logs_ws(
     ws: WebSocketUpgrade,
@@ -207,6 +247,47 @@ async fn handle_deployment_socket(
     }
 
     tracing::info!("WebSocket connection closed for deployment {}", deployment_id);
+}
+
+/// Handle server status WebSocket connection
+async fn handle_server_status_socket(
+    socket: WebSocket,
+    mut rx: broadcast::Receiver<WsMessage>,
+    server_id: Uuid,
+) {
+    let (mut sender, mut receiver) = socket.split();
+
+    let mut send_task = tokio::spawn(async move {
+        while let Ok(msg) = rx.recv().await {
+            let json = match serde_json::to_string(&msg) {
+                Ok(j) => j,
+                Err(e) => {
+                    tracing::error!("Failed to serialize WebSocket message: {}", e);
+                    continue;
+                }
+            };
+
+            if sender.send(Message::Text(json)).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let mut recv_task = tokio::spawn(async move {
+        while let Some(Ok(msg)) = receiver.next().await {
+            match msg {
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+    });
+
+    tokio::select! {
+        _ = &mut send_task => recv_task.abort(),
+        _ = &mut recv_task => send_task.abort(),
+    }
+
+    tracing::info!("WebSocket connection closed for server status {}", server_id);
 }
 
 /// Handle server logs WebSocket connection

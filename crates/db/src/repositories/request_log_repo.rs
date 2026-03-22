@@ -58,6 +58,90 @@ impl RequestLogRepository {
         Ok(logs)
     }
 
+    pub async fn list_by_server_filtered(
+        pool: &PgPool,
+        server_id: Uuid,
+        limit: i64,
+        offset: i64,
+        status_filter: Option<&str>,
+        time_range: Option<&str>,
+        search: Option<&str>,
+    ) -> Result<(Vec<RequestLog>, i64)> {
+        let since = match time_range {
+            Some("1h") => Some(Utc::now() - chrono::Duration::hours(1)),
+            Some("24h") => Some(Utc::now() - chrono::Duration::hours(24)),
+            Some("7d") => Some(Utc::now() - chrono::Duration::days(7)),
+            Some("30d") => Some(Utc::now() - chrono::Duration::days(30)),
+            _ => None,
+        };
+
+        let status_condition = match status_filter {
+            Some("2xx") => Some("response_status = 'success'"),
+            Some("4xx") => Some("response_status LIKE 'client_%' OR response_status = 'bad_request' OR response_status = 'unauthorized' OR response_status = 'forbidden' OR response_status = 'not_found'"),
+            Some("5xx") => Some("response_status LIKE 'server_%' OR response_status = 'error' OR response_status = 'internal_error'"),
+            _ => None,
+        };
+
+        // Build dynamic query
+        let mut conditions = vec!["server_id = $1".to_string()];
+        let mut param_idx = 2;
+
+        if since.is_some() {
+            conditions.push(format!("created_at > ${}", param_idx));
+            param_idx += 1;
+        }
+
+        if status_condition.is_some() {
+            conditions.push(format!("({})", status_condition.unwrap()));
+        }
+
+        if search.is_some() {
+            conditions.push(format!("(tool_name ILIKE ${} OR error_message ILIKE ${})", param_idx, param_idx));
+            param_idx += 1;
+        }
+
+        let where_clause = conditions.join(" AND ");
+
+        let query = format!(
+            r#"
+            SELECT id, server_id, tool_name, api_key_id, client_info,
+                   request_body, response_status, error_message, duration_ms, created_at
+            FROM request_logs
+            WHERE {}
+            ORDER BY created_at DESC
+            LIMIT ${} OFFSET ${}
+            "#,
+            where_clause, param_idx, param_idx + 1
+        );
+
+        let count_query = format!(
+            "SELECT COUNT(*) FROM request_logs WHERE {}",
+            where_clause
+        );
+
+        // Build and execute the query with proper binding
+        let mut query_builder = sqlx::query_as::<_, RequestLog>(&query).bind(server_id);
+        let mut count_builder = sqlx::query_as::<_, (i64,)>(&count_query).bind(server_id);
+
+        if let Some(s) = since {
+            query_builder = query_builder.bind(s);
+            count_builder = count_builder.bind(s);
+        }
+
+        if let Some(s) = search {
+            let search_pattern = format!("%{}%", s);
+            query_builder = query_builder.bind(search_pattern.clone());
+            count_builder = count_builder.bind(search_pattern);
+        }
+
+        query_builder = query_builder.bind(limit).bind(offset);
+
+        let logs = query_builder.fetch_all(pool).await?;
+        let (count,) = count_builder.fetch_one(pool).await?;
+
+        Ok((logs, count))
+    }
+
     pub async fn list_by_server_since(
         pool: &PgPool,
         server_id: Uuid,

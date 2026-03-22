@@ -627,6 +627,8 @@ pub struct PaginationMeta {
 pub enum WsMessage {
     /// Deployment status update
     DeploymentStatus(DeploymentStatusUpdate),
+    /// Server status update
+    ServerStatus(ServerStatusUpdate),
     /// Build log line
     BuildLog(BuildLogLine),
     /// Server log line
@@ -645,6 +647,15 @@ pub struct DeploymentStatusUpdate {
     pub status: DeploymentStatus,
     pub error_message: Option<String>,
     pub progress: Option<u8>, // 0-100
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerStatusUpdate {
+    pub server_id: Uuid,
+    pub status: ServerStatus,
+    pub endpoint_url: Option<String>,
+    pub error_message: Option<String>,
     pub timestamp: DateTime<Utc>,
 }
 

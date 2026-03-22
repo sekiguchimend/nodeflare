@@ -21,3 +21,9 @@ pub use request_log_repo::RequestLogRepository;
 pub use contact_message_repo::ContactMessageRepository;
 pub use announcement_repo::AnnouncementRepository;
 pub use user_preferences_repo::UserPreferencesRepository;
+
+mod notification_settings_repo;
+pub use notification_settings_repo::NotificationSettingsRepository;
+
+mod deploy_webhook_repo;
+pub use deploy_webhook_repo::DeployWebhookRepository;

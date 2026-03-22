@@ -4,14 +4,23 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { RequestLog, PaginatedResponse, McpServer } from '@/types';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+
+type StatusFilter = 'all' | '2xx' | '4xx' | '5xx';
+type MethodFilter = 'all' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type TimeFilter = 'all' | '1h' | '24h' | '7d' | '30d';
 
 export default function LogsPage() {
   const t = useTranslations('logs');
   const tCommon = useTranslations('common');
   const [page, setPage] = useState(1);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [methodFilter, setMethodFilter] = useState<MethodFilter>('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data: servers, isLoading: isLoadingServers } = useQuery<McpServer[]>({
     queryKey: ['servers'],
@@ -24,13 +33,94 @@ export default function LogsPage() {
   const workspaceId = selectedServer?.workspace_id;
   const serverId = selectedServer?.id;
 
-  const { data, isLoading: isLoadingLogs } = useQuery<PaginatedResponse<RequestLog>>({
-    queryKey: ['workspaces', workspaceId, 'servers', serverId, 'logs', page],
-    queryFn: () => api.get(`/workspaces/${workspaceId}/servers/${serverId}/logs?page=${page}&per_page=50`),
+  const buildQueryParams = () => {
+    const params = new URLSearchParams();
+    params.set('page', page.toString());
+    params.set('per_page', '50');
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (methodFilter !== 'all') params.set('method', methodFilter);
+    if (timeFilter !== 'all') params.set('time_range', timeFilter);
+    if (searchQuery) params.set('search', searchQuery);
+    return params.toString();
+  };
+
+  const { data, isLoading: isLoadingLogs, refetch } = useQuery<PaginatedResponse<RequestLog>>({
+    queryKey: ['workspaces', workspaceId, 'servers', serverId, 'logs', page, statusFilter, methodFilter, timeFilter, searchQuery],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/servers/${serverId}/logs?${buildQueryParams()}`),
     enabled: !!workspaceId && !!serverId,
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
   });
 
   const isLoading = isLoadingServers || isLoadingLogs;
+
+  const filteredLogs = useMemo(() => {
+    if (!data?.data) return [];
+    return data.data.filter(log => {
+      // Client-side search filtering (in addition to server-side)
+      if (searchQuery && !log.path?.toLowerCase().includes(searchQuery.toLowerCase()) &&
+          !log.tool_name?.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [data?.data, searchQuery]);
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    if (!data?.data) return;
+    setIsExporting(true);
+
+    try {
+      const exportData = data.data.map(log => ({
+        time: new Date(log.created_at).toISOString(),
+        method: log.method,
+        path: log.path,
+        tool: log.tool_name || '',
+        status: log.status_code,
+        duration_ms: log.duration_ms,
+        error: log.error_message || '',
+      }));
+
+      let content: string;
+      let filename: string;
+      let mimeType: string;
+
+      if (format === 'json') {
+        content = JSON.stringify(exportData, null, 2);
+        filename = `logs-${selectedServer?.name}-${new Date().toISOString().split('T')[0]}.json`;
+        mimeType = 'application/json';
+      } else {
+        const headers = ['Time', 'Method', 'Path', 'Tool', 'Status', 'Duration (ms)', 'Error'];
+        const rows = exportData.map(row => [
+          row.time, row.method, row.path, row.tool, row.status, row.duration_ms, row.error
+        ].join(','));
+        content = [headers.join(','), ...rows].join('\n');
+        filename = `logs-${selectedServer?.name}-${new Date().toISOString().split('T')[0]}.csv`;
+        mimeType = 'text/csv';
+      }
+
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setMethodFilter('all');
+    setTimeFilter('all');
+    setPage(1);
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || methodFilter !== 'all' || timeFilter !== 'all';
 
   return (
     <div className="max-w-6xl">
@@ -63,6 +153,120 @@ export default function LogsPage() {
           )}
         </div>
       </div>
+
+      {/* Filters */}
+      {servers && servers.length > 0 && (
+        <div className="mb-6 p-4 bg-white rounded-xl border border-gray-200">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search */}
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder={t('searchPlaceholder') || 'Search path or tool...'}
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(1); }}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="all">{t('filter.allStatus') || 'All Status'}</option>
+              <option value="2xx">2xx Success</option>
+              <option value="4xx">4xx Client Error</option>
+              <option value="5xx">5xx Server Error</option>
+            </select>
+
+            {/* Method Filter */}
+            <select
+              value={methodFilter}
+              onChange={(e) => { setMethodFilter(e.target.value as MethodFilter); setPage(1); }}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="all">{t('filter.allMethods') || 'All Methods'}</option>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+
+            {/* Time Range Filter */}
+            <select
+              value={timeFilter}
+              onChange={(e) => { setTimeFilter(e.target.value as TimeFilter); setPage(1); }}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="all">{t('filter.allTime') || 'All Time'}</option>
+              <option value="1h">{t('filter.lastHour') || 'Last Hour'}</option>
+              <option value="24h">{t('filter.last24h') || 'Last 24 Hours'}</option>
+              <option value="7d">{t('filter.last7d') || 'Last 7 Days'}</option>
+              <option value="30d">{t('filter.last30d') || 'Last 30 Days'}</option>
+            </select>
+
+            {/* Reset Filters */}
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
+              >
+                {t('filter.reset') || 'Reset'}
+              </button>
+            )}
+
+            {/* Refresh */}
+            <button
+              onClick={() => refetch()}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              title={t('refresh') || 'Refresh'}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M23 4v6h-6M1 20v-6h6" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {/* Export */}
+            <div className="relative group">
+              <button
+                disabled={isExporting || !data?.data?.length}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M7 10l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 15V3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t('export') || 'Export'}
+              </button>
+              <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 rounded-t-lg"
+                >
+                  CSV
+                </button>
+                <button
+                  onClick={() => handleExport('json')}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 rounded-b-lg"
+                >
+                  JSON
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isLoadingServers ? (
         <div className="space-y-3">

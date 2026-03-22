@@ -90,8 +90,8 @@ pub struct PlanDefinition {
     pub plan: Plan,
     pub name: &'static str,
     pub description: &'static str,
-    pub price_monthly_usd: u32,
-    pub price_yearly_usd: u32,
+    pub price_monthly_jpy: u32,
+    pub price_yearly_jpy: u32,
     #[serde(skip)]
     pub stripe_price_id_monthly: Option<&'static str>,
     #[serde(skip)]
@@ -119,8 +119,8 @@ pub static PLANS: &[PlanDefinition] = &[
         plan: Plan::Free,
         name: "Free",
         description: "Perfect for getting started",
-        price_monthly_usd: 0,
-        price_yearly_usd: 0,
+        price_monthly_jpy: 0,
+        price_yearly_jpy: 0,
         stripe_price_id_monthly: None,
         stripe_price_id_yearly: None,
         limits: PlanLimits {
@@ -145,8 +145,8 @@ pub static PLANS: &[PlanDefinition] = &[
         plan: Plan::Pro,
         name: "Pro",
         description: "For professional developers",
-        price_monthly_usd: 29,
-        price_yearly_usd: 290,
+        price_monthly_jpy: 2980,
+        price_yearly_jpy: 29800,
         stripe_price_id_monthly: None, // Set via STRIPE_PRICE_PRO_MONTHLY env
         stripe_price_id_yearly: None,  // Set via STRIPE_PRICE_PRO_YEARLY env
         limits: PlanLimits {
@@ -172,8 +172,8 @@ pub static PLANS: &[PlanDefinition] = &[
         plan: Plan::Team,
         name: "Team",
         description: "For growing teams",
-        price_monthly_usd: 99,
-        price_yearly_usd: 990,
+        price_monthly_jpy: 9800,
+        price_yearly_jpy: 98000,
         stripe_price_id_monthly: None, // Set via STRIPE_PRICE_TEAM_MONTHLY env
         stripe_price_id_yearly: None,  // Set via STRIPE_PRICE_TEAM_YEARLY env
         limits: PlanLimits {
@@ -200,8 +200,8 @@ pub static PLANS: &[PlanDefinition] = &[
         plan: Plan::Enterprise,
         name: "Enterprise",
         description: "For large organizations",
-        price_monthly_usd: 499,
-        price_yearly_usd: 4990,
+        price_monthly_jpy: 49800,
+        price_yearly_jpy: 498000,
         stripe_price_id_monthly: None, // Set via STRIPE_PRICE_ENTERPRISE_MONTHLY env
         stripe_price_id_yearly: None,  // Set via STRIPE_PRICE_ENTERPRISE_YEARLY env
         limits: PlanLimits {

@@ -104,24 +104,24 @@
       "perMonth": "/mo",
       "free": {
         "name": "Free",
-        "price": "$0",
+        "price": "¥0",
         "description": "Perfect for personal projects and testing",
         "feature1": "Up to 3 servers",
         "feature2": "10,000 requests/month",
-        "feature3": "Community support",
-        "feature4": "Basic logs",
+        "feature3": "7-day log retention",
+        "feature4": "Community support",
         "cta": "Start Free"
       },
       "pro": {
         "name": "Pro",
-        "price": "$29",
+        "price": "¥2,980",
         "badge": "Recommended",
         "description": "Everything for production",
-        "feature1": "Unlimited servers",
-        "feature2": "100,000 requests/month",
+        "feature1": "Up to 20 servers",
+        "feature2": "500,000 requests/month",
         "feature3": "Custom domains",
-        "feature4": "Priority support",
-        "feature5": "Advanced analytics",
+        "feature4": "30-day log retention",
+        "feature5": "Email support",
         "cta": "Start Pro"
       }
     },
@@ -410,6 +410,10 @@
     "plan": "{plan} Plan",
     "status": "Status",
     "periodEnd": "Current period ends",
+    "invoiceHistory": "Invoice History",
+    "noInvoices": "No invoices yet",
+    "viewInvoice": "View invoice",
+    "downloadPdf": "Download PDF",
     "manageSubscription": "Manage Subscription",
     "cancelSubscription": "Cancel Subscription",
     "cancelling": "Cancelling...",
@@ -420,7 +424,7 @@
     "upgrade": "Upgrade",
     "downgrade": "Downgrade",
     "perMonth": "/month",
-    "billedYearly": "Billed ${price}/year",
+    "billedYearly": "Billed ¥{price}/year",
     "planLimits": "Plan Limits",
     "planLimitsDesc": "Usage limits based on your current plan",
     "limit": "Limit",
@@ -467,22 +471,22 @@
       "free": {
         "name": "Free",
         "description": "For personal projects",
-        "features": ["Up to 3 servers", "50 deployments/month", "10,000 requests/month", "7-day log retention"]
+        "features": ["Up to 3 servers", "50 deployments/month", "10,000 requests/month", "7-day log retention", "Community support"]
       },
       "pro": {
         "name": "Pro",
         "description": "For professional developers",
-        "features": ["Up to 10 servers", "500 deployments/month", "100,000 requests/month", "30-day log retention", "Custom domains", "Priority support"]
+        "features": ["Up to 20 servers", "500 deployments/month", "500,000 requests/month", "30-day log retention", "Custom domains", "Email support"]
       },
       "team": {
         "name": "Team",
         "description": "For teams and organizations",
-        "features": ["Up to 50 servers", "Unlimited deployments", "1,000,000 requests/month", "90-day log retention", "Custom domains", "Priority support", "Team members"]
+        "features": ["Up to 100 servers", "2,000 deployments/month", "5,000,000 requests/month", "90-day log retention", "Custom domains", "Up to 10 team members", "Priority support"]
       },
       "enterprise": {
         "name": "Enterprise",
         "description": "For large organizations",
-        "features": ["Unlimited servers", "Unlimited deployments", "Unlimited requests", "1-year log retention", "Custom domains", "Priority support", "Unlimited team members", "SSO/SAML"]
+        "features": ["Unlimited servers", "Unlimited deployments", "Unlimited requests", "1-year log retention", "Custom domains", "Unlimited team members", "SSO/SAML", "Dedicated support", "SLA"]
       }
     }
   },

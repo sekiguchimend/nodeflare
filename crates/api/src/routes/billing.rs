@@ -20,8 +20,8 @@ pub async fn list_plans() -> Json<Vec<PlanResponse>> {
             plan: p.plan.to_string(),
             name: p.name.to_string(),
             description: p.description.to_string(),
-            price_monthly_usd: p.price_monthly_usd,
-            price_yearly_usd: p.price_yearly_usd,
+            price_monthly_jpy: p.price_monthly_jpy,
+            price_yearly_jpy: p.price_yearly_jpy,
             features: p.features.iter().map(|s| s.to_string()).collect(),
             limits: PlanLimitsResponse {
                 max_servers: p.limits.max_servers,
@@ -273,8 +273,8 @@ pub struct PlanResponse {
     pub plan: String,
     pub name: String,
     pub description: String,
-    pub price_monthly_usd: u32,
-    pub price_yearly_usd: u32,
+    pub price_monthly_jpy: u32,
+    pub price_yearly_jpy: u32,
     pub features: Vec<String>,
     pub limits: PlanLimitsResponse,
 }
@@ -323,4 +323,64 @@ pub struct CancelResponse {
     pub status: String,
     pub cancel_at_period_end: bool,
     pub current_period_end: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InvoiceResponse {
+    pub id: String,
+    pub number: Option<String>,
+    pub status: Option<String>,
+    pub amount_due: i64,
+    pub amount_paid: i64,
+    pub currency: String,
+    pub created: i64,
+    pub hosted_invoice_url: Option<String>,
+    pub invoice_pdf: Option<String>,
+}
+
+/// List invoices for a workspace
+pub async fn list_invoices(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(workspace_id): Path<Uuid>,
+) -> Result<Json<Vec<InvoiceResponse>>, (StatusCode, String)> {
+    // Verify user has access
+    WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
+
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+
+    let customer_id = workspace
+        .stripe_customer_id
+        .ok_or((StatusCode::NOT_FOUND, "No billing history for this workspace".to_string()))?;
+
+    let billing = state.billing.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing not configured".to_string()))?;
+
+    let invoices = billing
+        .list_invoices(&customer_id, 100)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let response: Vec<InvoiceResponse> = invoices
+        .into_iter()
+        .map(|inv| InvoiceResponse {
+            id: inv.id.to_string(),
+            number: inv.number,
+            status: inv.status.map(|s| s.to_string()),
+            amount_due: inv.amount_due.unwrap_or(0),
+            amount_paid: inv.amount_paid.unwrap_or(0),
+            currency: inv.currency.map(|c| c.to_string()).unwrap_or_else(|| "jpy".to_string()),
+            created: inv.created.unwrap_or(0),
+            hosted_invoice_url: inv.hosted_invoice_url,
+            invoice_pdf: inv.invoice_pdf,
+        })
+        .collect();
+
+    Ok(Json(response))
 }

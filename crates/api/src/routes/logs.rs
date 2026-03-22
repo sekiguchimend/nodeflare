@@ -6,12 +6,35 @@ use axum::{
 use chrono::{Duration, Utc};
 use mcp_common::types::{PaginationParams, RequestLogResponse};
 use mcp_db::{RequestLogRepository, RequestLogStats, ServerRepository, ToolUsageStats, WorkspaceRepository};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::extractors::AuthUser;
 use crate::state::AppState;
+
+#[derive(Debug, Deserialize)]
+pub struct LogsFilterParams {
+    #[serde(default = "default_page")]
+    pub page: u32,
+    #[serde(default = "default_per_page")]
+    pub per_page: u32,
+    pub status: Option<String>,
+    pub method: Option<String>,
+    pub time_range: Option<String>,
+    pub search: Option<String>,
+}
+
+fn default_page() -> u32 { 1 }
+fn default_per_page() -> u32 { 50 }
+
+#[derive(Serialize)]
+pub struct PaginatedLogsResponse {
+    pub data: Vec<RequestLogResponse>,
+    pub total: i64,
+    pub page: u32,
+    pub per_page: u32,
+}
 
 /// Helper to verify server belongs to workspace
 async fn verify_server_ownership(
@@ -34,8 +57,8 @@ pub async fn list(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
     Path((workspace_id, server_id)): Path<(Uuid, Uuid)>,
-    Query(pagination): Query<PaginationParams>,
-) -> Result<Json<Vec<RequestLogResponse>>, (StatusCode, String)> {
+    Query(params): Query<LogsFilterParams>,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -44,16 +67,22 @@ pub async fn list(
     // Verify server belongs to workspace
     verify_server_ownership(&state, workspace_id, server_id).await?;
 
-    let logs = RequestLogRepository::list_by_server(
+    let limit = params.per_page.min(100) as i64;
+    let offset = ((params.page.saturating_sub(1)) * params.per_page) as i64;
+
+    let (logs, total) = RequestLogRepository::list_by_server_filtered(
         &state.db,
         server_id,
-        pagination.limit() as i64,
-        pagination.offset() as i64,
+        limit,
+        offset,
+        params.status.as_deref(),
+        params.time_range.as_deref(),
+        params.search.as_deref(),
     )
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let response: Vec<RequestLogResponse> = logs
+    let data: Vec<RequestLogResponse> = logs
         .into_iter()
         .map(|l| RequestLogResponse {
             id: l.id,
@@ -65,7 +94,12 @@ pub async fn list(
         })
         .collect();
 
-    Ok(Json(response))
+    Ok(Json(PaginatedLogsResponse {
+        data,
+        total,
+        page: params.page,
+        per_page: params.per_page,
+    }))
 }
 
 #[derive(Serialize)]

@@ -130,6 +130,23 @@ impl UserRepository {
         Ok(())
     }
 
+    pub async fn update_name(pool: &PgPool, id: Uuid, name: &str) -> Result<User> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET name = $2, updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, github_id, email, name, avatar_url, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(user)
+    }
+
     pub async fn update_github_token(
         pool: &PgPool,
         id: Uuid,

@@ -9,7 +9,9 @@ import { McpServer, Deployment, Tool, Secret } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useServerStatusWebSocket } from '@/hooks/use-websocket';
+import { BuildLogsPanel } from '@/components/deployment/build-logs-panel';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,7 +46,7 @@ export default function ServerDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const serverId = params.id as string;
-  const [activeTab, setActiveTab] = useState<'deployments' | 'tools' | 'secrets' | 'settings'>('deployments');
+  const [activeTab, setActiveTab] = useState<'deployments' | 'tools' | 'secrets' | 'webhooks' | 'settings'>('deployments');
   const [showDeployInfo, setShowDeployInfo] = useState(false);
 
   const { data: servers, isLoading: isLoadingServers } = useQuery<McpServer[]>({
@@ -82,6 +84,25 @@ export default function ServerDetailPage() {
     queryKey: ['billing-plans'],
     queryFn: () => api.get('/billing/plans'),
   });
+
+  // Real-time server status via WebSocket
+  const { isConnected: wsConnected } = useServerStatusWebSocket(
+    workspaceId || '',
+    serverId,
+    {
+      onStatusUpdate: (status) => {
+        // Update the server status in cache
+        queryClient.setQueryData<McpServer[]>(['servers'], (old) => {
+          if (!old) return old;
+          return old.map((s) =>
+            s.id === serverId
+              ? { ...s, status: status.status, endpoint_url: status.endpoint_url || s.endpoint_url }
+              : s
+          );
+        });
+      },
+    }
+  );
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -149,6 +170,7 @@ export default function ServerDetailPage() {
     { id: 'deployments', label: t('detail.deployments'), count: deployments?.length },
     { id: 'tools', label: t('detail.tools'), count: tools?.length },
     { id: 'secrets', label: t('detail.secrets'), count: secrets?.length },
+    { id: 'webhooks', label: 'Webhooks' },
     { id: 'settings', label: t('detail.settings') },
   ] as const;
 
@@ -355,6 +377,13 @@ export default function ServerDetailPage() {
               tCommon={tCommon}
             />
           )}
+          {activeTab === 'webhooks' && (
+            <WebhooksTab
+              serverId={serverId}
+              workspaceId={workspaceId!}
+              tCommon={tCommon}
+            />
+          )}
           {activeTab === 'settings' && (
             <SettingsTab
               server={server}
@@ -370,6 +399,8 @@ export default function ServerDetailPage() {
 }
 
 function DeploymentsTab({ deployments, t }: { deployments: Deployment[]; t: (key: string) => string }) {
+  const [selectedDeployment, setSelectedDeployment] = useState<string | null>(null);
+
   if (deployments.length === 0) {
     return (
       <div className="py-16 text-center">
@@ -385,6 +416,7 @@ function DeploymentsTab({ deployments, t }: { deployments: Deployment[]; t: (key
 
   const statusColors: Record<string, { bg: string; text: string }> = {
     success: { bg: 'bg-green-100', text: 'text-green-700' },
+    succeeded: { bg: 'bg-green-100', text: 'text-green-700' },
     building: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
     deploying: { bg: 'bg-blue-100', text: 'text-blue-700' },
     failed: { bg: 'bg-red-100', text: 'text-red-700' },
@@ -392,38 +424,91 @@ function DeploymentsTab({ deployments, t }: { deployments: Deployment[]; t: (key
   };
 
   return (
-    <div className="space-y-3">
-      {deployments.map((deployment, index) => {
-        const style = statusColors[deployment.status] || statusColors.pending;
-        return (
-          <div
-            key={deployment.id}
-            className="p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-md transition-all"
-          >
-            <div className="flex items-center gap-4">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${style.bg}`}>
-                <span className={`text-sm font-bold ${style.text}`}>v{index + 1}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <code className="text-sm font-mono text-gray-600">{deployment.commit_sha.slice(0, 7)}</code>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
-                    {t(`status.${deployment.status}`)}
-                  </span>
+    <div className="space-y-4">
+      {/* Build Logs Panel */}
+      {selectedDeployment && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-gray-600">
+              Build Logs - {selectedDeployment.slice(0, 8)}
+            </h3>
+            <button
+              onClick={() => setSelectedDeployment(null)}
+              className="text-sm text-gray-400 hover:text-gray-600"
+            >
+              Close
+            </button>
+          </div>
+          <BuildLogsPanel deploymentId={selectedDeployment} maxHeight="300px" />
+        </div>
+      )}
+
+      {/* Deployments List */}
+      <div className="space-y-3">
+        {deployments.map((deployment, index) => {
+          const style = statusColors[deployment.status] || statusColors.pending;
+          const isSelected = selectedDeployment === deployment.id;
+          const isBuilding = deployment.status === 'building' || deployment.status === 'deploying';
+          return (
+            <div
+              key={deployment.id}
+              className={`p-4 rounded-xl bg-white border transition-all cursor-pointer ${
+                isSelected
+                  ? 'border-violet-300 ring-2 ring-violet-100'
+                  : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
+              }`}
+              onClick={() => setSelectedDeployment(isSelected ? null : deployment.id)}
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${style.bg}`}>
+                  <span className={`text-sm font-bold ${style.text}`}>v{deployments.length - index}</span>
                 </div>
-                <p className="text-sm text-gray-500 truncate mt-0.5">
-                  {deployment.commit_message || 'No commit message'}
-                </p>
-              </div>
-              <div className="text-sm text-gray-400">
-                {deployment.deployed_at
-                  ? new Date(deployment.deployed_at).toLocaleString()
-                  : t('detail.pending')}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm font-mono text-gray-600">{deployment.commit_sha.slice(0, 7)}</code>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${style.bg} ${style.text}`}>
+                      {isBuilding && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                      )}
+                      {t(`status.${deployment.status}`)}
+                    </span>
+                    {isBuilding && (
+                      <span className="text-xs text-violet-600 font-medium">
+                        Click to view logs
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 truncate mt-0.5">
+                    {deployment.commit_message || 'No commit message'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-400">
+                    {deployment.deployed_at
+                      ? new Date(deployment.deployed_at).toLocaleString()
+                      : t('detail.pending')}
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDeployment(isSelected ? null : deployment.id);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="View logs"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                      <line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -723,6 +808,318 @@ function SettingsTab({
           {isSaving ? tCommon('loading') : '保存する'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+interface Webhook {
+  id: string;
+  name: string;
+  webhook_url: string;
+  webhook_type: string;
+  events: string[];
+  is_active: boolean;
+  last_triggered_at: string | null;
+  last_status: string | null;
+  created_at: string;
+}
+
+function WebhooksTab({
+  serverId,
+  workspaceId,
+  tCommon
+}: {
+  serverId: string;
+  workspaceId: string;
+  tCommon: (key: string) => string;
+}) {
+  const queryClient = useQueryClient();
+  const [isAdding, setIsAdding] = useState(false);
+  const [newWebhook, setNewWebhook] = useState({
+    name: '',
+    webhook_url: '',
+    webhook_type: 'custom',
+    events: ['deploy_success', 'deploy_failure'],
+    secret: '',
+  });
+
+  const { data: webhooks = [], isLoading } = useQuery<Webhook[]>({
+    queryKey: ['webhooks', serverId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/servers/${serverId}/webhooks`),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof newWebhook) =>
+      api.post(`/workspaces/${workspaceId}/servers/${serverId}/webhooks`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', serverId] });
+      setIsAdding(false);
+      setNewWebhook({
+        name: '',
+        webhook_url: '',
+        webhook_type: 'custom',
+        events: ['deploy_success', 'deploy_failure'],
+        secret: '',
+      });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      api.patch(`/workspaces/${workspaceId}/servers/${serverId}/webhooks/${id}`, { is_active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', serverId] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/workspaces/${workspaceId}/servers/${serverId}/webhooks/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', serverId] });
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/workspaces/${workspaceId}/servers/${serverId}/webhooks/${id}/test`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', serverId] });
+    },
+  });
+
+  const handleEventToggle = (event: string) => {
+    const events = newWebhook.events.includes(event)
+      ? newWebhook.events.filter(e => e !== event)
+      : [...newWebhook.events, event];
+    setNewWebhook({ ...newWebhook, events });
+  };
+
+  const eventOptions = [
+    { id: 'deploy_success', label: 'Deploy Success', desc: 'Notify when deployment succeeds' },
+    { id: 'deploy_failure', label: 'Deploy Failure', desc: 'Notify when deployment fails' },
+    { id: 'deploy_started', label: 'Deploy Started', desc: 'Notify when deployment starts' },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="py-16 flex justify-center">
+        <svg className="w-8 h-8 animate-spin text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Add Webhook Form */}
+      {isAdding ? (
+        <div className="p-6 rounded-2xl bg-gray-50 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">Add Webhook</h3>
+            <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-gray-600">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <Label>Name</Label>
+              <Input
+                value={newWebhook.name}
+                onChange={(e) => setNewWebhook({ ...newWebhook, name: e.target.value })}
+                placeholder="My Slack Webhook"
+                className="mt-1 bg-white"
+              />
+            </div>
+            <div>
+              <Label>Webhook URL (HTTPS required)</Label>
+              <Input
+                value={newWebhook.webhook_url}
+                onChange={(e) => setNewWebhook({ ...newWebhook, webhook_url: e.target.value })}
+                placeholder="https://hooks.slack.com/services/..."
+                className="mt-1 bg-white"
+              />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <select
+                value={newWebhook.webhook_type}
+                onChange={(e) => setNewWebhook({ ...newWebhook, webhook_type: e.target.value })}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              >
+                <option value="custom">Custom</option>
+                <option value="slack">Slack</option>
+                <option value="discord">Discord</option>
+              </select>
+            </div>
+            <div>
+              <Label className="mb-2 block">Events</Label>
+              <div className="space-y-2">
+                {eventOptions.map(event => (
+                  <label key={event.id} className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 cursor-pointer hover:border-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={newWebhook.events.includes(event.id)}
+                      onChange={() => handleEventToggle(event.id)}
+                      className="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">{event.label}</div>
+                      <div className="text-sm text-gray-500">{event.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>Secret (optional, for signature verification)</Label>
+              <Input
+                type="password"
+                value={newWebhook.secret}
+                onChange={(e) => setNewWebhook({ ...newWebhook, secret: e.target.value })}
+                placeholder="Optional secret for signature"
+                className="mt-1 bg-white"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button
+                onClick={() => createMutation.mutate(newWebhook)}
+                disabled={!newWebhook.name || !newWebhook.webhook_url || newWebhook.events.length === 0 || createMutation.isPending}
+                className="bg-violet-600 hover:bg-violet-700"
+              >
+                {createMutation.isPending ? tCommon('loading') : 'Add Webhook'}
+              </Button>
+              <Button variant="outline" onClick={() => setIsAdding(false)}>
+                {tCommon('cancel')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsAdding(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-300 bg-violet-50 hover:bg-violet-100 text-violet-600 transition-all"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-sm font-medium">Add Webhook</span>
+        </button>
+      )}
+
+      {/* Webhooks List */}
+      {webhooks.length === 0 ? (
+        <div className="py-12 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+            <svg className="w-8 h-8 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <p className="text-gray-500 mb-2">No webhooks configured</p>
+          <p className="text-sm text-gray-400">Add webhooks to get notified when deployments complete</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {webhooks.map((webhook) => (
+            <div
+              key={webhook.id}
+              className={`group p-4 rounded-xl bg-white border transition-all ${
+                webhook.is_active ? 'border-gray-100 hover:border-gray-200 hover:shadow-md' : 'border-gray-100 opacity-60'
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  webhook.webhook_type === 'slack' ? 'bg-purple-100' :
+                  webhook.webhook_type === 'discord' ? 'bg-indigo-100' : 'bg-gray-100'
+                }`}>
+                  {webhook.webhook_type === 'slack' ? (
+                    <svg className="w-5 h-5 text-purple-600" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+                    </svg>
+                  ) : webhook.webhook_type === 'discord' ? (
+                    <svg className="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900">{webhook.name}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      webhook.webhook_type === 'slack' ? 'bg-purple-100 text-purple-700' :
+                      webhook.webhook_type === 'discord' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {webhook.webhook_type}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500 truncate">{webhook.webhook_url}</p>
+                  <div className="flex items-center gap-4 mt-1">
+                    <div className="flex gap-1">
+                      {webhook.events.map(event => (
+                        <span key={event} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                          {event.replace('deploy_', '')}
+                        </span>
+                      ))}
+                    </div>
+                    {webhook.last_triggered_at && (
+                      <span className="text-xs text-gray-400">
+                        Last: {new Date(webhook.last_triggered_at).toLocaleString()}
+                        {webhook.last_status && (
+                          <span className={webhook.last_status === 'success' ? 'text-green-600 ml-1' : 'text-red-600 ml-1'}>
+                            ({webhook.last_status})
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => testMutation.mutate(webhook.id)}
+                    disabled={testMutation.isPending}
+                    className="px-3 py-1.5 text-sm text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                    title="Test webhook"
+                  >
+                    {testMutation.isPending ? '...' : 'Test'}
+                  </button>
+                  <button
+                    onClick={() => toggleMutation.mutate({ id: webhook.id, is_active: !webhook.is_active })}
+                    disabled={toggleMutation.isPending}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      webhook.is_active ? 'bg-violet-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                      webhook.is_active ? 'left-5' : 'left-0.5'
+                    }`} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm('Delete this webhook?')) {
+                        deleteMutation.mutate(webhook.id);
+                      }
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
