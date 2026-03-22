@@ -44,6 +44,15 @@ module.exports = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      keyframes: {
+        flash: {
+          '0%': { backgroundColor: 'rgb(16 185 129 / 0.2)' },
+          '100%': { backgroundColor: 'transparent' },
+        },
+      },
+      animation: {
+        flash: 'flash 1s ease-out',
+      },
     },
   },
   plugins: [],

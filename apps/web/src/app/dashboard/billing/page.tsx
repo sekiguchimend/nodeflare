@@ -346,7 +346,7 @@ export default function BillingPage() {
                   <span className="text-muted-foreground">{t('perMonth')}</span>
                   {selectedInterval === 'yearly' && price > 0 && (
                     <p className="text-sm text-muted-foreground">
-                      年額 ¥{price.toLocaleString()}
+                      {t('billedYearly', { price: price.toLocaleString() })}
                     </p>
                   )}
                 </div>

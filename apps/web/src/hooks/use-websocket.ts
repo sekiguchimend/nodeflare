@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ServerStatus } from '@/types';
 
 type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -39,14 +40,6 @@ export interface ServerStatusUpdate {
   error_message?: string;
   timestamp: string;
 }
-
-export type ServerStatus =
-  | 'inactive'
-  | 'building'
-  | 'deploying'
-  | 'running'
-  | 'failed'
-  | 'stopped';
 
 export interface BuildLogLine {
   deployment_id: string;

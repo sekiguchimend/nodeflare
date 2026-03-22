@@ -80,13 +80,13 @@ export default function ServersPage() {
         <div className="flex items-center gap-3 text-sm text-gray-500">
           <div className="flex items-center gap-2">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
-            <span>サーバー上限に達しました。追加するにはプランをアップグレードしてください。</span>
+            <span>{t('upgrade.serverLimit')}</span>
           </div>
           <Link
             href="/dashboard/billing"
             className="text-violet-600 hover:text-violet-700 font-medium hover:underline"
           >
-            アップグレード →
+            {t('upgrade.cta')} →
           </Link>
         </div>
       )}

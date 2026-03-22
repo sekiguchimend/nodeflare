@@ -117,31 +117,31 @@ export default function DashboardPage() {
       <div className="flex items-center gap-6 mb-6 text-sm">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="text-gray-500">{runningServers.length} / {servers?.length} running</span>
+          <span className="text-gray-500">{t('runningCount', { running: runningServers.length, total: servers?.length || 0 })}</span>
         </div>
         <div className="text-gray-300">|</div>
         <div className="text-gray-500">
-          <span className="text-gray-900 font-medium">{aggregatedStats.totalRequests.toLocaleString()}</span> requests
+          <span className="text-gray-900 font-medium">{aggregatedStats.totalRequests.toLocaleString()}</span> {t('requests')}
         </div>
         <div className="text-gray-300">|</div>
         <div className="text-gray-500">
-          <span className={aggregatedStats.totalErrors > 0 ? 'text-red-600 font-medium' : 'text-gray-900 font-medium'}>{aggregatedStats.totalErrors}</span> errors
+          <span className={aggregatedStats.totalErrors > 0 ? 'text-red-600 font-medium' : 'text-gray-900 font-medium'}>{aggregatedStats.totalErrors}</span> {t('errors')}
         </div>
         <div className="flex-1" />
         <Link href="/dashboard/servers/new" className="flex items-center gap-1.5 text-violet-600 hover:text-violet-700">
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 5v14M5 12h14" strokeLinecap="round" />
           </svg>
-          New Server
+          {t('newServer')}
         </Link>
       </div>
 
       {/* Servers */}
       <div className="rounded-xl border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Servers</span>
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('servers')}</span>
           <Link href="/dashboard/servers" className="text-xs text-gray-400 hover:text-gray-600">
-            View all →
+            {t('viewAll')}
           </Link>
         </div>
         <div className="divide-y divide-gray-100">
@@ -154,15 +154,15 @@ export default function DashboardPage() {
       {/* Plan Usage */}
       <div className="mt-6 rounded-xl border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Plan Usage</span>
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('planUsage')}</span>
           <Link href="/dashboard/billing" className="text-xs text-gray-400 hover:text-gray-600">
-            Manage →
+            {t('manage')}
           </Link>
         </div>
         <div className="flex gap-8 p-4 bg-white">
           <div className="flex-1">
             <div className="flex items-baseline justify-between mb-2">
-              <span className="text-sm text-gray-600">Servers</span>
+              <span className="text-sm text-gray-600">{t('servers')}</span>
               <span className="text-sm">
                 <span className="font-semibold text-gray-900">{servers?.length || 0}</span>
                 <span className="text-gray-400"> / {maxServers === 4294967295 ? '∞' : maxServers}</span>
@@ -177,7 +177,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex-1">
             <div className="flex items-baseline justify-between mb-2">
-              <span className="text-sm text-gray-600">Requests</span>
+              <span className="text-sm text-gray-600">{t('requests')}</span>
               <span className="text-sm">
                 <span className="font-semibold text-gray-900">{aggregatedStats.totalRequests.toLocaleString()}</span>
                 <span className="text-gray-400"> / {maxRequests === 4294967295 ? '∞' : maxRequests.toLocaleString()}</span>
@@ -194,7 +194,7 @@ export default function DashboardPage() {
       </div>
 
       {/* News & Updates */}
-      <NewsSection />
+      <NewsSection t={t} />
     </div>
   );
 }
@@ -288,7 +288,7 @@ interface VideoItem {
   thumbnail: string;
 }
 
-function NewsSection() {
+function NewsSection({ t }: { t: (key: string) => string }) {
   // Fetch announcements from API
   const { data: announcements } = useQuery<Announcement[]>({
     queryKey: ['announcements'],
@@ -348,7 +348,7 @@ function NewsSection() {
       {/* Videos */}
       {videos.length > 0 && (
         <div>
-          <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Videos</div>
+          <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t('videos')}</div>
           <div className="flex gap-3 overflow-x-auto pb-1">
             {videos.map((item) => (
               <a
@@ -378,7 +378,7 @@ function NewsSection() {
       {/* Blogs */}
       {blogs.length > 0 && (
         <div>
-          <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Blog</div>
+          <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t('blog')}</div>
           <div className="flex gap-3 overflow-x-auto">
             {blogs.map((post) => (
               <a

@@ -9,6 +9,7 @@ export function useAuth() {
     data: user,
     isLoading,
     error,
+    refetch,
   } = useQuery<User | null>({
     queryKey: ['auth', 'me'],
     queryFn: async () => {
@@ -41,5 +42,6 @@ export function useAuth() {
     error,
     isAuthenticated: !!user,
     logout: logoutMutation.mutate,
+    refreshUser: refetch,
   };
 }

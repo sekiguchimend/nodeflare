@@ -170,7 +170,7 @@ export default function ServerDetailPage() {
     { id: 'deployments', label: t('detail.deployments'), count: deployments?.length },
     { id: 'tools', label: t('detail.tools'), count: tools?.length },
     { id: 'secrets', label: t('detail.secrets'), count: secrets?.length },
-    { id: 'webhooks', label: 'Webhooks' },
+    { id: 'webhooks', label: t('webhooks.title') },
     { id: 'settings', label: t('detail.settings') },
   ] as const;
 
@@ -216,7 +216,7 @@ export default function ServerDetailPage() {
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                 </svg>
-                Pull & Deploy
+                {t('detail.pullAndDeploy')}
               </>
             )}
           </Button>
@@ -290,7 +290,7 @@ export default function ServerDetailPage() {
             onClick={() => setShowDeployInfo(!showDeployInfo)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
           >
-            <span className="text-gray-500">デプロイ</span>
+            <span className="text-gray-500">{t('detail.deploys')}</span>
             <span className="font-medium text-gray-900">{deploymentsThisMonth}/{maxDeployments === 4294967295 ? '∞' : maxDeployments}</span>
             <svg className="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
@@ -299,21 +299,21 @@ export default function ServerDetailPage() {
           </button>
           {showDeployInfo && (
             <div className="absolute top-full left-0 mt-2 w-72 p-4 rounded-xl bg-white border border-gray-200 shadow-xl z-50">
-              <p className="font-medium text-gray-900 mb-2">今月のデプロイ</p>
+              <p className="font-medium text-gray-900 mb-2">{t('detail.deployInfo')}</p>
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-2xl font-bold text-violet-600">{deploymentsThisMonth}</span>
                 <span className="text-gray-400">/</span>
                 <span className="text-lg text-gray-500">{maxDeployments === 4294967295 ? '∞' : maxDeployments}</span>
               </div>
               <p className="text-sm text-gray-500">
-                現在のプランでは月{maxDeployments === 4294967295 ? '無制限' : `${maxDeployments}回`}までデプロイできます。
+                {maxDeployments === 4294967295 ? t('detail.deployInfoUnlimited') : t('detail.deployInfoDesc', { max: maxDeployments })}
               </p>
               <Link
                 href="/dashboard/billing"
                 className="inline-flex items-center gap-1 text-sm text-violet-600 hover:text-violet-700 mt-3 font-medium"
                 onClick={() => setShowDeployInfo(false)}
               >
-                プランを確認 →
+                {t('detail.viewPlan')}
               </Link>
             </div>
           )}
@@ -357,7 +357,7 @@ export default function ServerDetailPage() {
 
         <div className="mt-6">
           {activeTab === 'deployments' && (
-            <DeploymentsTab deployments={deployments ?? []} t={t} />
+            <DeploymentsTab deployments={deployments ?? []} t={t} tCommon={tCommon} />
           )}
           {activeTab === 'tools' && (
             <ToolsTab
@@ -381,6 +381,7 @@ export default function ServerDetailPage() {
             <WebhooksTab
               serverId={serverId}
               workspaceId={workspaceId!}
+              t={t}
               tCommon={tCommon}
             />
           )}
@@ -398,7 +399,7 @@ export default function ServerDetailPage() {
   );
 }
 
-function DeploymentsTab({ deployments, t }: { deployments: Deployment[]; t: (key: string) => string }) {
+function DeploymentsTab({ deployments, t, tCommon }: { deployments: Deployment[]; t: (key: string) => string; tCommon: (key: string) => string }) {
   const [selectedDeployment, setSelectedDeployment] = useState<string | null>(null);
 
   if (deployments.length === 0) {
@@ -430,13 +431,13 @@ function DeploymentsTab({ deployments, t }: { deployments: Deployment[]; t: (key
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-600">
-              Build Logs - {selectedDeployment.slice(0, 8)}
+              {t('detail.buildLogs')} - {selectedDeployment.slice(0, 8)}
             </h3>
             <button
               onClick={() => setSelectedDeployment(null)}
               className="text-sm text-gray-400 hover:text-gray-600"
             >
-              Close
+              {tCommon('close')}
             </button>
           </div>
           <BuildLogsPanel deploymentId={selectedDeployment} maxHeight="300px" />
@@ -474,12 +475,12 @@ function DeploymentsTab({ deployments, t }: { deployments: Deployment[]; t: (key
                     </span>
                     {isBuilding && (
                       <span className="text-xs text-violet-600 font-medium">
-                        Click to view logs
+                        {t('detail.clickToViewLogs')}
                       </span>
                     )}
                   </div>
                   <p className="text-sm text-gray-500 truncate mt-0.5">
-                    {deployment.commit_message || 'No commit message'}
+                    {deployment.commit_message || t('detail.noCommitMessage')}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -494,7 +495,7 @@ function DeploymentsTab({ deployments, t }: { deployments: Deployment[]; t: (key
                       setSelectedDeployment(isSelected ? null : deployment.id);
                     }}
                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="View logs"
+                    title={t('detail.viewLogs')}
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" />
@@ -805,7 +806,7 @@ function SettingsTab({
 
       <div className="pt-4 border-t border-gray-200">
         <Button onClick={handleSave} disabled={isSaving} className="bg-violet-600 hover:bg-violet-700 px-6">
-          {isSaving ? tCommon('loading') : '保存する'}
+          {isSaving ? tCommon('loading') : t('detail.save')}
         </Button>
       </div>
     </div>
@@ -827,10 +828,12 @@ interface Webhook {
 function WebhooksTab({
   serverId,
   workspaceId,
+  t,
   tCommon
 }: {
   serverId: string;
   workspaceId: string;
+  t: (key: string) => string;
   tCommon: (key: string) => string;
 }) {
   const queryClient = useQueryClient();
@@ -896,9 +899,9 @@ function WebhooksTab({
   };
 
   const eventOptions = [
-    { id: 'deploy_success', label: 'Deploy Success', desc: 'Notify when deployment succeeds' },
-    { id: 'deploy_failure', label: 'Deploy Failure', desc: 'Notify when deployment fails' },
-    { id: 'deploy_started', label: 'Deploy Started', desc: 'Notify when deployment starts' },
+    { id: 'deploy_success', label: t('webhooks.eventDeploySuccess'), desc: t('webhooks.eventDeploySuccessDesc') },
+    { id: 'deploy_failure', label: t('webhooks.eventDeployFailure'), desc: t('webhooks.eventDeployFailureDesc') },
+    { id: 'deploy_started', label: t('webhooks.eventDeployStarted'), desc: t('webhooks.eventDeployStartedDesc') },
   ];
 
   if (isLoading) {
@@ -917,7 +920,7 @@ function WebhooksTab({
       {isAdding ? (
         <div className="p-6 rounded-2xl bg-gray-50 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Add Webhook</h3>
+            <h3 className="font-semibold text-gray-900">{t('webhooks.add')}</h3>
             <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-gray-600">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
@@ -926,37 +929,37 @@ function WebhooksTab({
           </div>
           <div className="space-y-4">
             <div>
-              <Label>Name</Label>
+              <Label>{t('webhooks.name')}</Label>
               <Input
                 value={newWebhook.name}
                 onChange={(e) => setNewWebhook({ ...newWebhook, name: e.target.value })}
-                placeholder="My Slack Webhook"
+                placeholder={t('webhooks.namePlaceholder')}
                 className="mt-1 bg-white"
               />
             </div>
             <div>
-              <Label>Webhook URL (HTTPS required)</Label>
+              <Label>{t('webhooks.url')}</Label>
               <Input
                 value={newWebhook.webhook_url}
                 onChange={(e) => setNewWebhook({ ...newWebhook, webhook_url: e.target.value })}
-                placeholder="https://hooks.slack.com/services/..."
+                placeholder={t('webhooks.urlPlaceholder')}
                 className="mt-1 bg-white"
               />
             </div>
             <div>
-              <Label>Type</Label>
+              <Label>{t('webhooks.type')}</Label>
               <select
                 value={newWebhook.webhook_type}
                 onChange={(e) => setNewWebhook({ ...newWebhook, webhook_type: e.target.value })}
                 className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
               >
-                <option value="custom">Custom</option>
-                <option value="slack">Slack</option>
-                <option value="discord">Discord</option>
+                <option value="custom">{t('webhooks.typeCustom')}</option>
+                <option value="slack">{t('webhooks.typeSlack')}</option>
+                <option value="discord">{t('webhooks.typeDiscord')}</option>
               </select>
             </div>
             <div>
-              <Label className="mb-2 block">Events</Label>
+              <Label className="mb-2 block">{t('webhooks.events')}</Label>
               <div className="space-y-2">
                 {eventOptions.map(event => (
                   <label key={event.id} className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 cursor-pointer hover:border-gray-300">
@@ -975,12 +978,12 @@ function WebhooksTab({
               </div>
             </div>
             <div>
-              <Label>Secret (optional, for signature verification)</Label>
+              <Label>{t('webhooks.secret')}</Label>
               <Input
                 type="password"
                 value={newWebhook.secret}
                 onChange={(e) => setNewWebhook({ ...newWebhook, secret: e.target.value })}
-                placeholder="Optional secret for signature"
+                placeholder={t('webhooks.secretPlaceholder')}
                 className="mt-1 bg-white"
               />
             </div>
@@ -990,7 +993,7 @@ function WebhooksTab({
                 disabled={!newWebhook.name || !newWebhook.webhook_url || newWebhook.events.length === 0 || createMutation.isPending}
                 className="bg-violet-600 hover:bg-violet-700"
               >
-                {createMutation.isPending ? tCommon('loading') : 'Add Webhook'}
+                {createMutation.isPending ? tCommon('loading') : t('webhooks.add')}
               </Button>
               <Button variant="outline" onClick={() => setIsAdding(false)}>
                 {tCommon('cancel')}
@@ -1006,7 +1009,7 @@ function WebhooksTab({
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="text-sm font-medium">Add Webhook</span>
+          <span className="text-sm font-medium">{t('webhooks.add')}</span>
         </button>
       )}
 
@@ -1019,8 +1022,8 @@ function WebhooksTab({
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <p className="text-gray-500 mb-2">No webhooks configured</p>
-          <p className="text-sm text-gray-400">Add webhooks to get notified when deployments complete</p>
+          <p className="text-gray-500 mb-2">{t('webhooks.empty')}</p>
+          <p className="text-sm text-gray-400">{t('webhooks.emptyDesc')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1087,9 +1090,9 @@ function WebhooksTab({
                     onClick={() => testMutation.mutate(webhook.id)}
                     disabled={testMutation.isPending}
                     className="px-3 py-1.5 text-sm text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
-                    title="Test webhook"
+                    title={t('webhooks.test')}
                   >
-                    {testMutation.isPending ? '...' : 'Test'}
+                    {testMutation.isPending ? t('webhooks.testing') : t('webhooks.test')}
                   </button>
                   <button
                     onClick={() => toggleMutation.mutate({ id: webhook.id, is_active: !webhook.is_active })}
@@ -1104,7 +1107,7 @@ function WebhooksTab({
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm('Delete this webhook?')) {
+                      if (confirm(t('webhooks.deleteConfirm'))) {
                         deleteMutation.mutate(webhook.id);
                       }
                     }}

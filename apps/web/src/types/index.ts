@@ -16,7 +16,7 @@ export interface Workspace {
 
 export type Runtime = 'node' | 'python' | 'go' | 'rust' | 'docker';
 export type Visibility = 'public' | 'private' | 'team';
-export type ServerStatus = 'pending' | 'building' | 'deploying' | 'running' | 'stopped' | 'failed';
+export type ServerStatus = 'pending' | 'building' | 'deploying' | 'running' | 'stopped' | 'failed' | 'inactive';
 export type DeploymentStatus = 'pending' | 'building' | 'deploying' | 'success' | 'failed';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 
