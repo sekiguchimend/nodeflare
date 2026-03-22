@@ -7,6 +7,8 @@ mod api_key;
 mod secret;
 mod request_log;
 mod contact_message;
+mod announcement;
+mod user_preferences;
 
 pub use user::*;
 pub use workspace::*;
@@ -17,3 +19,5 @@ pub use api_key::*;
 pub use secret::*;
 pub use request_log::*;
 pub use contact_message::*;
+pub use announcement::*;
+pub use user_preferences::*;

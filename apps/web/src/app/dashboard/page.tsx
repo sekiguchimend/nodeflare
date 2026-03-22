@@ -266,59 +266,70 @@ function ServerStatusRow({
   );
 }
 
-interface NewsItem {
+interface Announcement {
   id: string;
-  type: 'message' | 'blog' | 'video' | 'update';
   title: string;
   content?: string;
-  url?: string;
-  thumbnail?: string;
-  date: string;
+  type: string;
+  published_at: string;
+}
+
+interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  publishDate?: string;
+}
+
+interface VideoItem {
+  id: string;
+  title: string;
+  url: string;
+  thumbnail: string;
 }
 
 function NewsSection() {
-  // TODO: Replace with API call
-  const news: NewsItem[] = [
+  // Fetch announcements from API
+  const { data: announcements } = useQuery<Announcement[]>({
+    queryKey: ['announcements'],
+    queryFn: () => api.get('/announcements?limit=5'),
+    staleTime: 60000,
+  });
+
+  // Fetch blog posts from CMS
+  const { data: blogPosts } = useQuery<BlogPost[]>({
+    queryKey: ['dashboard-blog-posts'],
+    queryFn: async () => {
+      const res = await fetch('/api/blog');
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  // Static videos for now
+  const videos: VideoItem[] = [
     {
       id: '1',
-      type: 'message',
-      title: 'Scheduled maintenance on Jan 25th, 2:00 AM UTC',
-      date: '2024-01-20',
-    },
-    {
-      id: '2',
-      type: 'message',
-      title: 'New feature: Custom domains now available for Pro plans',
-      date: '2024-01-18',
-    },
-    {
-      id: '3',
-      type: 'video',
       title: 'Getting started with Nodeflare',
       url: 'https://youtube.com/watch?v=example',
       thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-      date: '2024-01-18',
     },
     {
-      id: '4',
-      type: 'video',
+      id: '2',
       title: 'Deploy your first MCP server',
       url: 'https://youtube.com/watch?v=example2',
       thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-      date: '2024-01-15',
-    },
-    {
-      id: '5',
-      type: 'blog',
-      title: 'Best practices for MCP server development',
-      url: '/blog/mcp-best-practices',
-      date: '2024-01-15',
     },
   ];
 
-  const messages = news.filter(n => n.type === 'message' || n.type === 'update');
-  const videos = news.filter(n => n.type === 'video');
-  const blogs = news.filter(n => n.type === 'blog');
+  const messages = announcements || [];
+  const blogs = blogPosts?.slice(0, 3) || [];
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toISOString().split('T')[0];
+  };
 
   return (
     <div className="mt-6 space-y-5">
@@ -327,7 +338,7 @@ function NewsSection() {
         <div className="space-y-1">
           {messages.map((item) => (
             <div key={item.id} className="text-sm text-gray-500">
-              <span className="text-gray-400 mr-2">{item.date}</span>
+              <span className="text-gray-400 mr-2">{formatDate(item.published_at)}</span>
               {item.title}
             </div>
           ))}
@@ -348,11 +359,7 @@ function NewsSection() {
                 className="flex-shrink-0 group"
               >
                 <div className="relative w-36 h-20 rounded-lg overflow-hidden bg-gray-100">
-                  {item.thumbnail ? (
-                    <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200" />
-                  )}
+                  <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/30 transition-colors">
                     <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center">
                       <svg className="w-3 h-3 text-gray-900 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
@@ -373,14 +380,16 @@ function NewsSection() {
         <div>
           <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Blog</div>
           <div className="flex gap-3 overflow-x-auto">
-            {blogs.map((item) => (
+            {blogs.map((post) => (
               <a
-                key={item.id}
-                href={item.url}
+                key={post.id}
+                href={`/blog/${post.slug}`}
                 className="flex-shrink-0 p-3 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
               >
-                <p className="text-sm text-gray-900 w-44 line-clamp-2">{item.title}</p>
-                <span className="text-xs text-gray-400 mt-1 block">{item.date}</span>
+                <p className="text-sm text-gray-900 w-44 line-clamp-2">{post.title}</p>
+                {post.publishDate && (
+                  <span className="text-xs text-gray-400 mt-1 block">{formatDate(post.publishDate)}</span>
+                )}
               </a>
             ))}
           </div>

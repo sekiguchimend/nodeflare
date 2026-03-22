@@ -13,6 +13,8 @@ pub mod api_keys;
 pub mod secrets;
 pub mod logs;
 pub mod ws;
+pub mod announcements;
+pub mod user_preferences;
 
 use axum::{routing::{get, post, patch, delete}, Router};
 use std::sync::Arc;
@@ -142,6 +144,13 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/webhooks/stripe", post(billing::handle_webhook))
         // Contact (no auth required)
         .route("/contact", post(contact::submit_contact))
+        // Announcements (no auth required)
+        .route("/announcements", get(announcements::list))
+        // User Preferences
+        .route(
+            "/user/preferences",
+            get(user_preferences::get_preferences).patch(user_preferences::update_preferences),
+        )
 }
 
 /// WebSocket router for real-time updates
