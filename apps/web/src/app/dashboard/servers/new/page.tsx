@@ -65,13 +65,13 @@ export default function NewServerPage() {
   const handleSelectRepo = (repo: GitHubRepo) => {
     setSelectedRepo(repo);
     const slug = generateSlug(repo.name);
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       name: repo.name,
       slug: slug,
       github_repo: repo.full_name,
       github_branch: repo.default_branch,
-    });
+    }));
   };
 
   const createMutation = useMutation({
@@ -174,7 +174,7 @@ export default function NewServerPage() {
                 type="button"
                 onClick={() => {
                   setSelectedRepo(null);
-                  setFormData({ ...formData, github_repo: '', name: '', slug: '' });
+                  setFormData(prev => ({ ...prev, github_repo: '', name: '', slug: '' }));
                 }}
                 className="text-sm text-violet-600 hover:text-violet-700 font-medium"
               >
@@ -259,7 +259,7 @@ export default function NewServerPage() {
                 value={formData.name}
                 onChange={(e) => {
                   const name = e.target.value;
-                  setFormData({ ...formData, name, slug: generateSlug(name) });
+                  setFormData(prev => ({ ...prev, name, slug: generateSlug(name) }));
                 }}
                 required
                 className="mt-2"
@@ -272,7 +272,7 @@ export default function NewServerPage() {
                 id="description"
                 placeholder={t('create.descriptionBrief')}
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 className="mt-2"
               />
             </div>
@@ -288,7 +288,7 @@ export default function NewServerPage() {
                   type="text"
                   placeholder={t('create.branchPlaceholder')}
                   value={formData.github_branch}
-                  onChange={(e) => setFormData({ ...formData, github_branch: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, github_branch: e.target.value }))}
                   className="flex-1 bg-transparent text-sm focus:outline-none"
                 />
               </div>
@@ -305,7 +305,7 @@ export default function NewServerPage() {
               <button
                 key={runtime.value}
                 type="button"
-                onClick={() => setFormData({ ...formData, runtime: runtime.value as Runtime })}
+                onClick={() => setFormData(prev => ({ ...prev, runtime: runtime.value as Runtime }))}
                 className={`p-3 rounded-xl text-center transition-all ${
                   formData.runtime === runtime.value
                     ? 'bg-violet-100 border-2 border-violet-400 shadow-sm'
@@ -330,7 +330,7 @@ export default function NewServerPage() {
               <button
                 key={vis.value}
                 type="button"
-                onClick={() => setFormData({ ...formData, visibility: vis.value as Visibility })}
+                onClick={() => setFormData(prev => ({ ...prev, visibility: vis.value as Visibility }))}
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all ${
                   formData.visibility === vis.value
                     ? 'bg-violet-100 border-2 border-violet-400 text-violet-700'

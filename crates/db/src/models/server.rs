@@ -26,7 +26,10 @@ pub struct McpServer {
 impl McpServer {
     pub fn runtime(&self) -> Runtime {
         match self.runtime.as_str() {
+            "node" => Runtime::Node,
             "python" => Runtime::Python,
+            "go" => Runtime::Go,
+            "rust" => Runtime::Rust,
             "docker" => Runtime::Docker,
             _ => Runtime::Node,
         }
