@@ -17,13 +17,17 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod auth;
+mod cache;
 mod rate_limit;
+
+use cache::{RequestCache, CoalesceResult};
 
 pub struct ProxyState {
     pub config: AppConfig,
     pub db: mcp_db::DbPool,
     pub redis: fred::prelude::RedisClient,
     pub http_client: reqwest::Client,
+    pub request_cache: RequestCache,
 }
 
 #[tokio::main]
@@ -50,11 +54,15 @@ async fn main() -> Result<()> {
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
 
+    // Request cache: 30 second TTL, max 10000 entries
+    let request_cache = RequestCache::new(30, 10000);
+
     let state = Arc::new(ProxyState {
         config: config.clone(),
         db: db_pool,
         redis,
         http_client,
+        request_cache,
     });
 
     let app = Router::new()
@@ -300,6 +308,86 @@ async fn forward_request(
     // Check scope permission before forwarding
     check_scope_permission(api_key, &mcp_info)?;
 
+    // Only cache read-only MCP methods (list operations)
+    let is_cacheable = matches!(
+        mcp_info.method,
+        McpMethod::ToolsList | McpMethod::ResourcesList | McpMethod::PromptsList
+    );
+
+    // Try request coalescing + caching for cacheable requests
+    if is_cacheable {
+        match state.request_cache.try_coalesce(target_url, &body_bytes).await {
+            CoalesceResult::Cached(cached) => {
+                tracing::debug!("Cache hit for {}", target_url);
+                let response = build_response_from_cache(&cached)?;
+                return Ok((response, mcp_info));
+            }
+            CoalesceResult::Coalesced(cached) => {
+                tracing::debug!("Request coalesced for {}", target_url);
+                let response = build_response_from_cache(&cached)?;
+                return Ok((response, mcp_info));
+            }
+            CoalesceResult::Execute(handle) => {
+                // Execute the request and cache the result
+                match execute_upstream_request(state, target_url, method, &headers, body_bytes).await {
+                    Ok((response_body, status, response_headers)) => {
+                        // Cache successful responses only
+                        if status >= 200 && status < 300 {
+                            state.request_cache.complete(handle, response_body.clone(), status, response_headers.clone()).await;
+                        } else {
+                            state.request_cache.cancel(handle).await;
+                        }
+
+                        let response = build_response(status, &response_headers, response_body)?;
+                        return Ok((response, mcp_info));
+                    }
+                    Err(e) => {
+                        state.request_cache.cancel(handle).await;
+                        return Err(e);
+                    }
+                }
+            }
+        }
+    }
+
+    // Non-cacheable requests: execute directly
+    let (response_body, status, response_headers) =
+        execute_upstream_request(state, target_url, method, &headers, body_bytes).await?;
+
+    let response = build_response(status, &response_headers, response_body)?;
+    Ok((response, mcp_info))
+}
+
+/// Build response from cached data
+fn build_response_from_cache(cached: &cache::CachedResponse) -> Result<Response, ProxyError> {
+    let mut builder = Response::builder().status(cached.status);
+    for (name, value) in &cached.headers {
+        builder = builder.header(name.as_str(), value.as_str());
+    }
+    builder
+        .body(Body::from(cached.body.clone()))
+        .map_err(|e| ProxyError::Internal(e.to_string()))
+}
+
+/// Build response from raw parts
+fn build_response(status: u16, headers: &[(String, String)], body: Vec<u8>) -> Result<Response, ProxyError> {
+    let mut builder = Response::builder().status(status);
+    for (name, value) in headers {
+        builder = builder.header(name.as_str(), value.as_str());
+    }
+    builder
+        .body(Body::from(body))
+        .map_err(|e| ProxyError::Internal(e.to_string()))
+}
+
+/// Execute request to upstream MCP server
+async fn execute_upstream_request(
+    state: &ProxyState,
+    target_url: &str,
+    method: axum::http::Method,
+    headers: &axum::http::HeaderMap,
+    body_bytes: bytes::Bytes,
+) -> Result<(Vec<u8>, u16, Vec<(String, String)>), ProxyError> {
     // Build outgoing request
     let mut req_builder = state.http_client.request(method, target_url);
 
@@ -319,23 +407,18 @@ async fn forward_request(
         .map_err(|e| ProxyError::ServiceUnavailable(format!("Upstream error: {}", e)))?;
 
     // Convert response
-    let status = response.status();
-    let headers = response.headers().clone();
+    let status = response.status().as_u16();
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
     let body = response
         .bytes()
         .await
         .map_err(|e| ProxyError::Internal(format!("Failed to read response: {}", e)))?;
 
-    let mut builder = Response::builder().status(status);
-    for (name, value) in headers.iter() {
-        builder = builder.header(name, value);
-    }
-
-    let response = builder
-        .body(Body::from(body))
-        .map_err(|e| ProxyError::Internal(e.to_string()))?;
-
-    Ok((response, mcp_info))
+    Ok((body.to_vec(), status, headers))
 }
 
 /// Extract server slug from subdomain
