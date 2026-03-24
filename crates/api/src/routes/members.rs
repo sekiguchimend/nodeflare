@@ -174,11 +174,10 @@ pub async fn update(
         return Err(AppError::bad_request("INVALID_OPERATION", "Cannot change owner's role"));
     }
 
-    // Remove and re-add with new role (simple approach)
-    WorkspaceRepository::remove_member(&state.db, workspace_id, user_id).await?;
-
-    let updated_member = WorkspaceRepository::add_member(&state.db, workspace_id, user_id, body.role)
-        .await?;
+    // Update role atomically to prevent race conditions
+    let updated_member = WorkspaceRepository::update_member_role(&state.db, workspace_id, user_id, body.role)
+        .await?
+        .ok_or_else(|| AppError::not_found("Member"))?;
 
     let user = UserRepository::find_by_id(&state.db, user_id)
         .await?

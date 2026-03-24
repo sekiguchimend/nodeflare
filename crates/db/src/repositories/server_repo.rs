@@ -7,6 +7,8 @@ use uuid::Uuid;
 pub struct ServerRepository;
 
 impl ServerRepository {
+    /// Maximum servers to return in a single query
+    const MAX_SERVERS_PER_QUERY: i64 = 200;
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<McpServer>> {
         let server = sqlx::query_as::<_, McpServer>(
             r#"
@@ -237,12 +239,40 @@ impl ServerRepository {
             INNER JOIN workspace_members wm ON s.workspace_id = wm.workspace_id
             WHERE wm.user_id = $1
             ORDER BY s.created_at DESC
+            LIMIT $2
             "#,
         )
         .bind(user_id)
+        .bind(Self::MAX_SERVERS_PER_QUERY)
         .fetch_all(pool)
         .await?;
 
         Ok(servers)
+    }
+
+    /// Check if a user has access to a server (optimized single query with JOIN)
+    /// Returns true if the server exists, belongs to the workspace, and the user is a member
+    pub async fn check_user_access(
+        pool: &PgPool,
+        server_id: Uuid,
+        workspace_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool> {
+        let result: Option<(i32,)> = sqlx::query_as(
+            r#"
+            SELECT 1
+            FROM mcp_servers s
+            INNER JOIN workspace_members wm ON s.workspace_id = wm.workspace_id
+            WHERE s.id = $1 AND s.workspace_id = $2 AND wm.user_id = $3
+            LIMIT 1
+            "#,
+        )
+        .bind(server_id)
+        .bind(workspace_id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(result.is_some())
     }
 }

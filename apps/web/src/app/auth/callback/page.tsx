@@ -9,9 +9,6 @@ function AuthCallbackContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    const expiresIn = searchParams.get('expires_in');
     const errorParam = searchParams.get('error');
 
     if (errorParam) {
@@ -19,17 +16,9 @@ function AuthCallbackContent() {
       return;
     }
 
-    if (accessToken && refreshToken) {
-      localStorage.setItem('access_token', accessToken);
-      localStorage.setItem('refresh_token', refreshToken);
-      if (expiresIn) {
-        const expiresAt = Date.now() + parseInt(expiresIn) * 1000;
-        localStorage.setItem('token_expires_at', expiresAt.toString());
-      }
-      router.replace('/dashboard');
-    } else {
-      setError('Missing authentication tokens');
-    }
+    // Tokens are now set as HTTP-only cookies by the server.
+    // Simply redirect to dashboard - the API will use cookies automatically.
+    router.replace('/dashboard');
   }, [searchParams, router]);
 
   if (error) {

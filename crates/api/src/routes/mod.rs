@@ -29,6 +29,7 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/auth/github/callback", get(auth::github_callback))
         .route("/auth/refresh", post(auth::refresh_token))
         .route("/auth/me", get(auth::get_current_user))
+        .route("/auth/logout", post(auth::logout))
         .route("/auth/profile", patch(auth::update_profile))
         .route("/auth/account", delete(auth::delete_account))
         // GitHub

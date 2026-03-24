@@ -3,6 +3,8 @@ use crate::types::{
     ServerLogLine, WsMessage,
 };
 use chrono::Utc;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Channel prefix for deployment status updates
@@ -15,16 +17,57 @@ pub const BUILD_LOG_CHANNEL: &str = "ws:deployment:logs:";
 pub const SERVER_LOG_CHANNEL: &str = "ws:server:logs:";
 
 /// Event publisher for sending real-time updates via Redis pub/sub
+/// Uses connection pooling for better performance
 #[derive(Clone)]
 pub struct EventPublisher {
+    /// Shared Redis connection (multiplexed)
+    conn: Arc<RwLock<Option<redis::aio::MultiplexedConnection>>>,
     redis_url: String,
 }
 
 impl EventPublisher {
     pub fn new(redis_url: &str) -> Self {
         Self {
+            conn: Arc::new(RwLock::new(None)),
             redis_url: redis_url.to_string(),
         }
+    }
+
+    /// Get or create a Redis connection (lazy initialization with reconnection)
+    async fn get_connection(&self) -> Result<redis::aio::MultiplexedConnection, PublishError> {
+        // First, try to get existing connection
+        {
+            let conn_guard = self.conn.read().await;
+            if let Some(ref conn) = *conn_guard {
+                return Ok(conn.clone());
+            }
+        }
+
+        // Need to create a new connection
+        let mut conn_guard = self.conn.write().await;
+
+        // Double-check after acquiring write lock
+        if let Some(ref conn) = *conn_guard {
+            return Ok(conn.clone());
+        }
+
+        // Create new connection
+        let client = redis::Client::open(self.redis_url.as_str())
+            .map_err(|e| PublishError::ConnectionError(e.to_string()))?;
+
+        let conn = client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| PublishError::ConnectionError(e.to_string()))?;
+
+        *conn_guard = Some(conn.clone());
+        Ok(conn)
+    }
+
+    /// Reset the connection (useful for reconnection after errors)
+    async fn reset_connection(&self) {
+        let mut conn_guard = self.conn.write().await;
+        *conn_guard = None;
     }
 
     /// Publish a deployment status update
@@ -86,16 +129,23 @@ impl EventPublisher {
     }
 
     async fn publish(&self, channel: &str, message: &WsMessage) -> Result<(), PublishError> {
-        let client = redis::Client::open(self.redis_url.as_str())
-            .map_err(|e| PublishError::ConnectionError(e.to_string()))?;
-
-        let mut conn = client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(|e| PublishError::ConnectionError(e.to_string()))?;
-
         let json = serde_json::to_string(message)
             .map_err(|e| PublishError::SerializationError(e.to_string()))?;
+
+        // Try to publish with existing connection
+        let result = self.try_publish(channel, &json).await;
+
+        // If failed, try once more with a fresh connection
+        if result.is_err() {
+            self.reset_connection().await;
+            return self.try_publish(channel, &json).await;
+        }
+
+        result
+    }
+
+    async fn try_publish(&self, channel: &str, json: &str) -> Result<(), PublishError> {
+        let mut conn = self.get_connection().await?;
 
         redis::cmd("PUBLISH")
             .arg(channel)

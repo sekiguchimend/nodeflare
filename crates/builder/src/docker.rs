@@ -4,7 +4,86 @@ use bollard::Docker;
 use flate2::read::GzDecoder;
 use futures::StreamExt;
 use mcp_queue::BuildJob;
+use regex::Regex;
 use std::io::{Cursor, Read};
+
+/// Validate GitHub repository name (owner/repo format)
+/// Prevents command injection by ensuring strict format
+fn validate_github_repo(repo: &str) -> Result<()> {
+    // GitHub repo format: owner/repo
+    // Owner: alphanumeric, hyphens (but not starting/ending with hyphen)
+    // Repo: alphanumeric, hyphens, underscores, dots
+    let re = Regex::new(r"^[a-zA-Z0-9][-a-zA-Z0-9]*[a-zA-Z0-9]?/[a-zA-Z0-9][-a-zA-Z0-9._]*[a-zA-Z0-9]$")
+        .expect("Invalid regex");
+
+    if !re.is_match(repo) {
+        return Err(anyhow::anyhow!(
+            "Invalid GitHub repository format. Expected 'owner/repo'"
+        ));
+    }
+
+    // Additional safety checks
+    if repo.contains("..") || repo.contains("//") {
+        return Err(anyhow::anyhow!("Invalid characters in repository name"));
+    }
+
+    // Check length limits
+    let parts: Vec<&str> = repo.split('/').collect();
+    if parts.len() != 2 {
+        return Err(anyhow::anyhow!("Repository must be in 'owner/repo' format"));
+    }
+    if parts[0].len() > 39 || parts[1].len() > 100 {
+        return Err(anyhow::anyhow!("Repository name too long"));
+    }
+
+    Ok(())
+}
+
+/// Validate Git branch name
+/// Prevents command injection through malicious branch names
+fn validate_git_branch(branch: &str) -> Result<()> {
+    // Git branch naming rules:
+    // - Cannot start with '-' or '.'
+    // - Cannot contain: space, ~, ^, :, ?, *, [, \, control chars
+    // - Cannot end with '.lock' or '/'
+    // - Cannot contain '..' or '@{'
+
+    if branch.is_empty() || branch.len() > 255 {
+        return Err(anyhow::anyhow!("Invalid branch name length"));
+    }
+
+    // Check for disallowed patterns
+    if branch.starts_with('-') || branch.starts_with('.') {
+        return Err(anyhow::anyhow!("Branch name cannot start with '-' or '.'"));
+    }
+
+    if branch.ends_with('/') || branch.ends_with(".lock") {
+        return Err(anyhow::anyhow!("Invalid branch name ending"));
+    }
+
+    if branch.contains("..") || branch.contains("@{") {
+        return Err(anyhow::anyhow!("Branch name contains invalid sequence"));
+    }
+
+    // Disallowed characters (including shell metacharacters)
+    let disallowed = ['~', '^', ':', '?', '*', '[', '\\', ' ', '\t', '\n', '\r',
+                      '\'', '"', '`', '$', '!', '&', '|', ';', '<', '>', '(', ')'];
+    for c in disallowed {
+        if branch.contains(c) {
+            return Err(anyhow::anyhow!(
+                "Branch name contains invalid character: '{}'",
+                c
+            ));
+        }
+    }
+
+    // Must be valid UTF-8 and printable
+    if !branch.chars().all(|c| c.is_ascii_graphic() || c == '/') {
+        return Err(anyhow::anyhow!("Branch name contains non-printable characters"));
+    }
+
+    Ok(())
+}
 
 /// Build Docker image from GitHub tarball
 pub async fn build_image_from_tarball(
@@ -93,6 +172,12 @@ pub async fn build_image_from_tarball(
 
 /// Legacy build function for when no tarball is available (public repos via git clone)
 pub async fn build_image(docker: &Docker, job: &BuildJob, image_tag: &str) -> Result<()> {
+    // Validate inputs to prevent command injection
+    validate_github_repo(&job.github_repo)
+        .context("Invalid GitHub repository name")?;
+    validate_git_branch(&job.github_branch)
+        .context("Invalid Git branch name")?;
+
     // Clone the repository using git
     let temp_dir = tempfile::tempdir()?;
     let repo_path = temp_dir.path();

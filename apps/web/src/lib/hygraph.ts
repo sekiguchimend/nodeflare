@@ -1,5 +1,10 @@
-const HYGRAPH_ENDPOINT = 'https://api-us-west-2.hygraph.com/v2/cmmky48hh00h006w5q885vkcf/master';
-const HYGRAPH_TOKEN = process.env.HYGRAPH_TOKEN || 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImdjbXMtbWFpbi1wcm9kdWN0aW9uIn0.eyJ2ZXJzaW9uIjozLCJpYXQiOjE3NzM5NDAxMDIsImF1ZCI6WyJodHRwczovL2FwaS11cy13ZXN0LTIuaHlncmFwaC5jb20vdjIvY21ta3k0OGhoMDBoMDA2dzVxODg1dmtjZi9tYXN0ZXIiLCJtYW5hZ2VtZW50LW5leHQuZ3JhcGhjbXMuY29tIl0sImlzcyI6Imh0dHBzOi8vbWFuYWdlbWVudC11cy13ZXN0LTIuaHlncmFwaC5jb20vIiwic3ViIjoiZjE5MGM5MzAtNzg4NS00ODFlLWE5ZDctNmY1YjE3YjlkNGY3IiwianRpIjoiY21teHE0djFkMDJ2ZzA3bG1majg0N2gxdSJ9.zWAHGWGtFqip2Q21GgEtqYoatdZMPt1anJOplZIo1YnKIPw0JidKVAkx9UC6qWcptHHotxHFD3qSSoQUa9w6RnRQeysS3ussVFdBwSRetdudyd6N4UgLUfTb-A-1hOKHR3h8NX18wgUoZakSsCP5f2W72rfM9EMgzWkKotN0eaoaKdFMrfjRWL50pcD7Z-QX5CwbzPxKJKZ_oiyZdKCSkz9RzjZBbZF-NeBMHdR0EWuTb8GDzQ3aZr-GcXCv-c2TU94GYgBAMTomKcY_cdKQY7p_Tdaq_3zNBci3L9uRf3ZfbI6U3zaCKw6vlujL3LiKkuPef48oH8mUtI4LRYEgfIeMJpbIy6bF6va0uFjuETLNVOj-FJhqSpZ3EiGkDvMkkBpXBKDy--HcGLZLD3nu-iwdOr1-OHBPlh4_XM5b2dyaRmhpPgbGpnr8cuNAoF3Vlo3-jAP76d_EMy12wkmFPN8f_wdG_qgKRwvmTVjGFyvQ7bWhonUrdg0DbAkF0d0NaDZIKYA7rT8UlBIDqHT0QmIg07dr-RLiATgGXD-KHPJK0murBvmHmoJeLWXpuY-k0eyF0FedUNhW1MOzCQ8xbtWLmTL5ZYn1cVJEyFls53qxQuq4MOWeWhwwCtiQs2e79zz11AmqJbPV0m3p3vAkTVe4P-nf3hbV58b4c9BUZAk';
+const HYGRAPH_ENDPOINT = process.env.HYGRAPH_ENDPOINT || 'https://api-us-west-2.hygraph.com/v2/cmmky48hh00h006w5q885vkcf/master';
+// SECURITY: Token must be provided via environment variable - never commit tokens to code
+const HYGRAPH_TOKEN = process.env.HYGRAPH_TOKEN;
+
+if (!HYGRAPH_TOKEN) {
+  console.warn('Warning: HYGRAPH_TOKEN environment variable not set. Blog features will be unavailable.');
+}
 
 export interface Author {
   id: string;
@@ -28,6 +33,10 @@ export interface BlogPost {
 }
 
 async function fetchHygraph<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+  if (!HYGRAPH_TOKEN) {
+    throw new Error('HYGRAPH_TOKEN is not configured');
+  }
+
   const res = await fetch(HYGRAPH_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -46,6 +55,39 @@ async function fetchHygraph<T>(query: string, variables?: Record<string, unknown
   }
 
   return json.data;
+}
+
+/**
+ * Sanitize HTML content to prevent XSS attacks.
+ * Removes potentially dangerous elements and attributes.
+ */
+export function sanitizeHtml(html: string): string {
+  if (!html) return '';
+
+  // Remove script tags and their content
+  let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+  // Remove event handlers (onclick, onerror, onload, etc.)
+  sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
+  sanitized = sanitized.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, '');
+
+  // Remove javascript: URLs
+  sanitized = sanitized.replace(/javascript\s*:/gi, 'blocked:');
+
+  // Remove data: URLs in src/href (can be used for XSS)
+  sanitized = sanitized.replace(/(src|href)\s*=\s*["']data:[^"']*["']/gi, '$1="blocked"');
+
+  // Remove iframe, object, embed tags
+  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button)[^>]*>.*?<\/\1>/gi, '');
+  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button)[^>]*\/?>/gi, '');
+
+  // Remove style tags (can be used for CSS-based attacks)
+  sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+
+  // Remove base tag (can redirect all links)
+  sanitized = sanitized.replace(/<base[^>]*>/gi, '');
+
+  return sanitized;
 }
 
 export async function getBlogPosts(): Promise<BlogPost[]> {

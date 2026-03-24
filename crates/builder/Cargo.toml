@@ -48,3 +48,4 @@ dotenvy.workspace = true
 tar = "0.4"
 flate2 = "1.0"
 tempfile = "3.10"
+regex = "1"

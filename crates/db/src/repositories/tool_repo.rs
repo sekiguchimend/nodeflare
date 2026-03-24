@@ -44,6 +44,9 @@ impl ToolRepository {
         Ok(tool)
     }
 
+    /// Maximum tools per server to prevent resource exhaustion
+    const MAX_TOOLS_PER_SERVER: i64 = 500;
+
     pub async fn list_by_server(pool: &PgPool, server_id: Uuid) -> Result<Vec<Tool>> {
         let tools = sqlx::query_as::<_, Tool>(
             r#"
@@ -52,9 +55,11 @@ impl ToolRepository {
             FROM tools
             WHERE server_id = $1
             ORDER BY name
+            LIMIT $2
             "#,
         )
         .bind(server_id)
+        .bind(Self::MAX_TOOLS_PER_SERVER)
         .fetch_all(pool)
         .await?;
 
@@ -69,9 +74,11 @@ impl ToolRepository {
             FROM tools
             WHERE server_id = $1 AND enabled = true
             ORDER BY name
+            LIMIT $2
             "#,
         )
         .bind(server_id)
+        .bind(Self::MAX_TOOLS_PER_SERVER)
         .fetch_all(pool)
         .await?;
 
@@ -170,39 +177,68 @@ impl ToolRepository {
         Ok(())
     }
 
+    /// Sync tools using batch operations to prevent N+1 queries
+    /// Limits the number of tools to prevent resource exhaustion
     pub async fn sync_tools(
         pool: &PgPool,
         server_id: Uuid,
         tools: Vec<UpsertTool>,
     ) -> Result<Vec<Tool>> {
-        let mut result = Vec::new();
+        // Limit tools to prevent DoS
+        let tools: Vec<UpsertTool> = tools.into_iter().take(Self::MAX_TOOLS_PER_SERVER as usize).collect();
 
-        // Get existing tool names
-        let existing: Vec<String> = sqlx::query_scalar(
-            "SELECT name FROM tools WHERE server_id = $1",
+        if tools.is_empty() {
+            // Delete all tools for this server
+            sqlx::query("DELETE FROM tools WHERE server_id = $1")
+                .bind(server_id)
+                .execute(pool)
+                .await?;
+            return Ok(Vec::new());
+        }
+
+        // Use a transaction for atomicity
+        let mut tx = pool.begin().await?;
+
+        // Collect new tool names
+        let new_names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
+
+        // Batch delete tools that no longer exist (single query)
+        sqlx::query(
+            r#"
+            DELETE FROM tools
+            WHERE server_id = $1 AND name != ALL($2)
+            "#,
         )
         .bind(server_id)
-        .fetch_all(pool)
+        .bind(&new_names)
+        .execute(&mut *tx)
         .await?;
 
-        // Upsert all provided tools
-        let mut new_names = Vec::new();
-        for tool in tools {
-            new_names.push(tool.name.clone());
-            let upserted = Self::upsert(pool, tool).await?;
-            result.push(upserted);
-        }
+        // Batch upsert using UNNEST for efficiency (single query)
+        let names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
+        let descriptions: Vec<Option<String>> = tools.iter().map(|t| t.description.clone()).collect();
+        let input_schemas: Vec<Option<serde_json::Value>> = tools.iter().map(|t| t.input_schema.clone()).collect();
 
-        // Remove tools that no longer exist
-        for name in existing {
-            if !new_names.contains(&name) {
-                sqlx::query("DELETE FROM tools WHERE server_id = $1 AND name = $2")
-                    .bind(server_id)
-                    .bind(&name)
-                    .execute(pool)
-                    .await?;
-            }
-        }
+        let result = sqlx::query_as::<_, Tool>(
+            r#"
+            INSERT INTO tools (server_id, name, description, input_schema)
+            SELECT $1, * FROM UNNEST($2::text[], $3::text[], $4::jsonb[])
+            ON CONFLICT (server_id, name) DO UPDATE SET
+                description = EXCLUDED.description,
+                input_schema = EXCLUDED.input_schema,
+                updated_at = NOW()
+            RETURNING id, server_id, name, description, input_schema, enabled,
+                      permission_level, rate_limit_per_minute, created_at, updated_at
+            "#,
+        )
+        .bind(server_id)
+        .bind(&names)
+        .bind(&descriptions)
+        .bind(&input_schemas)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
 
         Ok(result)
     }

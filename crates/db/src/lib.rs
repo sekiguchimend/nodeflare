@@ -14,12 +14,16 @@ pub async fn create_pool(config: &AppConfig) -> anyhow::Result<DbPool> {
     let pool = PgPoolOptions::new()
         .max_connections(config.database.max_connections)
         .min_connections(config.database.min_connections)
-        .acquire_timeout(Duration::from_secs(30))
-        .idle_timeout(Duration::from_secs(600))
+        .acquire_timeout(Duration::from_secs(config.database.acquire_timeout_secs))
+        .idle_timeout(Duration::from_secs(config.database.idle_timeout_secs))
         .connect(&config.database.url)
         .await?;
 
-    tracing::info!("Database connection pool established");
+    tracing::info!(
+        "Database connection pool established (max: {}, min: {})",
+        config.database.max_connections,
+        config.database.min_connections
+    );
 
     Ok(pool)
 }

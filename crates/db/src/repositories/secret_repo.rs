@@ -41,6 +41,9 @@ impl SecretRepository {
         Ok(secret)
     }
 
+    /// Maximum secrets per server to prevent resource exhaustion
+    const MAX_SECRETS_PER_SERVER: i64 = 100;
+
     pub async fn list_by_server(pool: &PgPool, server_id: Uuid) -> Result<Vec<Secret>> {
         let secrets = sqlx::query_as::<_, Secret>(
             r#"
@@ -48,9 +51,11 @@ impl SecretRepository {
             FROM secrets
             WHERE server_id = $1
             ORDER BY key
+            LIMIT $2
             "#,
         )
         .bind(server_id)
+        .bind(Self::MAX_SECRETS_PER_SERVER)
         .fetch_all(pool)
         .await?;
 
@@ -59,9 +64,10 @@ impl SecretRepository {
 
     pub async fn list_keys_by_server(pool: &PgPool, server_id: Uuid) -> Result<Vec<String>> {
         let keys: Vec<String> = sqlx::query_scalar(
-            "SELECT key FROM secrets WHERE server_id = $1 ORDER BY key",
+            "SELECT key FROM secrets WHERE server_id = $1 ORDER BY key LIMIT $2",
         )
         .bind(server_id)
+        .bind(Self::MAX_SECRETS_PER_SERVER)
         .fetch_all(pool)
         .await?;
 

@@ -1,4 +1,3 @@
-// Middleware modules will be added here as needed
-// - Rate limiting
-// - Request logging
-// - Error handling
+pub mod rate_limit;
+
+pub use rate_limit::{rate_limit_middleware, user_rate_limit_middleware, RateLimitConfig};

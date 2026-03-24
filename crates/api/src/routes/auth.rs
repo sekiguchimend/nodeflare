@@ -1,9 +1,10 @@
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Redirect},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Redirect, Response},
     Json,
 };
+use fred::interfaces::KeysInterface;
 use mcp_auth::GitHubOAuth;
 use mcp_common::types::{AuthResponse, RefreshTokenRequest, UserResponse};
 use mcp_db::{UserRepository, WorkspaceRepository};
@@ -12,6 +13,9 @@ use std::sync::Arc;
 
 use crate::extractors::AuthUser;
 use crate::state::AppState;
+
+const CSRF_TOKEN_PREFIX: &str = "csrf:oauth:";
+const CSRF_TOKEN_TTL_SECS: i64 = 600; // 10 minutes
 
 #[derive(Debug, Deserialize)]
 pub struct GitHubCallbackQuery {
@@ -33,8 +37,25 @@ pub async fn github_login(State(state): State<Arc<AppState>>) -> impl IntoRespon
 
     match GitHubOAuth::new(&state.config, &redirect_url) {
         Ok(oauth) => {
-            let (auth_url, _csrf_token) = oauth.get_authorization_url();
-            // In production, store csrf_token in session
+            let (auth_url, csrf_token) = oauth.get_authorization_url();
+
+            // Store CSRF token in Redis with TTL for validation on callback
+            let csrf_key = format!("{}{}", CSRF_TOKEN_PREFIX, csrf_token);
+            if let Err(e) = state
+                .redis
+                .set::<(), _, _>(
+                    &csrf_key,
+                    "1",
+                    Some(fred::types::Expiration::EX(CSRF_TOKEN_TTL_SECS)),
+                    None,
+                    false,
+                )
+                .await
+            {
+                tracing::error!("Failed to store CSRF token: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to initiate OAuth").into_response();
+            }
+
             Redirect::temporary(&auth_url).into_response()
         }
         Err(e) => {
@@ -47,7 +68,30 @@ pub async fn github_login(State(state): State<Arc<AppState>>) -> impl IntoRespon
 pub async fn github_callback(
     State(state): State<Arc<AppState>>,
     Query(query): Query<GitHubCallbackQuery>,
-) -> Result<Redirect, (StatusCode, String)> {
+) -> Result<Response, (StatusCode, String)> {
+    // Validate CSRF token (state parameter)
+    let csrf_state = query.state.as_ref().ok_or((
+        StatusCode::BAD_REQUEST,
+        "Missing state parameter".to_string(),
+    ))?;
+
+    let csrf_key = format!("{}{}", CSRF_TOKEN_PREFIX, csrf_state);
+    let csrf_exists: Option<String> = state
+        .redis
+        .get(&csrf_key)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if csrf_exists.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid or expired state parameter".to_string(),
+        ));
+    }
+
+    // Delete used CSRF token (one-time use)
+    let _ = state.redis.del::<(), _>(&csrf_key).await;
+
     let redirect_url = if state.config.github.redirect_uri.is_empty() {
         format!(
             "{}://{}:{}/api/v1/auth/github/callback",
@@ -140,16 +184,56 @@ pub async fn github_callback(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Redirect to frontend with tokens
-    let frontend_callback_url = format!(
-        "{}/auth/callback?access_token={}&refresh_token={}&expires_in={}",
-        state.config.server.frontend_url,
+    // Set tokens as HTTP-only secure cookies
+    let is_production = state.config.is_production();
+    let cookie_domain = extract_domain(&state.config.server.frontend_url);
+    let access_token_max_age = state.config.auth.jwt_expiration_hours * 3600;
+    let refresh_token_max_age = state.config.auth.refresh_token_expiration_days * 24 * 3600;
+
+    let access_cookie = format!(
+        "access_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}{}",
         access_token,
-        refresh.token,
-        state.config.auth.jwt_expiration_hours * 3600
+        access_token_max_age,
+        if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
     );
 
-    Ok(Redirect::temporary(&frontend_callback_url))
+    let refresh_cookie = format!(
+        "refresh_token={}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age={}{}",
+        refresh.token,
+        refresh_token_max_age,
+        if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
+    );
+
+    let frontend_callback_url = format!("{}/auth/callback", state.config.server.frontend_url);
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&access_cookie).unwrap(),
+    );
+    headers.append(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&refresh_cookie).unwrap(),
+    );
+    headers.insert(
+        header::LOCATION,
+        HeaderValue::from_str(&frontend_callback_url).unwrap(),
+    );
+
+    Ok((StatusCode::TEMPORARY_REDIRECT, headers, ()).into_response())
+}
+
+/// Extract domain from URL for cookie domain setting
+fn extract_domain(url: &str) -> String {
+    url.trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or("localhost")
+        .split(':')
+        .next()
+        .unwrap_or("localhost")
+        .to_string()
 }
 
 pub async fn refresh_token(
@@ -290,6 +374,45 @@ pub async fn update_profile(
         avatar_url: updated_user.avatar_url,
         created_at: updated_user.created_at,
     }))
+}
+
+pub async fn logout(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+) -> impl IntoResponse {
+    // Delete all refresh tokens for this user
+    let _ = sqlx::query("DELETE FROM refresh_tokens WHERE user_id = $1")
+        .bind(auth_user.user_id)
+        .execute(&state.db)
+        .await;
+
+    tracing::info!("User {} logged out", auth_user.user_id);
+
+    // Clear cookies by setting them with expired max-age
+    let is_production = state.config.is_production();
+    let cookie_domain = extract_domain(&state.config.server.frontend_url);
+
+    let clear_access_cookie = format!(
+        "access_token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0{}",
+        if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
+    );
+
+    let clear_refresh_cookie = format!(
+        "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=0{}",
+        if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&clear_access_cookie).unwrap(),
+    );
+    headers.append(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&clear_refresh_cookie).unwrap(),
+    );
+
+    (StatusCode::OK, headers, ())
 }
 
 pub async fn delete_account(

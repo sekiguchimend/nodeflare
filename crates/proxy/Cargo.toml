@@ -52,3 +52,4 @@ metrics-exporter-prometheus.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 dotenvy.workspace = true
+bytes.workspace = true

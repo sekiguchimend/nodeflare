@@ -7,9 +7,10 @@ use axum::{
     routing::any,
     Router,
 };
+use bytes::Bytes;
 use fred::interfaces::ClientLike;
 use mcp_common::{AppConfig, McpMethod};
-use mcp_db::{ApiKey, ApiKeyRepository, McpServer, ServerRepository};
+use mcp_db::{ApiKey, McpServer, ServerRepository};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::TcpListener;
@@ -386,7 +387,7 @@ async fn execute_upstream_request(
     target_url: &str,
     method: axum::http::Method,
     headers: &axum::http::HeaderMap,
-    body_bytes: bytes::Bytes,
+    body_bytes: Bytes,
 ) -> Result<(Vec<u8>, u16, Vec<(String, String)>), ProxyError> {
     // Build outgoing request
     let mut req_builder = state.http_client.request(method, target_url);

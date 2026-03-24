@@ -1,5 +1,5 @@
 use chrono::Datelike;
-use fred::interfaces::{KeysInterface, SortedSetsInterface};
+use fred::interfaces::{KeysInterface, LuaInterface};
 use mcp_billing::Plan;
 use mcp_db::{ApiKey, McpServer, WorkspaceRepository};
 use uuid::Uuid;
@@ -9,6 +9,36 @@ use crate::{ProxyError, ProxyState};
 const DEFAULT_RATE_LIMIT: i32 = 100; // requests per minute
 const WINDOW_SIZE_SECONDS: i64 = 60;
 
+/// Lua script for atomic sliding window rate limiting
+/// This prevents race conditions by performing all operations atomically
+const RATE_LIMIT_SCRIPT: &str = r#"
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local window_start = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
+
+-- Remove old entries
+redis.call('ZREMRANGEBYSCORE', key, '-inf', window_start)
+
+-- Count current requests in window
+local count = redis.call('ZCOUNT', key, window_start, '+inf')
+
+-- Check if limit exceeded
+if count >= limit then
+    return -1
+end
+
+-- Add current request with unique member (timestamp + random suffix)
+local member = now .. ':' .. math.random(1000000)
+redis.call('ZADD', key, now, member)
+
+-- Set TTL on the key
+redis.call('EXPIRE', key, ttl)
+
+return count + 1
+"#;
+
 pub async fn check(
     state: &ProxyState,
     api_key: &ApiKey,
@@ -17,49 +47,28 @@ pub async fn check(
     let key = format!("rate_limit:{}:{}", api_key.id, server.id);
     let now = chrono::Utc::now().timestamp();
     let window_start = now - WINDOW_SIZE_SECONDS;
-
-    // Use Redis sorted set for sliding window rate limiting
-    // Remove old entries
-    let _: () = state
-        .redis
-        .zremrangebyscore(&key, f64::NEG_INFINITY, window_start as f64)
-        .await
-        .map_err(|e| ProxyError::Internal(format!("Redis error: {}", e)))?;
-
-    // Count current requests in window
-    let count: i64 = state
-        .redis
-        .zcount(&key, window_start as f64, f64::INFINITY)
-        .await
-        .map_err(|e| ProxyError::Internal(format!("Redis error: {}", e)))?;
-
-    // Check limit - use server config or default
     let limit = server.rate_limit_per_minute.unwrap_or(DEFAULT_RATE_LIMIT) as i64;
+    let ttl = WINDOW_SIZE_SECONDS * 2;
 
-    if count >= limit {
-        return Err(ProxyError::RateLimitExceeded);
-    }
-
-    // Add current request
-    let _: () = state
+    // Execute atomic rate limiting with Lua script
+    let result: i64 = state
         .redis
-        .zadd(
-            &key,
-            None,
-            None,
-            false,
-            false,
-            (now as f64, now.to_string().as_str()),
+        .eval(
+            RATE_LIMIT_SCRIPT,
+            &[key],
+            &[
+                now.to_string(),
+                window_start.to_string(),
+                limit.to_string(),
+                ttl.to_string(),
+            ],
         )
         .await
         .map_err(|e| ProxyError::Internal(format!("Redis error: {}", e)))?;
 
-    // Set TTL on the key
-    let _: () = state
-        .redis
-        .expire(&key, WINDOW_SIZE_SECONDS * 2)
-        .await
-        .map_err(|e| ProxyError::Internal(format!("Redis error: {}", e)))?;
+    if result < 0 {
+        return Err(ProxyError::RateLimitExceeded);
+    }
 
     Ok(())
 }

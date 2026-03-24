@@ -1,4 +1,4 @@
-use crate::models::{CreateRequestLog, RequestLog, RequestLogStats, ToolUsageStats};
+use crate::models::{CreateRequestLog, RequestLog, RequestLogStats, RequestLogWithCount, ToolUsageStats};
 use chrono::{DateTime, Utc};
 use mcp_common::Result;
 use sqlx::PgPool;
@@ -58,6 +58,8 @@ impl RequestLogRepository {
         Ok(logs)
     }
 
+    /// List request logs with filtering - optimized to use window function for count
+    /// This executes a single query instead of two separate queries
     pub async fn list_by_server_filtered(
         pool: &PgPool,
         server_id: Uuid,
@@ -102,10 +104,12 @@ impl RequestLogRepository {
 
         let where_clause = conditions.join(" AND ");
 
+        // Use window function COUNT(*) OVER() to get total count in single query
         let query = format!(
             r#"
             SELECT id, server_id, tool_name, api_key_id, client_info,
-                   request_body, response_status, error_message, duration_ms, created_at
+                   request_body, response_status, error_message, duration_ms, created_at,
+                   COUNT(*) OVER() as total_count
             FROM request_logs
             WHERE {}
             ORDER BY created_at DESC
@@ -114,32 +118,43 @@ impl RequestLogRepository {
             where_clause, param_idx, param_idx + 1
         );
 
-        let count_query = format!(
-            "SELECT COUNT(*) FROM request_logs WHERE {}",
-            where_clause
-        );
-
         // Build and execute the query with proper binding
-        let mut query_builder = sqlx::query_as::<_, RequestLog>(&query).bind(server_id);
-        let mut count_builder = sqlx::query_as::<_, (i64,)>(&count_query).bind(server_id);
+        let mut query_builder = sqlx::query_as::<_, RequestLogWithCount>(&query).bind(server_id);
 
         if let Some(s) = since {
             query_builder = query_builder.bind(s);
-            count_builder = count_builder.bind(s);
         }
 
         if let Some(s) = search {
             let search_pattern = format!("%{}%", s);
-            query_builder = query_builder.bind(search_pattern.clone());
-            count_builder = count_builder.bind(search_pattern);
+            query_builder = query_builder.bind(search_pattern);
         }
 
         query_builder = query_builder.bind(limit).bind(offset);
 
-        let logs = query_builder.fetch_all(pool).await?;
-        let (count,) = count_builder.fetch_one(pool).await?;
+        let logs_with_count = query_builder.fetch_all(pool).await?;
 
-        Ok((logs, count))
+        // Extract total count from first row (all rows have the same count)
+        let total_count = logs_with_count.first().map(|r| r.total_count).unwrap_or(0);
+
+        // Convert to RequestLog (without the count field)
+        let logs: Vec<RequestLog> = logs_with_count
+            .into_iter()
+            .map(|r| RequestLog {
+                id: r.id,
+                server_id: r.server_id,
+                tool_name: r.tool_name,
+                api_key_id: r.api_key_id,
+                client_info: r.client_info,
+                request_body: r.request_body,
+                response_status: r.response_status,
+                error_message: r.error_message,
+                duration_ms: r.duration_ms,
+                created_at: r.created_at,
+            })
+            .collect();
+
+        Ok((logs, total_count))
     }
 
     pub async fn list_by_server_since(

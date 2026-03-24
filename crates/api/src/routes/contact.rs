@@ -80,38 +80,29 @@ fn contains_spam_patterns(message: &str) -> bool {
     false
 }
 
-/// Check rate limit using Redis
+/// Check rate limit using Redis with atomic Lua script (fixes race condition)
 async fn check_rate_limit(state: &AppState, ip: &str) -> Result<bool, AppError> {
     let key = format!("{}{}", RATE_LIMIT_KEY_PREFIX, ip);
 
-    // Get current count
-    let count: Option<i64> = fred::interfaces::KeysInterface::get(&state.redis, &key)
-        .await
-        .ok();
+    // Use Lua script for atomic INCR + EXPIRE operation
+    let lua_script = r#"
+        local current = redis.call('INCR', KEYS[1])
+        if current == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        return current
+    "#;
 
-    let current_count = count.unwrap_or(0);
+    let count: i64 = fred::interfaces::LuaInterface::eval(
+        &state.redis,
+        lua_script,
+        vec![key],
+        vec![RATE_LIMIT_WINDOW_SECS.to_string()],
+    )
+    .await
+    .map_err(|_| AppError::internal("Rate limit check failed"))?;
 
-    if current_count >= RATE_LIMIT_MAX_REQUESTS {
-        return Ok(false); // Rate limited
-    }
-
-    // Increment counter
-    let _: () = fred::interfaces::KeysInterface::incr(&state.redis, &key)
-        .await
-        .map_err(|_| AppError::internal("Rate limit check failed"))?;
-
-    // Set expiry if this is the first request
-    if current_count == 0 {
-        let _: () = fred::interfaces::KeysInterface::expire(
-            &state.redis,
-            &key,
-            RATE_LIMIT_WINDOW_SECS as i64,
-        )
-        .await
-        .map_err(|_| AppError::internal("Rate limit check failed"))?;
-    }
-
-    Ok(true)
+    Ok(count <= RATE_LIMIT_MAX_REQUESTS)
 }
 
 pub async fn submit_contact(

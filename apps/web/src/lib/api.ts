@@ -1,24 +1,16 @@
 const API_BASE = '/api/v1';
 
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('access_token');
-}
-
 class ApiClient {
   private async request<T>(
     path: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const token = getAccessToken();
+    // Authentication is handled via HTTP-only cookies set by the server.
+    // The credentials: 'include' option ensures cookies are sent with requests.
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,

@@ -170,4 +170,25 @@ impl DeploymentRepository {
 
         Ok(count.0)
     }
+
+    /// Check if a user has access to a deployment (optimized single query with JOIN)
+    /// Returns true if the deployment exists and the user is a member of the associated workspace
+    pub async fn check_user_access(pool: &PgPool, deployment_id: Uuid, user_id: Uuid) -> Result<bool> {
+        let result: Option<(i32,)> = sqlx::query_as(
+            r#"
+            SELECT 1
+            FROM deployments d
+            INNER JOIN mcp_servers s ON d.server_id = s.id
+            INNER JOIN workspace_members wm ON s.workspace_id = wm.workspace_id
+            WHERE d.id = $1 AND wm.user_id = $2
+            LIMIT 1
+            "#,
+        )
+        .bind(deployment_id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(result.is_some())
+    }
 }

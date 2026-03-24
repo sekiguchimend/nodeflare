@@ -6,6 +6,8 @@ use uuid::Uuid;
 pub struct ApiKeyRepository;
 
 impl ApiKeyRepository {
+    /// Maximum API keys per workspace to prevent resource exhaustion
+    const MAX_KEYS_PER_WORKSPACE: i64 = 100;
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<ApiKey>> {
         let key = sqlx::query_as::<_, ApiKey>(
             r#"
@@ -46,9 +48,11 @@ impl ApiKeyRepository {
             FROM api_keys
             WHERE workspace_id = $1
             ORDER BY created_at DESC
+            LIMIT $2
             "#,
         )
         .bind(workspace_id)
+        .bind(Self::MAX_KEYS_PER_WORKSPACE)
         .fetch_all(pool)
         .await?;
 
@@ -63,9 +67,11 @@ impl ApiKeyRepository {
             FROM api_keys
             WHERE server_id = $1
             ORDER BY created_at DESC
+            LIMIT $2
             "#,
         )
         .bind(server_id)
+        .bind(Self::MAX_KEYS_PER_WORKSPACE)
         .fetch_all(pool)
         .await?;
 

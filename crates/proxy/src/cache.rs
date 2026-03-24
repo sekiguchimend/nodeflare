@@ -5,12 +5,14 @@ use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 use tokio::sync::broadcast;
 
-/// Cache entry with TTL
+/// Cache entry with TTL and LRU tracking
 struct CacheEntry {
     response_body: Vec<u8>,
     status: u16,
     headers: Vec<(String, String)>,
     created_at: Instant,
+    /// Last access time for LRU eviction
+    last_accessed: Instant,
 }
 
 /// In-flight request tracker for coalescing
@@ -23,7 +25,7 @@ struct InFlightRequest {
 /// This provides two optimizations:
 /// 1. Request Coalescing (singleflight): If multiple identical requests come in
 ///    while one is being processed, they all wait for and share the same result
-/// 2. TTL Cache: Results are cached for a configurable duration
+/// 2. TTL Cache with LRU eviction: Results are cached for a configurable duration
 pub struct RequestCache {
     /// Cached responses with TTL
     cache: RwLock<HashMap<u64, CacheEntry>>,
@@ -53,14 +55,27 @@ impl RequestCache {
         hasher.finish()
     }
 
-    /// Try to get cached response
+    /// Try to get cached response and update LRU timestamp
     pub async fn get(&self, endpoint: &str, body: &[u8]) -> Option<CachedResponse> {
         let key = Self::cache_key(endpoint, body);
-        let cache = self.cache.read().await;
 
-        if let Some(entry) = cache.get(&key) {
-            // Check if still valid
+        // First try with read lock
+        {
+            let cache = self.cache.read().await;
+            if let Some(entry) = cache.get(&key) {
+                if entry.created_at.elapsed() >= self.ttl {
+                    return None; // Expired
+                }
+            } else {
+                return None; // Not found
+            }
+        }
+
+        // Need write lock to update last_accessed
+        let mut cache = self.cache.write().await;
+        if let Some(entry) = cache.get_mut(&key) {
             if entry.created_at.elapsed() < self.ttl {
+                entry.last_accessed = Instant::now();
                 return Some(CachedResponse {
                     body: entry.response_body.clone(),
                     status: entry.status,
@@ -79,11 +94,12 @@ impl RequestCache {
     pub async fn try_coalesce(&self, endpoint: &str, body: &[u8]) -> CoalesceResult {
         let key = Self::cache_key(endpoint, body);
 
-        // First check cache
+        // First check cache and update LRU
         {
-            let cache = self.cache.read().await;
-            if let Some(entry) = cache.get(&key) {
+            let mut cache = self.cache.write().await;
+            if let Some(entry) = cache.get_mut(&key) {
                 if entry.created_at.elapsed() < self.ttl {
+                    entry.last_accessed = Instant::now();
                     tracing::debug!("Cache hit for request");
                     return CoalesceResult::Cached(CachedResponse {
                         body: entry.response_body.clone(),
@@ -135,11 +151,13 @@ impl RequestCache {
         status: u16,
         headers: Vec<(String, String)>,
     ) {
+        let now = Instant::now();
         let entry = Arc::new(CacheEntry {
             response_body,
             status,
             headers,
-            created_at: Instant::now(),
+            created_at: now,
+            last_accessed: now,
         });
 
         // Notify waiting requests
@@ -157,16 +175,17 @@ impl RequestCache {
 
             // Evict old entries if at capacity
             if cache.len() >= self.max_entries {
-                self.evict_expired(&mut cache).await;
+                self.evict_expired(&mut cache);
 
-                // If still at capacity, remove oldest
+                // If still at capacity, remove least recently used
                 if cache.len() >= self.max_entries {
-                    if let Some(oldest_key) = cache
+                    if let Some(lru_key) = cache
                         .iter()
-                        .min_by_key(|(_, v)| v.created_at)
+                        .min_by_key(|(_, v)| v.last_accessed)
                         .map(|(k, _)| *k)
                     {
-                        cache.remove(&oldest_key);
+                        cache.remove(&lru_key);
+                        tracing::debug!("Evicted LRU cache entry");
                     }
                 }
             }
@@ -176,6 +195,7 @@ impl RequestCache {
                 status: entry.status,
                 headers: entry.headers.clone(),
                 created_at: entry.created_at,
+                last_accessed: entry.last_accessed,
             });
         }
     }
@@ -187,9 +207,22 @@ impl RequestCache {
         // Dropping the sender will cause receivers to get an error
     }
 
-    /// Remove expired entries
-    async fn evict_expired(&self, cache: &mut HashMap<u64, CacheEntry>) {
-        cache.retain(|_, entry| entry.created_at.elapsed() < self.ttl);
+    /// Remove expired entries (synchronous, requires mutable reference)
+    fn evict_expired(&self, cache: &mut HashMap<u64, CacheEntry>) {
+        let ttl = self.ttl;
+        cache.retain(|_, entry| entry.created_at.elapsed() < ttl);
+    }
+
+    /// Periodic cleanup of expired entries (call from background task)
+    pub async fn cleanup_expired(&self) {
+        let mut cache = self.cache.write().await;
+        let ttl = self.ttl;
+        let before = cache.len();
+        cache.retain(|_, entry| entry.created_at.elapsed() < ttl);
+        let after = cache.len();
+        if before != after {
+            tracing::debug!("Cleaned up {} expired cache entries", before - after);
+        }
     }
 
     /// Get cache statistics
@@ -300,5 +333,39 @@ mod tests {
             }
             _ => panic!("Expected Coalesced for second request"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_lru_eviction() {
+        let cache = RequestCache::new(60, 2); // Max 2 entries
+
+        // Add first entry
+        let result1 = cache.try_coalesce("endpoint1", b"body1").await;
+        if let CoalesceResult::Execute(h) = result1 {
+            cache.complete(h, b"response1".to_vec(), 200, vec![]).await;
+        }
+
+        // Add second entry
+        let result2 = cache.try_coalesce("endpoint2", b"body2").await;
+        if let CoalesceResult::Execute(h) = result2 {
+            cache.complete(h, b"response2".to_vec(), 200, vec![]).await;
+        }
+
+        // Access first entry to update its LRU timestamp
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        let _ = cache.get("endpoint1", b"body1").await;
+
+        // Add third entry - should evict second (least recently used)
+        let result3 = cache.try_coalesce("endpoint3", b"body3").await;
+        if let CoalesceResult::Execute(h) = result3 {
+            cache.complete(h, b"response3".to_vec(), 200, vec![]).await;
+        }
+
+        // First entry should still exist (was accessed more recently)
+        assert!(cache.get("endpoint1", b"body1").await.is_some());
+        // Second entry should be evicted
+        assert!(cache.get("endpoint2", b"body2").await.is_none());
+        // Third entry should exist
+        assert!(cache.get("endpoint3", b"body3").await.is_some());
     }
 }

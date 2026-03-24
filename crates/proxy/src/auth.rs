@@ -24,16 +24,11 @@ pub fn extract_api_key(request: &Request<Body>) -> Result<String, ProxyError> {
         return Ok(key.to_string());
     }
 
-    // Check query parameter
-    if let Some(query) = request.uri().query() {
-        for param in query.split('&') {
-            if let Some(key) = param.strip_prefix("api_key=") {
-                return Ok(key.to_string());
-            }
-        }
-    }
+    // NOTE: Query parameter API key support removed for security reasons.
+    // API keys in URLs are logged in access logs, browser history, and proxies.
+    // Use Authorization header (Bearer) or X-API-Key header instead.
 
-    Err(ProxyError::Unauthorized("Missing API key".into()))
+    Err(ProxyError::Unauthorized("Missing API key. Use Authorization header or X-API-Key header.".into()))
 }
 
 pub async fn validate_api_key(state: &ProxyState, api_key: &str) -> Result<ApiKey, ProxyError> {

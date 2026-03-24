@@ -61,6 +61,7 @@ uuid.workspace = true
 chrono.workspace = true
 dotenvy.workspace = true
 regex = "1"
+url = "2"
 
 # Redis (for pub/sub WebSocket events)
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager", "tokio-rustls-comp"] }

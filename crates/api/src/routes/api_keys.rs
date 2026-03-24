@@ -61,11 +61,33 @@ pub async fn create(
         return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
     }
 
+    // Require explicit scopes - no default to prevent over-permissioning
+    // If no scopes provided, use minimal read-only scope
+    let scopes = body.scopes.unwrap_or_else(|| vec!["tools:list".to_string()]);
+
+    // Validate scopes
+    let valid_scopes = [
+        "*",
+        "tools:list",
+        "tools:call",
+        "resources:list",
+        "resources:read",
+        "prompts:list",
+        "prompts:get",
+    ];
+    for scope in &scopes {
+        // Allow wildcard patterns like "tools:call:specific_tool"
+        let base_scope = scope.split(':').take(2).collect::<Vec<_>>().join(":");
+        if !valid_scopes.contains(&scope.as_str()) && !valid_scopes.contains(&base_scope.as_str()) && scope != "*" {
+            return Err((StatusCode::BAD_REQUEST, format!("Invalid scope: {}", scope)));
+        }
+    }
+
     let (data, full_key) = ApiKeyService::create_api_key_data(
         workspace_id,
         body.server_id,
         body.name.clone(),
-        body.scopes.unwrap_or_else(|| vec!["*".to_string()]),
+        scopes,
         body.expires_in_days,
     );
 

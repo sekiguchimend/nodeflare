@@ -88,6 +88,32 @@ impl Error {
             Error::Internal(_) => "INTERNAL_ERROR",
         }
     }
+
+    /// Returns a sanitized message safe for client responses.
+    /// Internal details are hidden to prevent information leakage.
+    pub fn client_message(&self) -> String {
+        match self {
+            // Safe to expose - user-facing messages
+            Error::Unauthorized => "Authentication required".to_string(),
+            Error::Forbidden => "Permission denied".to_string(),
+            Error::NotFound(resource) => format!("{} not found", resource),
+            Error::Conflict(msg) => msg.clone(),
+            Error::Validation(msg) => format!("Validation error: {}", msg),
+            Error::BadRequest(msg) => msg.clone(),
+            Error::RateLimitExceeded => "Rate limit exceeded. Please try again later.".to_string(),
+            Error::ServiceUnavailable(_) => "Service temporarily unavailable".to_string(),
+
+            // Hide internal details - generic messages only
+            Error::Database(_) => "A database error occurred".to_string(),
+            Error::Redis(_) => "A cache error occurred".to_string(),
+            Error::Jwt(_) => "Authentication error".to_string(),
+            Error::ExternalService(_) => "External service error".to_string(),
+            Error::Config(_) => "Configuration error".to_string(),
+            Error::Io(_) => "An I/O error occurred".to_string(),
+            Error::Json(_) => "Invalid JSON format".to_string(),
+            Error::Internal(_) => "An internal error occurred".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -108,11 +134,21 @@ impl From<&Error> for ErrorResponse {
         Self {
             error: ErrorBody {
                 code: err.error_code().to_string(),
-                message: err.to_string(),
+                // Use sanitized message instead of full error
+                message: err.client_message(),
                 details: None,
             },
         }
     }
+}
+
+/// Helper function to convert any error to a sanitized API response.
+/// Logs the full error internally but returns a safe message to the client.
+pub fn sanitize_error<E: std::fmt::Display>(e: E, context: &str) -> String {
+    // Log the full error for debugging (server-side only)
+    tracing::error!("{}: {}", context, e);
+    // Return generic message to client
+    "An internal error occurred".to_string()
 }
 
 impl From<fred::error::RedisError> for Error {

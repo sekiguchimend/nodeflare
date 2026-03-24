@@ -1,6 +1,6 @@
 import { Header, Footer } from '@/components/layout';
 import Link from 'next/link';
-import { getBlogPost, getBlogPosts } from '@/lib/hygraph';
+import { getBlogPost, getBlogPosts, sanitizeHtml } from '@/lib/hygraph';
 import { notFound } from 'next/navigation';
 
 function formatDate(dateString?: string): string {
@@ -125,7 +125,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                 prose-pre:bg-gray-900 prose-pre:rounded-xl prose-pre:shadow-lg
                 prose-ul:my-6 prose-li:text-gray-600 prose-li:marker:text-gray-400
                 prose-blockquote:border-l-violet-500 prose-blockquote:bg-gray-50 prose-blockquote:py-1 prose-blockquote:not-italic"
-              dangerouslySetInnerHTML={{ __html: post.content.html }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content.html) }}
             />
           )}
 

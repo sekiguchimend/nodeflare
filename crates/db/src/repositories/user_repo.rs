@@ -9,7 +9,7 @@ impl UserRepository {
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<User>> {
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, github_id, email, name, avatar_url, created_at, updated_at
+            SELECT id, github_id, email, name, avatar_url, is_admin, created_at, updated_at
             FROM users
             WHERE id = $1
             "#,
@@ -21,10 +21,26 @@ impl UserRepository {
         Ok(user)
     }
 
+    /// Check if a user is a system admin
+    pub async fn is_admin(pool: &PgPool, id: Uuid) -> Result<bool> {
+        let result: Option<(bool,)> = sqlx::query_as(
+            r#"
+            SELECT is_admin
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(result.map(|(is_admin,)| is_admin).unwrap_or(false))
+    }
+
     pub async fn find_by_github_id(pool: &PgPool, github_id: i64) -> Result<Option<User>> {
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, github_id, email, name, avatar_url, created_at, updated_at
+            SELECT id, github_id, email, name, avatar_url, is_admin, created_at, updated_at
             FROM users
             WHERE github_id = $1
             "#,
@@ -39,7 +55,7 @@ impl UserRepository {
     pub async fn find_by_email(pool: &PgPool, email: &str) -> Result<Option<User>> {
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, github_id, email, name, avatar_url, created_at, updated_at
+            SELECT id, github_id, email, name, avatar_url, is_admin, created_at, updated_at
             FROM users
             WHERE email = $1
             "#,
@@ -56,7 +72,7 @@ impl UserRepository {
             r#"
             INSERT INTO users (github_id, email, name, avatar_url)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, github_id, email, name, avatar_url, created_at, updated_at
+            RETURNING id, github_id, email, name, avatar_url, is_admin, created_at, updated_at
             "#,
         )
         .bind(data.github_id)
@@ -79,7 +95,7 @@ impl UserRepository {
                 avatar_url = COALESCE($4, avatar_url),
                 updated_at = NOW()
             WHERE id = $1
-            RETURNING id, github_id, email, name, avatar_url, created_at, updated_at
+            RETURNING id, github_id, email, name, avatar_url, is_admin, created_at, updated_at
             "#,
         )
         .bind(id)
@@ -108,7 +124,7 @@ impl UserRepository {
                 name = EXCLUDED.name,
                 avatar_url = EXCLUDED.avatar_url,
                 updated_at = NOW()
-            RETURNING id, github_id, email, name, avatar_url, created_at, updated_at
+            RETURNING id, github_id, email, name, avatar_url, is_admin, created_at, updated_at
             "#,
         )
         .bind(github_id)
@@ -136,7 +152,7 @@ impl UserRepository {
             UPDATE users
             SET name = $2, updated_at = NOW()
             WHERE id = $1
-            RETURNING id, github_id, email, name, avatar_url, created_at, updated_at
+            RETURNING id, github_id, email, name, avatar_url, is_admin, created_at, updated_at
             "#,
         )
         .bind(id)
@@ -172,7 +188,7 @@ impl UserRepository {
     pub async fn get_with_token(pool: &PgPool, id: Uuid) -> Result<Option<UserWithToken>> {
         let user = sqlx::query_as::<_, UserWithToken>(
             r#"
-            SELECT id, github_id, email, name, avatar_url, github_access_token_encrypted, github_access_token_nonce, created_at, updated_at
+            SELECT id, github_id, email, name, avatar_url, is_admin, github_access_token_encrypted, github_access_token_nonce, created_at, updated_at
             FROM users
             WHERE id = $1
             "#,

@@ -7,6 +7,10 @@ use uuid::Uuid;
 pub struct WorkspaceRepository;
 
 impl WorkspaceRepository {
+    /// Maximum workspaces a user can belong to
+    const MAX_WORKSPACES_PER_USER: i64 = 50;
+    /// Maximum members per workspace
+    const MAX_MEMBERS_PER_WORKSPACE: i64 = 200;
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Workspace>> {
         let workspace = sqlx::query_as::<_, Workspace>(
             r#"
@@ -49,9 +53,11 @@ impl WorkspaceRepository {
             INNER JOIN workspace_members wm ON w.id = wm.workspace_id
             WHERE wm.user_id = $1
             ORDER BY w.created_at DESC
+            LIMIT $2
             "#,
         )
         .bind(user_id)
+        .bind(Self::MAX_WORKSPACES_PER_USER)
         .fetch_all(pool)
         .await?;
 
@@ -332,6 +338,37 @@ impl WorkspaceRepository {
         Ok(())
     }
 
+    /// Update member role atomically (prevents race conditions)
+    pub async fn update_member_role(
+        pool: &PgPool,
+        workspace_id: Uuid,
+        user_id: Uuid,
+        role: WorkspaceRole,
+    ) -> Result<Option<WorkspaceMember>> {
+        let role_str = match role {
+            WorkspaceRole::Owner => "owner",
+            WorkspaceRole::Admin => "admin",
+            WorkspaceRole::Member => "member",
+            WorkspaceRole::Viewer => "viewer",
+        };
+
+        let member = sqlx::query_as::<_, WorkspaceMember>(
+            r#"
+            UPDATE workspace_members
+            SET role = $3
+            WHERE workspace_id = $1 AND user_id = $2
+            RETURNING workspace_id, user_id, role, created_at
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(user_id)
+        .bind(role_str)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(member)
+    }
+
     pub async fn list_members(pool: &PgPool, workspace_id: Uuid) -> Result<Vec<WorkspaceMember>> {
         let members = sqlx::query_as::<_, WorkspaceMember>(
             r#"
@@ -339,9 +376,11 @@ impl WorkspaceRepository {
             FROM workspace_members
             WHERE workspace_id = $1
             ORDER BY created_at
+            LIMIT $2
             "#,
         )
         .bind(workspace_id)
+        .bind(Self::MAX_MEMBERS_PER_WORKSPACE)
         .fetch_all(pool)
         .await?;
 
@@ -363,9 +402,11 @@ impl WorkspaceRepository {
             INNER JOIN users u ON wm.user_id = u.id
             WHERE wm.workspace_id = $1
             ORDER BY wm.created_at
+            LIMIT $2
             "#,
         )
         .bind(workspace_id)
+        .bind(Self::MAX_MEMBERS_PER_WORKSPACE)
         .fetch_all(pool)
         .await?;
 
@@ -380,9 +421,11 @@ impl WorkspaceRepository {
             FROM workspaces
             WHERE owner_id = $1
             ORDER BY created_at DESC
+            LIMIT $2
             "#,
         )
         .bind(user_id)
+        .bind(Self::MAX_WORKSPACES_PER_USER)
         .fetch_all(pool)
         .await?;
 

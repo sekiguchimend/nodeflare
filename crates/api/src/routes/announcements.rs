@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, Utc};
-use mcp_db::{models::{Announcement, CreateAnnouncement}, repositories::AnnouncementRepository};
+use mcp_db::{models::{Announcement, CreateAnnouncement}, repositories::AnnouncementRepository, UserRepository};
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -19,6 +19,22 @@ pub struct ListQuery {
 
 fn default_limit() -> i64 {
     10
+}
+
+/// Helper function to verify admin privileges
+async fn require_admin(state: &AppState, user_id: uuid::Uuid) -> Result<(), AppError> {
+    let is_admin = UserRepository::is_admin(&state.db, user_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to check admin status: {}", e);
+            AppError::internal("Failed to verify admin status")
+        })?;
+
+    if !is_admin {
+        return Err(AppError::forbidden("Admin privileges required"));
+    }
+
+    Ok(())
 }
 
 /// List active announcements (public endpoint, no auth required)
@@ -39,10 +55,12 @@ pub async fn list(
 /// List all announcements (admin only)
 pub async fn list_all(
     State(state): State<Arc<AppState>>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<Announcement>>, AppError> {
-    // TODO: Add admin check
+    // Verify admin privileges
+    require_admin(&state, auth_user.user_id).await?;
+
     let announcements = AnnouncementRepository::list_all(&state.db, query.limit, 0)
         .await
         .map_err(|e| {
@@ -65,10 +83,12 @@ pub struct CreateAnnouncementRequest {
 /// Create a new announcement (admin only)
 pub async fn create(
     State(state): State<Arc<AppState>>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Json(body): Json<CreateAnnouncementRequest>,
 ) -> Result<Json<Announcement>, AppError> {
-    // TODO: Add admin check
+    // Verify admin privileges
+    require_admin(&state, auth_user.user_id).await?;
+
     let announcement = AnnouncementRepository::create(
         &state.db,
         CreateAnnouncement {
@@ -100,11 +120,13 @@ pub struct UpdateAnnouncementRequest {
 /// Update an announcement (admin only)
 pub async fn update(
     State(state): State<Arc<AppState>>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateAnnouncementRequest>,
 ) -> Result<Json<Announcement>, AppError> {
-    // TODO: Add admin check
+    // Verify admin privileges
+    require_admin(&state, auth_user.user_id).await?;
+
     let announcement = AnnouncementRepository::update(
         &state.db,
         id,
@@ -127,10 +149,12 @@ pub async fn update(
 /// Delete an announcement (admin only)
 pub async fn delete(
     State(state): State<Arc<AppState>>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    // TODO: Add admin check
+    // Verify admin privileges
+    require_admin(&state, auth_user.user_id).await?;
+
     let deleted = AnnouncementRepository::delete(&state.db, id)
         .await
         .map_err(|e| {

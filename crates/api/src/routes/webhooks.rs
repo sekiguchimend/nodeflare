@@ -8,10 +8,108 @@ use mcp_db::{
     repositories::{DeployWebhookRepository, ServerRepository, WorkspaceRepository},
 };
 use serde::{Deserialize, Serialize};
+use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::Arc;
+use url::Url;
 use uuid::Uuid;
 
 use crate::{error::AppError, extractors::AuthUser, state::AppState};
+
+/// Validate webhook URL to prevent SSRF attacks
+/// Blocks internal IPs, cloud metadata endpoints, and non-HTTPS URLs
+fn validate_webhook_url(url_str: &str) -> Result<(), AppError> {
+    // Must be HTTPS
+    if !url_str.starts_with("https://") {
+        return Err(AppError::bad_request("INVALID_URL", "Webhook URL must use HTTPS"));
+    }
+
+    // Parse the URL
+    let url = Url::parse(url_str)
+        .map_err(|_| AppError::bad_request("INVALID_URL", "Invalid URL format"))?;
+
+    // Get the host
+    let host = url.host_str()
+        .ok_or_else(|| AppError::bad_request("INVALID_URL", "URL must have a host"))?;
+
+    // Block localhost and common internal hostnames
+    let blocked_hosts = [
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "[::1]",
+        "169.254.169.254",  // AWS/GCP metadata
+        "metadata.google.internal",  // GCP metadata
+        "metadata.internal",
+        "kubernetes.default",
+        "kubernetes.default.svc",
+    ];
+
+    let host_lower = host.to_lowercase();
+    for blocked in &blocked_hosts {
+        if host_lower == *blocked || host_lower.ends_with(&format!(".{}", blocked)) {
+            return Err(AppError::bad_request(
+                "BLOCKED_URL",
+                "Webhook URL points to a blocked internal address",
+            ));
+        }
+    }
+
+    // Resolve hostname and check if it resolves to internal IP
+    let port = url.port().unwrap_or(443);
+    let socket_addr = format!("{}:{}", host, port);
+
+    if let Ok(addrs) = socket_addr.to_socket_addrs() {
+        for addr in addrs {
+            if is_internal_ip(&addr.ip()) {
+                return Err(AppError::bad_request(
+                    "BLOCKED_URL",
+                    "Webhook URL resolves to an internal IP address",
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if an IP address is internal/private
+fn is_internal_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            // Private ranges
+            ipv4.is_private() ||
+            // Loopback (127.0.0.0/8)
+            ipv4.is_loopback() ||
+            // Link-local (169.254.0.0/16)
+            ipv4.is_link_local() ||
+            // Broadcast
+            ipv4.is_broadcast() ||
+            // Documentation ranges
+            ipv4.is_documentation() ||
+            // Unspecified (0.0.0.0)
+            ipv4.is_unspecified() ||
+            // AWS/Cloud metadata range
+            ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254
+        }
+        IpAddr::V6(ipv6) => {
+            // Loopback (::1)
+            ipv6.is_loopback() ||
+            // Unspecified (::)
+            ipv6.is_unspecified() ||
+            // IPv4-mapped addresses - check the mapped IPv4
+            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                is_internal_ip(&IpAddr::V4(ipv4))
+            } else {
+                // Unique local addresses (fc00::/7)
+                let segments = ipv6.segments();
+                (segments[0] & 0xfe00) == 0xfc00 ||
+                // Link-local (fe80::/10)
+                (segments[0] & 0xffc0) == 0xfe80
+            }
+        }
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct WebhookResponse {
@@ -122,10 +220,8 @@ pub async fn create(
         return Err(AppError::not_found("Server not found"));
     }
 
-    // Validate webhook URL
-    if !body.webhook_url.starts_with("https://") {
-        return Err(AppError::bad_request("INVALID_URL", "Webhook URL must use HTTPS"));
-    }
+    // Validate webhook URL (SSRF protection)
+    validate_webhook_url(&body.webhook_url)?;
 
     // Validate events
     let valid_events = ["deploy_success", "deploy_failure", "deploy_started"];
@@ -197,11 +293,9 @@ pub async fn update(
         return Err(AppError::not_found("Webhook not found"));
     }
 
-    // Validate webhook URL if provided
+    // Validate webhook URL if provided (SSRF protection)
     if let Some(ref url) = body.webhook_url {
-        if !url.starts_with("https://") {
-            return Err(AppError::bad_request("INVALID_URL", "Webhook URL must use HTTPS"));
-        }
+        validate_webhook_url(url)?;
     }
 
     // Validate events if provided
@@ -310,6 +404,9 @@ pub async fn test(
         return Err(AppError::not_found("Webhook not found"));
     }
 
+    // Validate webhook URL before sending (SSRF protection)
+    validate_webhook_url(&webhook.webhook_url)?;
+
     // Send test payload
     let test_payload = serde_json::json!({
         "event": "test",
@@ -319,11 +416,16 @@ pub async fn test(
         "timestamp": chrono::Utc::now().to_rfc3339(),
     });
 
-    let client = reqwest::Client::new();
+    // Create client with redirect policy disabled to prevent SSRF via redirects
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|_| AppError::internal("Failed to create HTTP client"))?;
+
     let response = client
         .post(&webhook.webhook_url)
         .json(&test_payload)
-        .timeout(std::time::Duration::from_secs(10))
         .send()
         .await;
 

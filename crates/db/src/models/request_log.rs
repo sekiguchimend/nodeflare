@@ -29,6 +29,22 @@ pub struct CreateRequestLog {
     pub duration_ms: i32,
 }
 
+/// RequestLog with total count from window function (for optimized queries)
+#[derive(Debug, Clone, FromRow)]
+pub struct RequestLogWithCount {
+    pub id: Uuid,
+    pub server_id: Uuid,
+    pub tool_name: Option<String>,
+    pub api_key_id: Option<Uuid>,
+    pub client_info: Option<serde_json::Value>,
+    pub request_body: Option<serde_json::Value>,
+    pub response_status: String,
+    pub error_message: Option<String>,
+    pub duration_ms: i32,
+    pub created_at: DateTime<Utc>,
+    pub total_count: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct RequestLogStats {
     pub total_requests: i64,

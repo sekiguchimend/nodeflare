@@ -55,14 +55,21 @@ pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
     pub min_connections: u32,
+    /// Connection acquire timeout in seconds
+    pub acquire_timeout_secs: u64,
+    /// Idle connection timeout in seconds
+    pub idle_timeout_secs: u64,
 }
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
             url: "postgres://postgres:postgres@localhost:5432/mcp_cloud".to_string(),
-            max_connections: 10,
-            min_connections: 2,
+            // Increased defaults for better scalability
+            max_connections: 20,
+            min_connections: 5,
+            acquire_timeout_secs: 30,
+            idle_timeout_secs: 600,
         }
     }
 }
@@ -90,7 +97,7 @@ pub struct AuthConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
-            jwt_secret: "your-super-secret-jwt-key-change-in-production".to_string(),
+            jwt_secret: String::new(), // Must be set via environment variable
             jwt_expiration_hours: 24,
             refresh_token_expiration_days: 30,
         }
@@ -168,10 +175,16 @@ impl AppConfig {
                 url: env::var("DATABASE_URL")
                     .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/mcp_cloud".to_string()),
                 max_connections: env::var("DATABASE_MAX_CONNECTIONS")
-                    .unwrap_or_else(|_| "10".to_string())
+                    .unwrap_or_else(|_| "20".to_string())
                     .parse()?,
                 min_connections: env::var("DATABASE_MIN_CONNECTIONS")
-                    .unwrap_or_else(|_| "2".to_string())
+                    .unwrap_or_else(|_| "5".to_string())
+                    .parse()?,
+                acquire_timeout_secs: env::var("DATABASE_ACQUIRE_TIMEOUT_SECS")
+                    .unwrap_or_else(|_| "30".to_string())
+                    .parse()?,
+                idle_timeout_secs: env::var("DATABASE_IDLE_TIMEOUT_SECS")
+                    .unwrap_or_else(|_| "600".to_string())
                     .parse()?,
             },
             redis: RedisConfig {
@@ -179,8 +192,18 @@ impl AppConfig {
                     .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
             },
             auth: AuthConfig {
-                jwt_secret: env::var("JWT_SECRET")
-                    .unwrap_or_else(|_| "your-super-secret-jwt-key-change-in-production".to_string()),
+                jwt_secret: {
+                    let secret = env::var("JWT_SECRET")
+                        .map_err(|_| anyhow::anyhow!("JWT_SECRET environment variable is required"))?;
+                    // Minimum 32 characters for security (256 bits)
+                    if secret.len() < 32 {
+                        return Err(anyhow::anyhow!(
+                            "JWT_SECRET must be at least 32 characters long for security. Current length: {}",
+                            secret.len()
+                        ));
+                    }
+                    secret
+                },
                 jwt_expiration_hours: env::var("JWT_EXPIRATION_HOURS")
                     .unwrap_or_else(|_| "24".to_string())
                     .parse()?,

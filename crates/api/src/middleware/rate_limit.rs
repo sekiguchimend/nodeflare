@@ -1,0 +1,165 @@
+use axum::{
+    extract::{ConnectInfo, State},
+    http::{Request, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
+    body::Body,
+};
+use std::{net::SocketAddr, sync::Arc};
+
+use crate::state::AppState;
+
+/// Rate limit configuration
+#[derive(Clone)]
+pub struct RateLimitConfig {
+    /// Maximum requests per window
+    pub max_requests: i64,
+    /// Window duration in seconds
+    pub window_secs: u64,
+    /// Key prefix for Redis
+    pub key_prefix: String,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            max_requests: std::env::var("RATE_LIMIT_MAX_REQUESTS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(100),
+            window_secs: std::env::var("RATE_LIMIT_WINDOW_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(60),
+            key_prefix: "rate_limit:".to_string(),
+        }
+    }
+}
+
+/// Rate limit middleware using Redis with atomic INCR + EXPIRE via Lua script
+pub async fn rate_limit_middleware(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let config = RateLimitConfig::default();
+    let ip = addr.ip().to_string();
+    let key = format!("{}{}", config.key_prefix, ip);
+
+    // Use Lua script for atomic rate limiting (fixes race condition)
+    let lua_script = r#"
+        local current = redis.call('INCR', KEYS[1])
+        if current == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        return current
+    "#;
+
+    let result: Result<i64, _> = fred::interfaces::LuaInterface::eval(
+        &state.redis,
+        lua_script,
+        vec![key.clone()],
+        vec![config.window_secs.to_string()],
+    )
+    .await;
+
+    match result {
+        Ok(count) if count > config.max_requests => {
+            tracing::warn!("Rate limit exceeded for IP: {} (count: {})", ip, count);
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                [
+                    ("X-RateLimit-Limit", config.max_requests.to_string()),
+                    ("X-RateLimit-Remaining", "0".to_string()),
+                    ("Retry-After", config.window_secs.to_string()),
+                ],
+                "Too many requests. Please try again later.",
+            )
+                .into_response()
+        }
+        Ok(count) => {
+            let mut response = next.run(request).await;
+            let remaining = (config.max_requests - count).max(0);
+
+            // Add rate limit headers to response
+            let headers = response.headers_mut();
+            headers.insert(
+                "X-RateLimit-Limit",
+                config.max_requests.to_string().parse().unwrap(),
+            );
+            headers.insert(
+                "X-RateLimit-Remaining",
+                remaining.to_string().parse().unwrap(),
+            );
+
+            response
+        }
+        Err(e) => {
+            // On Redis error, allow the request but log the error
+            tracing::error!("Rate limit Redis error: {}", e);
+            next.run(request).await
+        }
+    }
+}
+
+/// User-based rate limit middleware (for authenticated endpoints)
+pub async fn user_rate_limit_middleware(
+    State(state): State<Arc<AppState>>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    // Extract user ID from request extensions (set by auth middleware)
+    let user_id = request
+        .extensions()
+        .get::<uuid::Uuid>()
+        .copied();
+
+    let Some(user_id) = user_id else {
+        // No user ID means not authenticated, skip user rate limiting
+        return next.run(request).await;
+    };
+
+    let max_requests: i64 = std::env::var("USER_RATE_LIMIT_MAX_REQUESTS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1000);
+    let window_secs: u64 = std::env::var("USER_RATE_LIMIT_WINDOW_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60);
+
+    let key = format!("user_rate_limit:{}", user_id);
+
+    let lua_script = r#"
+        local current = redis.call('INCR', KEYS[1])
+        if current == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        return current
+    "#;
+
+    let result: Result<i64, _> = fred::interfaces::LuaInterface::eval(
+        &state.redis,
+        lua_script,
+        vec![key],
+        vec![window_secs.to_string()],
+    )
+    .await;
+
+    match result {
+        Ok(count) if count > max_requests => {
+            tracing::warn!("User rate limit exceeded for user: {} (count: {})", user_id, count);
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                "User rate limit exceeded. Please try again later.",
+            )
+                .into_response()
+        }
+        Ok(_) => next.run(request).await,
+        Err(e) => {
+            tracing::error!("User rate limit Redis error: {}", e);
+            next.run(request).await
+        }
+    }
+}

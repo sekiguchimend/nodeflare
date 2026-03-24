@@ -89,6 +89,11 @@ pub async fn get(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Deployment not found".to_string()))?;
 
+    // Verify deployment belongs to the specified server (prevents IDOR)
+    if deployment.server_id != server_id {
+        return Err((StatusCode::NOT_FOUND, "Deployment not found".to_string()));
+    }
+
     let status = deployment.status();
     Ok(Json(DeploymentResponse {
         id: deployment.id,
@@ -124,6 +129,11 @@ pub async fn get_logs(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Deployment not found".to_string()))?;
+
+    // Verify deployment belongs to the specified server (prevents IDOR)
+    if deployment.server_id != server_id {
+        return Err((StatusCode::NOT_FOUND, "Deployment not found".to_string()));
+    }
 
     Ok(Json(DeploymentLogsResponse {
         logs: deployment.build_logs,

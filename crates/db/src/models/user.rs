@@ -10,6 +10,7 @@ pub struct User {
     pub email: String,
     pub name: String,
     pub avatar_url: Option<String>,
+    pub is_admin: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -21,6 +22,7 @@ pub struct UserWithToken {
     pub email: String,
     pub name: String,
     pub avatar_url: Option<String>,
+    pub is_admin: bool,
     pub github_access_token_encrypted: Option<Vec<u8>>,
     pub github_access_token_nonce: Option<Vec<u8>>,
     pub created_at: DateTime<Utc>,

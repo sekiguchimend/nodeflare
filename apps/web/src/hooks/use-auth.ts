@@ -25,11 +25,16 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('token_expires_at');
+      // Call server-side logout to invalidate tokens and clear cookies
+      await api.post('/auth/logout');
     },
     onSuccess: () => {
+      queryClient.setQueryData(['auth', 'me'], null);
+      queryClient.invalidateQueries();
+      window.location.href = '/';
+    },
+    onError: () => {
+      // Even if server logout fails, redirect to home
       queryClient.setQueryData(['auth', 'me'], null);
       queryClient.invalidateQueries();
       window.location.href = '/';
