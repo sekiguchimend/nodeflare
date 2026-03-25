@@ -264,6 +264,7 @@
       "trySuggestion": "Try this slug:"
     },
     "regions": {
+      "title": "Regions",
       "asiaPacific": "Asia Pacific",
       "americas": "Americas",
       "europe": "Europe",
@@ -277,7 +278,16 @@
       "sea": "Seattle",
       "ams": "Amsterdam",
       "fra": "Frankfurt",
-      "lhr": "London"
+      "lhr": "London",
+      "multiRegionTitle": "Global Distribution",
+      "multiRegionDesc": "Deploy to multiple regions to serve Claude users worldwide with the lowest latency. Anycast automatically routes users to the nearest region.",
+      "currentCost": "Current additional regions: {count} (¥{cost}/month)",
+      "activeRegions": "Active Regions",
+      "primary": "Primary",
+      "addRegion": "Add Region",
+      "addRegionDesc": "Select a region to add. Additional regions are billed at ¥300/month per server.",
+      "priceInfo": "Additional region: ¥300/month/server",
+      "removeConfirm": "Remove this region?"
     },
     "detail": {
       "overview": "Overview",

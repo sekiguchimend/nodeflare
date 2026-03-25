@@ -2,11 +2,15 @@ use anyhow::{anyhow, Result};
 use stripe::{
     CheckoutSession, CheckoutSessionMode, Client, CreateCheckoutSession,
     CreateCheckoutSessionLineItems, CreateCustomer, CreateBillingPortalSession,
-    Customer, CustomerId, Subscription, SubscriptionId, Invoice, ListInvoices,
+    Customer, CustomerId, Subscription, SubscriptionId,
+    Invoice, ListInvoices,
 };
 use uuid::Uuid;
 
 use crate::plans::{get_plan_by_price_id, Plan};
+
+/// Price per additional region per month (in JPY)
+pub const REGION_PRICE_JPY: i64 = 300;
 
 /// Stripe billing service
 #[derive(Clone)]
@@ -140,6 +144,11 @@ impl BillingService {
             .await
             .map(|list| list.data)
             .map_err(|e| anyhow!("Failed to list invoices: {}", e))
+    }
+
+    /// Calculate estimated monthly cost for additional regions
+    pub fn calculate_region_cost(additional_regions: i64) -> i64 {
+        additional_regions * REGION_PRICE_JPY
     }
 }
 

@@ -3,7 +3,7 @@ use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 use mcp_auth::CryptoService;
 use mcp_common::{types::LogStream, AppConfig, EventPublisher};
-use mcp_db::{DeploymentRepository, NotificationSettingsRepository, SecretRepository, ServerRepository, UpdateDeployment, UserRepository, WorkspaceRepository};
+use mcp_db::{DeploymentRepository, NotificationSettingsRepository, RegionStatus, SecretRepository, ServerRegionRepository, ServerRepository, UpdateDeployment, UpdateServerRegion, UserRepository, WorkspaceRepository};
 use mcp_email::EmailService;
 use mcp_github::GitHubApp;
 use mcp_queue::{BuildJob, DeployJob, JobQueue};
@@ -431,7 +431,7 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
 }
 
 async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Result<(), Error> {
-    tracing::info!("Processing deploy job: {:?}", job.deployment_id);
+    tracing::info!("Processing deploy job: {:?} to region {}", job.deployment_id, job.region);
 
     // Update deployment status
     DeploymentRepository::update(
@@ -444,6 +444,16 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
     )
     .await
     .map_err(|e| Error::Failed(Arc::new(e.into())))?;
+
+    // Update region status to deploying
+    ServerRegionRepository::update_status(
+        &ctx.db,
+        job.server_id,
+        &job.region,
+        RegionStatus::Deploying,
+    )
+    .await
+    .ok();
 
     // Publish deploying status
     ctx.events
@@ -493,11 +503,31 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
             .await
             .ok();
 
+            // Update region status to running with endpoint URL
+            ServerRegionRepository::update(
+                &ctx.db,
+                job.server_id,
+                &job.region,
+                UpdateServerRegion {
+                    status: Some(RegionStatus::Running),
+                    endpoint_url: Some(endpoint_url.clone()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .ok();
+
+            tracing::info!(
+                "Deploy to region {} succeeded for server {}",
+                job.region,
+                job.server_id
+            );
+
             // Send success email notification
             send_deploy_notification(&ctx, job.server_id, true, None).await;
         }
         Err(e) => {
-            tracing::error!("Deploy failed: {}", e);
+            tracing::error!("Deploy to region {} failed: {}", job.region, e);
             let error_msg = e.to_string();
 
             DeploymentRepository::update(
@@ -530,6 +560,16 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
                 job.server_id,
                 mcp_common::types::ServerStatus::Failed,
                 None,
+            )
+            .await
+            .ok();
+
+            // Update region status to failed
+            ServerRegionRepository::update_status(
+                &ctx.db,
+                job.server_id,
+                &job.region,
+                RegionStatus::Failed,
             )
             .await
             .ok();

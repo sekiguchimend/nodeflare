@@ -27,3 +27,6 @@ pub use notification_settings_repo::NotificationSettingsRepository;
 
 mod deploy_webhook_repo;
 pub use deploy_webhook_repo::DeployWebhookRepository;
+
+mod server_region_repo;
+pub use server_region_repo::{ServerRegionRepository, RegionUsageRepository};

@@ -22,21 +22,21 @@ export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type Region = 'nrt' | 'sin' | 'hkg' | 'syd' | 'iad' | 'sjc' | 'lax' | 'sea' | 'ams' | 'fra' | 'lhr';
 
 // Region metadata for UI
-export const REGIONS: { code: Region; city: string; area: string; flag: string }[] = [
+export const REGIONS: { code: Region; city: string; area: string; countryCode: string }[] = [
   // Asia Pacific
-  { code: 'nrt', city: 'Tokyo', area: 'Asia Pacific', flag: '🇯🇵' },
-  { code: 'sin', city: 'Singapore', area: 'Asia Pacific', flag: '🇸🇬' },
-  { code: 'hkg', city: 'Hong Kong', area: 'Asia Pacific', flag: '🇭🇰' },
-  { code: 'syd', city: 'Sydney', area: 'Asia Pacific', flag: '🇦🇺' },
+  { code: 'nrt', city: 'Tokyo', area: 'Asia Pacific', countryCode: 'jp' },
+  { code: 'sin', city: 'Singapore', area: 'Asia Pacific', countryCode: 'sg' },
+  { code: 'hkg', city: 'Hong Kong', area: 'Asia Pacific', countryCode: 'hk' },
+  { code: 'syd', city: 'Sydney', area: 'Asia Pacific', countryCode: 'au' },
   // Americas
-  { code: 'iad', city: 'Virginia', area: 'Americas', flag: '🇺🇸' },
-  { code: 'sjc', city: 'San Jose', area: 'Americas', flag: '🇺🇸' },
-  { code: 'lax', city: 'Los Angeles', area: 'Americas', flag: '🇺🇸' },
-  { code: 'sea', city: 'Seattle', area: 'Americas', flag: '🇺🇸' },
+  { code: 'iad', city: 'Virginia', area: 'Americas', countryCode: 'us' },
+  { code: 'sjc', city: 'San Jose', area: 'Americas', countryCode: 'us' },
+  { code: 'lax', city: 'Los Angeles', area: 'Americas', countryCode: 'us' },
+  { code: 'sea', city: 'Seattle', area: 'Americas', countryCode: 'us' },
   // Europe
-  { code: 'ams', city: 'Amsterdam', area: 'Europe', flag: '🇳🇱' },
-  { code: 'fra', city: 'Frankfurt', area: 'Europe', flag: '🇩🇪' },
-  { code: 'lhr', city: 'London', area: 'Europe', flag: '🇬🇧' },
+  { code: 'ams', city: 'Amsterdam', area: 'Europe', countryCode: 'nl' },
+  { code: 'fra', city: 'Frankfurt', area: 'Europe', countryCode: 'de' },
+  { code: 'lhr', city: 'London', area: 'Europe', countryCode: 'gb' },
 ];
 
 export interface McpServer {
@@ -221,4 +221,25 @@ export interface AddMemberRequest {
 
 export interface UpdateMemberRequest {
   role: WorkspaceRole;
+}
+
+// Multi-region types
+export type RegionStatus = 'pending' | 'deploying' | 'running' | 'stopped' | 'failed';
+
+export interface ServerRegion {
+  region: Region;
+  is_primary: boolean;
+  status: RegionStatus;
+  endpoint_url: string | null;
+  machine_id: string | null;
+}
+
+export interface AddRegionRequest {
+  region: Region;
+}
+
+export interface RegionCostEstimate {
+  additional_regions: number;
+  price_per_region_jpy: number;
+  estimated_monthly_jpy: number;
 }

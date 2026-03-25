@@ -264,6 +264,7 @@
       "trySuggestion": "スラッグを試す:"
     },
     "regions": {
+      "title": "リージョン",
       "asiaPacific": "アジア太平洋",
       "americas": "アメリカ",
       "europe": "ヨーロッパ",
@@ -277,7 +278,16 @@
       "sea": "シアトル",
       "ams": "アムステルダム",
       "fra": "フランクフルト",
-      "lhr": "ロンドン"
+      "lhr": "ロンドン",
+      "multiRegionTitle": "グローバル配信",
+      "multiRegionDesc": "複数のリージョンにデプロイすることで、世界中のClaudeユーザーに最速で提供できます。Anycastにより、ユーザーは自動的に最寄りのリージョンに接続されます。",
+      "currentCost": "現在の追加リージョン: {count}個 (月額 ¥{cost})",
+      "activeRegions": "有効なリージョン",
+      "primary": "プライマリ",
+      "addRegion": "リージョンを追加",
+      "addRegionDesc": "追加するリージョンを選択してください。追加リージョンは ¥300/月 の従量課金となります。",
+      "priceInfo": "追加リージョン: ¥300/月/サーバー",
+      "removeConfirm": "このリージョンを削除しますか？"
     },
     "detail": {
       "overview": "概要",

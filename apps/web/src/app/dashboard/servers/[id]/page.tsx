@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { McpServer, Deployment, Tool, Secret, Region, REGIONS } from '@/types';
+import { McpServer, Deployment, Tool, Secret, Region, REGIONS, ServerRegion, RegionCostEstimate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,7 +46,7 @@ export default function ServerDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const serverId = params.id as string;
-  const [activeTab, setActiveTab] = useState<'deployments' | 'tools' | 'secrets' | 'webhooks' | 'settings'>('deployments');
+  const [activeTab, setActiveTab] = useState<'deployments' | 'tools' | 'secrets' | 'regions' | 'webhooks' | 'settings'>('deployments');
   const [showDeployInfo, setShowDeployInfo] = useState(false);
 
   const { data: servers, isLoading: isLoadingServers } = useQuery<McpServer[]>({
@@ -72,6 +72,12 @@ export default function ServerDetailPage() {
   const { data: secrets } = useQuery<Secret[]>({
     queryKey: ['servers', serverId, 'secrets'],
     queryFn: () => api.get(`/workspaces/${workspaceId}/servers/${serverId}/secrets`),
+    enabled: !!workspaceId,
+  });
+
+  const { data: serverRegions } = useQuery<ServerRegion[]>({
+    queryKey: ['servers', serverId, 'regions'],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/servers/${serverId}/regions`),
     enabled: !!workspaceId,
   });
 
@@ -170,6 +176,7 @@ export default function ServerDetailPage() {
     { id: 'deployments', label: t('detail.deployments'), count: deployments?.length },
     { id: 'tools', label: t('detail.tools'), count: tools?.length },
     { id: 'secrets', label: t('detail.secrets'), count: secrets?.length },
+    { id: 'regions', label: t('regions.title'), count: serverRegions?.length },
     { id: 'webhooks', label: t('webhooks.title') },
     { id: 'settings', label: t('detail.settings') },
   ] as const;
@@ -287,7 +294,8 @@ export default function ServerDetailPage() {
         </span>
         <span className="px-3 py-1.5 bg-gray-100 rounded-full">
           <span className="text-gray-500">{t('create.region')}</span>
-          <span className="ml-1.5 font-medium text-gray-900">{REGIONS.find(r => r.code === server.region)?.flag} {t(`regions.${server.region}`)} ({server.region.toUpperCase()})</span>
+          <span className={`fi fi-${REGIONS.find(r => r.code === server.region)?.countryCode} mr-1.5`}></span>
+          <span className="font-medium text-gray-900">{t(`regions.${server.region}`)} ({server.region.toUpperCase()})</span>
         </span>
         <div className="relative">
           <button
@@ -377,6 +385,16 @@ export default function ServerDetailPage() {
               secrets={secrets ?? []}
               serverId={serverId}
               workspaceId={workspaceId!}
+              t={t}
+              tCommon={tCommon}
+            />
+          )}
+          {activeTab === 'regions' && (
+            <RegionsTab
+              regions={serverRegions ?? []}
+              serverId={serverId}
+              workspaceId={workspaceId!}
+              currentRegion={server.region}
               t={t}
               tCommon={tCommon}
             />
@@ -812,44 +830,7 @@ function SettingsTab({
         <div className="space-y-2">
           <Label htmlFor="region" className="text-gray-700">{t('create.region')}</Label>
           <p className="text-xs text-gray-500">{t('create.regionHelp')}</p>
-          <div className="relative">
-            <select
-              id="region"
-              value={region}
-              onChange={(e) => setRegion(e.target.value as Region)}
-              className="w-full px-3 py-2 pl-10 rounded-lg border border-gray-300 bg-white text-gray-900 font-medium appearance-none cursor-pointer hover:border-gray-400 focus:border-violet-400 focus:outline-none transition-colors"
-            >
-              <optgroup label={t('regions.asiaPacific')}>
-                {REGIONS.filter(r => r.area === 'Asia Pacific').map(r => (
-                  <option key={r.code} value={r.code}>
-                    {r.flag} {t(`regions.${r.code}`)} ({r.code.toUpperCase()})
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label={t('regions.americas')}>
-                {REGIONS.filter(r => r.area === 'Americas').map(r => (
-                  <option key={r.code} value={r.code}>
-                    {r.flag} {t(`regions.${r.code}`)} ({r.code.toUpperCase()})
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label={t('regions.europe')}>
-                {REGIONS.filter(r => r.area === 'Europe').map(r => (
-                  <option key={r.code} value={r.code}>
-                    {r.flag} {t(`regions.${r.code}`)} ({r.code.toUpperCase()})
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-              {REGIONS.find(r => r.code === region)?.flag}
-            </div>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-              <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          </div>
+          <RegionSelect value={region} onChange={setRegion} t={t} />
         </div>
       </div>
 
@@ -858,6 +839,283 @@ function SettingsTab({
           {isSaving ? tCommon('loading') : t('detail.save')}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function RegionSelect({
+  value,
+  onChange,
+  t
+}: {
+  value: Region;
+  onChange: (region: Region) => void;
+  t: (key: string) => string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedRegion = REGIONS.find(r => r.code === value);
+
+  const groupedRegions = {
+    'Asia Pacific': REGIONS.filter(r => r.area === 'Asia Pacific'),
+    'Americas': REGIONS.filter(r => r.area === 'Americas'),
+    'Europe': REGIONS.filter(r => r.area === 'Europe'),
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 font-medium cursor-pointer hover:border-gray-400 focus:border-violet-400 focus:outline-none transition-colors text-left"
+      >
+        <span className={`fi fi-${selectedRegion?.countryCode} text-lg`}></span>
+        <span className="flex-1 text-sm">{t(`regions.${value}`)} ({value.toUpperCase()})</span>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute z-20 w-full mt-2 py-2 bg-white rounded-xl border border-gray-200 shadow-xl max-h-64 overflow-y-auto">
+            {Object.entries(groupedRegions).map(([area, regions]) => (
+              <div key={area}>
+                <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
+                  {t(`regions.${area === 'Asia Pacific' ? 'asiaPacific' : area === 'Americas' ? 'americas' : 'europe'}`)}
+                </div>
+                {regions.map(region => (
+                  <button
+                    key={region.code}
+                    type="button"
+                    onClick={() => {
+                      onChange(region.code);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 hover:bg-violet-50 transition-colors text-left ${
+                      value === region.code ? 'bg-violet-50 text-violet-700' : 'text-gray-700'
+                    }`}
+                  >
+                    <span className={`fi fi-${region.countryCode} text-lg`}></span>
+                    <span className="flex-1 text-sm">{t(`regions.${region.code}`)} ({region.code.toUpperCase()})</span>
+                    {value === region.code && (
+                      <svg className="w-4 h-4 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RegionsTab({
+  regions,
+  serverId,
+  workspaceId,
+  currentRegion,
+  t,
+  tCommon
+}: {
+  regions: ServerRegion[];
+  serverId: string;
+  workspaceId: string;
+  currentRegion: Region;
+  t: ReturnType<typeof useTranslations>;
+  tCommon: ReturnType<typeof useTranslations>;
+}) {
+  const queryClient = useQueryClient();
+  const [isAdding, setIsAdding] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
+
+  // Get cost estimate
+  const { data: costEstimate } = useQuery<RegionCostEstimate>({
+    queryKey: ['region-cost', workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/billing/region-cost`),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (region: Region) =>
+      api.post(`/workspaces/${workspaceId}/servers/${serverId}/regions`, { region }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servers', serverId, 'regions'] });
+      queryClient.invalidateQueries({ queryKey: ['region-cost', workspaceId] });
+      setIsAdding(false);
+      setSelectedRegion(null);
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (region: string) =>
+      api.delete(`/workspaces/${workspaceId}/servers/${serverId}/regions/${region}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servers', serverId, 'regions'] });
+      queryClient.invalidateQueries({ queryKey: ['region-cost', workspaceId] });
+    },
+  });
+
+  // Filter out regions that are already added
+  const existingRegionCodes = regions.map(r => r.region);
+  const availableRegions = REGIONS.filter(r => !existingRegionCodes.includes(r.code));
+
+  const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
+    running: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+    deploying: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+    stopped: { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-400' },
+    failed: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
+    pending: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Info Banner */}
+      <div className="p-4 rounded-xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold text-violet-900">{t('regions.multiRegionTitle')}</h3>
+            <p className="text-sm text-violet-700 mt-1">{t('regions.multiRegionDesc')}</p>
+            {costEstimate && costEstimate.additional_regions > 0 && (
+              <p className="text-sm text-violet-600 mt-2 font-medium">
+                {t('regions.currentCost', {
+                  count: costEstimate.additional_regions,
+                  cost: costEstimate.estimated_monthly_jpy
+                })}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Current Regions */}
+      <div className="space-y-3">
+        <h3 className="font-medium text-gray-900">{t('regions.activeRegions')}</h3>
+        {regions.map((region) => {
+          const regionInfo = REGIONS.find(r => r.code === region.region);
+          const style = statusColors[region.status] || statusColors.pending;
+          return (
+            <div
+              key={region.region}
+              className="group p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-md transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center">
+                  <span className={`fi fi-${regionInfo?.countryCode} text-2xl`}></span>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">
+                      {t(`regions.${region.region}`)} ({region.region.toUpperCase()})
+                    </span>
+                    {region.is_primary && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+                        {t('regions.primary')}
+                      </span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${style.bg} ${style.text}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+                      {t(`status.${region.status}`)}
+                    </span>
+                  </div>
+                  {region.endpoint_url && (
+                    <p className="text-sm text-gray-500 mt-0.5">{region.endpoint_url}</p>
+                  )}
+                </div>
+                {!region.is_primary && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-400">¥300/月</span>
+                    <button
+                      onClick={() => {
+                        if (confirm(t('regions.removeConfirm'))) {
+                          removeMutation.mutate(region.region);
+                        }
+                      }}
+                      disabled={removeMutation.isPending}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add Region */}
+      {availableRegions.length > 0 && (
+        <div>
+          {isAdding ? (
+            <div className="p-6 rounded-2xl bg-gray-50 border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900">{t('regions.addRegion')}</h3>
+                <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">{t('regions.addRegionDesc')}</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {availableRegions.map((region) => (
+                    <button
+                      key={region.code}
+                      onClick={() => setSelectedRegion(region.code)}
+                      className={`flex items-center gap-2 p-3 rounded-lg border transition-all text-left ${
+                        selectedRegion === region.code
+                          ? 'border-violet-300 bg-violet-50 ring-2 ring-violet-100'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <span className={`fi fi-${region.countryCode} text-lg`}></span>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{region.city}</div>
+                        <div className="text-xs text-gray-500">{region.code.toUpperCase()}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-600">
+                    {t('regions.priceInfo')}
+                  </div>
+                  <Button
+                    onClick={() => selectedRegion && addMutation.mutate(selectedRegion)}
+                    disabled={!selectedRegion || addMutation.isPending}
+                    className="bg-violet-600 hover:bg-violet-700"
+                  >
+                    {addMutation.isPending ? tCommon('loading') : t('regions.addRegion')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAdding(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-300 bg-violet-50 hover:bg-violet-100 text-violet-600 transition-all"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="text-sm font-medium">{t('regions.addRegion')}</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

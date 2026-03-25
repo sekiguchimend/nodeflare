@@ -11,6 +11,77 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SiNodedotjs, SiPython, SiGo, SiRust, SiDocker } from 'react-icons/si';
 
+function RegionSelect({
+  value,
+  onChange,
+  t
+}: {
+  value: Region;
+  onChange: (region: Region) => void;
+  t: (key: string) => string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedRegion = REGIONS.find(r => r.code === value);
+
+  const groupedRegions = {
+    'Asia Pacific': REGIONS.filter(r => r.area === 'Asia Pacific'),
+    'Americas': REGIONS.filter(r => r.area === 'Americas'),
+    'Europe': REGIONS.filter(r => r.area === 'Europe'),
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-100 bg-white text-gray-900 font-medium cursor-pointer hover:border-gray-200 focus:border-violet-400 focus:outline-none transition-colors text-left"
+      >
+        <span className={`fi fi-${selectedRegion?.countryCode} text-xl`}></span>
+        <span className="flex-1">{t(`regions.${value}`)} ({value.toUpperCase()})</span>
+        <svg className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute z-20 w-full mt-2 py-2 bg-white rounded-xl border border-gray-200 shadow-xl max-h-80 overflow-y-auto">
+            {Object.entries(groupedRegions).map(([area, regions]) => (
+              <div key={area}>
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
+                  {t(`regions.${area === 'Asia Pacific' ? 'asiaPacific' : area === 'Americas' ? 'americas' : 'europe'}`)}
+                </div>
+                {regions.map(region => (
+                  <button
+                    key={region.code}
+                    type="button"
+                    onClick={() => {
+                      onChange(region.code);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-violet-50 transition-colors text-left ${
+                      value === region.code ? 'bg-violet-50 text-violet-700' : 'text-gray-700'
+                    }`}
+                  >
+                    <span className={`fi fi-${region.countryCode} text-xl`}></span>
+                    <span className="flex-1">{t(`regions.${region.code}`)} ({region.code.toUpperCase()})</span>
+                    {value === region.code && (
+                      <svg className="w-5 h-5 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function NewServerPage() {
   const t = useTranslations('servers');
   const tCommon = useTranslations('common');
@@ -352,43 +423,11 @@ export default function NewServerPage() {
           <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('create.region')}</h2>
           <p className="text-sm text-gray-500 mb-4">{t('create.regionHelp')}</p>
 
-          <div className="relative">
-            <select
-              value={formData.region}
-              onChange={(e) => setFormData(prev => ({ ...prev, region: e.target.value as Region }))}
-              className="w-full px-4 py-3 pl-12 rounded-xl border-2 border-gray-100 bg-white text-gray-900 font-medium appearance-none cursor-pointer hover:border-gray-200 focus:border-violet-400 focus:outline-none transition-colors"
-            >
-              <optgroup label={t('regions.asiaPacific')}>
-                {REGIONS.filter(r => r.area === 'Asia Pacific').map(region => (
-                  <option key={region.code} value={region.code}>
-                    {region.flag} {t(`regions.${region.code}`)} ({region.code.toUpperCase()})
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label={t('regions.americas')}>
-                {REGIONS.filter(r => r.area === 'Americas').map(region => (
-                  <option key={region.code} value={region.code}>
-                    {region.flag} {t(`regions.${region.code}`)} ({region.code.toUpperCase()})
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label={t('regions.europe')}>
-                {REGIONS.filter(r => r.area === 'Europe').map(region => (
-                  <option key={region.code} value={region.code}>
-                    {region.flag} {t(`regions.${region.code}`)} ({region.code.toUpperCase()})
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 pointer-events-none text-lg">
-              {REGIONS.find(r => r.code === formData.region)?.flag}
-            </div>
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-              <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          </div>
+          <RegionSelect
+            value={formData.region || 'nrt'}
+            onChange={(region) => setFormData(prev => ({ ...prev, region }))}
+            t={t}
+          />
         </section>
 
         {/* Error Message */}

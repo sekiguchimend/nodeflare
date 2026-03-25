@@ -17,6 +17,7 @@ pub mod announcements;
 pub mod user_preferences;
 pub mod notifications;
 pub mod webhooks;
+pub mod regions;
 
 use axum::{routing::{get, post, patch, delete}, Router};
 use std::sync::Arc;
@@ -138,6 +139,23 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route(
             "/workspaces/:workspace_id/servers/:server_id/webhooks/:webhook_id/test",
             post(webhooks::test),
+        )
+        // Multi-region
+        .route(
+            "/workspaces/:workspace_id/servers/:server_id/regions",
+            get(regions::list).post(regions::add),
+        )
+        .route(
+            "/workspaces/:workspace_id/servers/:server_id/regions/:region_code",
+            delete(regions::remove),
+        )
+        .route(
+            "/workspaces/:workspace_id/servers/:server_id/regions/deploy-all",
+            post(regions::deploy_all_regions),
+        )
+        .route(
+            "/workspaces/:workspace_id/billing/region-cost",
+            get(regions::estimate_cost),
         )
         // Billing
         .route("/billing/plans", get(billing::list_plans))
