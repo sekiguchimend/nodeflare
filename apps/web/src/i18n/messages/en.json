@@ -287,7 +287,10 @@
       "addRegion": "Add Region",
       "addRegionDesc": "Select a region to add. Additional regions are billed at ¥300/month per server.",
       "priceInfo": "Additional region: ¥300/month/server",
-      "removeConfirm": "Remove this region?"
+      "removeConfirm": "Remove this region?",
+      "confirmTitle": "Add Region",
+      "confirmDesc": "Add {region} region? This will add ¥300/month to your billing.",
+      "confirmAdd": "Add Region"
     },
     "detail": {
       "overview": "Overview",

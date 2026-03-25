@@ -287,7 +287,10 @@
       "addRegion": "リージョンを追加",
       "addRegionDesc": "追加するリージョンを選択してください。追加リージョンは ¥300/月 の従量課金となります。",
       "priceInfo": "追加リージョン: ¥300/月/サーバー",
-      "removeConfirm": "このリージョンを削除しますか？"
+      "removeConfirm": "このリージョンを削除しますか？",
+      "confirmTitle": "リージョンを追加",
+      "confirmDesc": "{region}リージョンを追加しますか？月額¥300が課金されます。",
+      "confirmAdd": "追加する"
     },
     "detail": {
       "overview": "概要",

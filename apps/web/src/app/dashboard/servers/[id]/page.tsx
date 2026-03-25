@@ -942,8 +942,8 @@ function RegionsTab({
 
   const addMutation = useMutation({
     mutationFn: (region: Region) =>
-      api.post(`/workspaces/${workspaceId}/servers/${serverId}/regions`, { region }),
-    onSuccess: (data: { type: string; checkout_url?: string; region?: unknown }) => {
+      api.post<{ type: string; checkout_url?: string; region?: unknown }>(`/workspaces/${workspaceId}/servers/${serverId}/regions`, { region }),
+    onSuccess: (data) => {
       if (data.type === 'checkout_required' && data.checkout_url) {
         // First region - redirect to Stripe checkout for subscription
         window.location.href = data.checkout_url;
@@ -1112,7 +1112,7 @@ function RegionsTab({
                       <AlertDialogHeader>
                         <AlertDialogTitle>{t('regions.confirmTitle')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          {t('regions.confirmDesc', { region: selectedRegion?.toUpperCase() })}
+                          {t('regions.confirmDesc', { region: selectedRegion?.toUpperCase() || '' })}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
