@@ -130,6 +130,29 @@ pub async fn add(
     let new_member = WorkspaceRepository::add_member(&state.db, workspace_id, user.id, role)
         .await?;
 
+    // Send invitation email (non-blocking)
+    if let Some(ref email_service) = state.email {
+        let inviter = UserRepository::find_by_id(&state.db, auth_user.user_id)
+            .await
+            .ok()
+            .flatten();
+        let inviter_name = inviter.map(|u| u.name).unwrap_or_else(|| "Someone".to_string());
+        let workspace_name = workspace.name.clone();
+        let user_email = user.email.clone();
+        let email_service = email_service.clone();
+        let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://mcpcloud.dev".to_string());
+        let invite_url = format!("{}/dashboard?workspace={}", app_url, workspace_id);
+
+        tokio::spawn(async move {
+            if let Err(e) = email_service
+                .send_team_invite(&user_email, &inviter_name, &workspace_name, &invite_url)
+                .await
+            {
+                tracing::error!("Failed to send team invite email: {}", e);
+            }
+        });
+    }
+
     Ok(Json(MemberResponse {
         user_id: user.id,
         email: user.email,

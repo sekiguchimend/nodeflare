@@ -72,7 +72,7 @@ pub async fn deploy(config: &AppConfig, job: &DeployJob) -> Result<String> {
     // Create machine
     let request = CreateMachineRequest {
         name: format!("{}-machine", app_name),
-        region: config.flyio.region.clone(),
+        region: job.region.clone(),
         config: MachineConfig {
             image: job.image_url.clone(),
             env,

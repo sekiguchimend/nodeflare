@@ -256,10 +256,28 @@
       "visibilityPublic": "公開",
       "visibilityPrivate": "非公開",
       "visibilityTeam": "チーム",
+      "region": "リージョン",
+      "regionHelp": "サーバーをデプロイするリージョンを選択してください",
       "submit": "サーバーを作成",
       "creating": "作成中...",
       "failed": "サーバーの作成に失敗しました",
       "trySuggestion": "スラッグを試す:"
+    },
+    "regions": {
+      "asiaPacific": "アジア太平洋",
+      "americas": "アメリカ",
+      "europe": "ヨーロッパ",
+      "nrt": "東京",
+      "sin": "シンガポール",
+      "hkg": "香港",
+      "syd": "シドニー",
+      "iad": "バージニア",
+      "sjc": "サンノゼ",
+      "lax": "ロサンゼルス",
+      "sea": "シアトル",
+      "ams": "アムステルダム",
+      "fra": "フランクフルト",
+      "lhr": "ロンドン"
     },
     "detail": {
       "overview": "概要",

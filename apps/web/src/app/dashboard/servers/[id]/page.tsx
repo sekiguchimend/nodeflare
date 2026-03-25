@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { McpServer, Deployment, Tool, Secret } from '@/types';
+import { McpServer, Deployment, Tool, Secret, Region, REGIONS } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -272,7 +272,7 @@ export default function ServerDetailPage() {
       )}
 
       {/* Info Pills */}
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-sm flex-wrap">
         <span className="px-3 py-1.5 bg-gray-100 rounded-full">
           <span className="text-gray-500">{t('detail.runtime')}</span>
           <span className="ml-1.5 font-medium text-gray-900 capitalize">{server.runtime}</span>
@@ -284,6 +284,10 @@ export default function ServerDetailPage() {
         <span className="px-3 py-1.5 bg-gray-100 rounded-full">
           <span className="text-gray-500">{t('create.branch')}</span>
           <span className="ml-1.5 font-medium text-gray-900 font-mono">{server.github_branch}</span>
+        </span>
+        <span className="px-3 py-1.5 bg-gray-100 rounded-full">
+          <span className="text-gray-500">{t('create.region')}</span>
+          <span className="ml-1.5 font-medium text-gray-900">{REGIONS.find(r => r.code === server.region)?.flag} {t(`regions.${server.region}`)} ({server.region.toUpperCase()})</span>
         </span>
         <div className="relative">
           <button
@@ -730,6 +734,7 @@ function SettingsTab({
   const [description, setDescription] = useState(server.description || '');
   const [visibility, setVisibility] = useState(server.visibility);
   const [branch, setBranch] = useState(server.github_branch);
+  const [region, setRegion] = useState<Region>(server.region);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -740,6 +745,7 @@ function SettingsTab({
         description: description || null,
         visibility,
         github_branch: branch,
+        region,
       });
       queryClient.invalidateQueries({ queryKey: ['servers'] });
     } catch (error) {
@@ -800,6 +806,49 @@ function SettingsTab({
                 {t(`create.visibility${v.charAt(0).toUpperCase() + v.slice(1)}`)}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="region" className="text-gray-700">{t('create.region')}</Label>
+          <p className="text-xs text-gray-500">{t('create.regionHelp')}</p>
+          <div className="relative">
+            <select
+              id="region"
+              value={region}
+              onChange={(e) => setRegion(e.target.value as Region)}
+              className="w-full px-3 py-2 pl-10 rounded-lg border border-gray-300 bg-white text-gray-900 font-medium appearance-none cursor-pointer hover:border-gray-400 focus:border-violet-400 focus:outline-none transition-colors"
+            >
+              <optgroup label={t('regions.asiaPacific')}>
+                {REGIONS.filter(r => r.area === 'Asia Pacific').map(r => (
+                  <option key={r.code} value={r.code}>
+                    {r.flag} {t(`regions.${r.code}`)} ({r.code.toUpperCase()})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label={t('regions.americas')}>
+                {REGIONS.filter(r => r.area === 'Americas').map(r => (
+                  <option key={r.code} value={r.code}>
+                    {r.flag} {t(`regions.${r.code}`)} ({r.code.toUpperCase()})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label={t('regions.europe')}>
+                {REGIONS.filter(r => r.area === 'Europe').map(r => (
+                  <option key={r.code} value={r.code}>
+                    {r.flag} {t(`regions.${r.code}`)} ({r.code.toUpperCase()})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+              {REGIONS.find(r => r.code === region)?.flag}
+            </div>
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+              <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>

@@ -3,7 +3,8 @@ use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 use mcp_auth::CryptoService;
 use mcp_common::{types::LogStream, AppConfig, EventPublisher};
-use mcp_db::{DeploymentRepository, SecretRepository, ServerRepository, UpdateDeployment};
+use mcp_db::{DeploymentRepository, NotificationSettingsRepository, SecretRepository, ServerRepository, UpdateDeployment, UserRepository, WorkspaceRepository};
+use mcp_email::EmailService;
 use mcp_github::GitHubApp;
 use mcp_queue::{BuildJob, DeployJob, JobQueue};
 use std::sync::Arc;
@@ -11,6 +12,56 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod docker;
 mod flyio;
+
+/// Send deployment notification email to workspace owner
+async fn send_deploy_notification(
+    ctx: &BuilderContext,
+    server_id: uuid::Uuid,
+    success: bool,
+    error_message: Option<&str>,
+) {
+    let email_service = match &ctx.email {
+        Some(s) => s,
+        None => return,
+    };
+
+    // Get server -> workspace -> owner user
+    let server = match ServerRepository::find_by_id(&ctx.db, server_id).await {
+        Ok(Some(s)) => s,
+        _ => return,
+    };
+
+    let workspace = match WorkspaceRepository::find_by_id(&ctx.db, server.workspace_id).await {
+        Ok(Some(w)) => w,
+        _ => return,
+    };
+
+    let owner = match UserRepository::find_by_id(&ctx.db, workspace.owner_id).await {
+        Ok(Some(u)) => u,
+        _ => return,
+    };
+
+    // Check notification settings
+    let settings = match NotificationSettingsRepository::get_or_create(&ctx.db, owner.id).await {
+        Ok(s) => s,
+        _ => return,
+    };
+
+    let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://mcpcloud.dev".to_string());
+
+    if success && settings.email_deploy_success {
+        let deploy_url = format!("{}/dashboard/servers/{}", app_url, server_id);
+        if let Err(e) = email_service.send_deploy_success(&owner.email, &server.name, &deploy_url).await {
+            tracing::error!("Failed to send deploy success email: {}", e);
+        }
+    } else if !success && settings.email_deploy_failure {
+        let logs_url = format!("{}/dashboard/servers/{}/logs", app_url, server_id);
+        let error_msg = error_message.unwrap_or("Unknown error");
+        if let Err(e) = email_service.send_deploy_failure(&owner.email, &server.name, error_msg, &logs_url).await {
+            tracing::error!("Failed to send deploy failure email: {}", e);
+        }
+    }
+}
 
 struct BuilderContext {
     config: AppConfig,
@@ -20,6 +71,7 @@ struct BuilderContext {
     crypto: CryptoService,
     github: Option<GitHubApp>,
     events: EventPublisher,
+    email: Option<EmailService>,
 }
 
 #[tokio::main]
@@ -56,6 +108,18 @@ async fn main() -> Result<()> {
     // Create event publisher for real-time WebSocket updates
     let events = EventPublisher::new(&config.redis.url);
 
+    // Create email service (optional)
+    let email = match EmailService::from_env() {
+        Ok(service) => {
+            tracing::info!("Resend email service initialized");
+            Some(service)
+        }
+        Err(e) => {
+            tracing::warn!("Email service not configured: {} - email notifications disabled", e);
+            None
+        }
+    };
+
     let context = Arc::new(BuilderContext {
         config: config.clone(),
         db: db_pool,
@@ -64,6 +128,7 @@ async fn main() -> Result<()> {
         crypto,
         github,
         events,
+        email,
     });
 
     // Connect to Redis for job queue
@@ -259,6 +324,7 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
                         server_id: job.server_id,
                         image_url: full_image_url,
                         secrets,
+                        region: job.region.clone(),
                     };
 
                     if let Err(e) = ctx.job_queue.push_deploy_job(deploy_job).await {
@@ -426,6 +492,9 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
             )
             .await
             .ok();
+
+            // Send success email notification
+            send_deploy_notification(&ctx, job.server_id, true, None).await;
         }
         Err(e) => {
             tracing::error!("Deploy failed: {}", e);
@@ -450,7 +519,7 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
                     job.deployment_id,
                     job.server_id,
                     mcp_common::types::DeploymentStatus::Failed,
-                    Some(error_msg),
+                    Some(error_msg.clone()),
                     Some(100),
                 )
                 .await
@@ -464,6 +533,9 @@ async fn handle_deploy_job(job: DeployJob, ctx: Data<Arc<BuilderContext>>) -> Re
             )
             .await
             .ok();
+
+            // Send failure email notification
+            send_deploy_notification(&ctx, job.server_id, false, Some(&error_msg)).await;
         }
     }
 

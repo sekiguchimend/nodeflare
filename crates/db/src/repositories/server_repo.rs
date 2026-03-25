@@ -14,7 +14,7 @@ impl ServerRepository {
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
                    github_installation_id, runtime, visibility, status, endpoint_url,
-                   rate_limit_per_minute, created_at, updated_at
+                   rate_limit_per_minute, region, created_at, updated_at
             FROM mcp_servers
             WHERE id = $1
             "#,
@@ -35,7 +35,7 @@ impl ServerRepository {
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
                    github_installation_id, runtime, visibility, status, endpoint_url,
-                   rate_limit_per_minute, created_at, updated_at
+                   rate_limit_per_minute, region, created_at, updated_at
             FROM mcp_servers
             WHERE workspace_id = $1 AND slug = $2
             "#,
@@ -54,7 +54,7 @@ impl ServerRepository {
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
                    github_installation_id, runtime, visibility, status, endpoint_url,
-                   rate_limit_per_minute, created_at, updated_at
+                   rate_limit_per_minute, region, created_at, updated_at
             FROM mcp_servers
             WHERE slug = $1 AND visibility = 'public' AND status = 'running'
             "#,
@@ -76,7 +76,7 @@ impl ServerRepository {
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
                    github_installation_id, runtime, visibility, status, endpoint_url,
-                   rate_limit_per_minute, created_at, updated_at
+                   rate_limit_per_minute, region, created_at, updated_at
             FROM mcp_servers
             WHERE workspace_id = $1
             ORDER BY created_at DESC
@@ -117,12 +117,12 @@ impl ServerRepository {
             r#"
             INSERT INTO mcp_servers (
                 workspace_id, name, slug, description, github_repo, github_branch,
-                github_installation_id, runtime, visibility
+                github_installation_id, runtime, visibility, region
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id, workspace_id, name, slug, description, github_repo, github_branch,
                       github_installation_id, runtime, visibility, status, endpoint_url,
-                      rate_limit_per_minute, created_at, updated_at
+                      rate_limit_per_minute, region, created_at, updated_at
             "#,
         )
         .bind(data.workspace_id)
@@ -134,6 +134,7 @@ impl ServerRepository {
         .bind(data.github_installation_id)
         .bind(runtime_str)
         .bind(visibility_str)
+        .bind(&data.region)
         .fetch_one(pool)
         .await?;
 
@@ -166,11 +167,12 @@ impl ServerRepository {
                 visibility = COALESCE($5, visibility),
                 status = COALESCE($6, status),
                 endpoint_url = COALESCE($7, endpoint_url),
+                region = COALESCE($8, region),
                 updated_at = NOW()
             WHERE id = $1
             RETURNING id, workspace_id, name, slug, description, github_repo, github_branch,
                       github_installation_id, runtime, visibility, status, endpoint_url,
-                      rate_limit_per_minute, created_at, updated_at
+                      rate_limit_per_minute, region, created_at, updated_at
             "#,
         )
         .bind(id)
@@ -180,6 +182,7 @@ impl ServerRepository {
         .bind(visibility_str)
         .bind(status_str)
         .bind(&data.endpoint_url)
+        .bind(&data.region)
         .fetch_one(pool)
         .await?;
 
@@ -234,7 +237,7 @@ impl ServerRepository {
                 s.id, s.workspace_id, s.name, s.slug, s.description,
                 s.github_repo, s.github_branch, s.github_installation_id,
                 s.runtime, s.visibility, s.status, s.endpoint_url,
-                s.rate_limit_per_minute, s.created_at, s.updated_at
+                s.rate_limit_per_minute, s.region, s.created_at, s.updated_at
             FROM mcp_servers s
             INNER JOIN workspace_members wm ON s.workspace_id = wm.workspace_id
             WHERE wm.user_id = $1

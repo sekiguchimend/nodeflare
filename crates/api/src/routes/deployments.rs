@@ -212,6 +212,7 @@ pub async fn rollback(
         commit_sha: target_deployment.commit_sha,
         runtime: server.runtime,
         github_installation_id: server.github_installation_id,
+        region: server.region,
     };
 
     state

@@ -256,10 +256,28 @@
       "visibilityPublic": "Public",
       "visibilityPrivate": "Private",
       "visibilityTeam": "Team",
+      "region": "Region",
+      "regionHelp": "Select the region to deploy your server",
       "submit": "Create Server",
       "creating": "Creating...",
       "failed": "Failed to create server",
       "trySuggestion": "Try this slug:"
+    },
+    "regions": {
+      "asiaPacific": "Asia Pacific",
+      "americas": "Americas",
+      "europe": "Europe",
+      "nrt": "Tokyo",
+      "sin": "Singapore",
+      "hkg": "Hong Kong",
+      "syd": "Sydney",
+      "iad": "Virginia",
+      "sjc": "San Jose",
+      "lax": "Los Angeles",
+      "sea": "Seattle",
+      "ams": "Amsterdam",
+      "fra": "Frankfurt",
+      "lhr": "London"
     },
     "detail": {
       "overview": "Overview",

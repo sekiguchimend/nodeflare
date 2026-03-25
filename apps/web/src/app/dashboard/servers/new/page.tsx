@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
-import { CreateServerRequest, McpServer, Runtime, Visibility, GitHubRepo } from '@/types';
+import { CreateServerRequest, McpServer, Runtime, Visibility, GitHubRepo, Region, REGIONS } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +52,7 @@ export default function NewServerPage() {
     github_branch: 'main',
     runtime: 'node',
     visibility: 'private',
+    region: 'nrt',
   });
 
   const generateSlug = (name: string) => {
@@ -343,6 +344,50 @@ export default function NewServerPage() {
                 <span className="text-sm font-medium">{vis.label}</span>
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* Region Selection */}
+        <section>
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">{t('create.region')}</h2>
+          <p className="text-sm text-gray-500 mb-4">{t('create.regionHelp')}</p>
+
+          <div className="relative">
+            <select
+              value={formData.region}
+              onChange={(e) => setFormData(prev => ({ ...prev, region: e.target.value as Region }))}
+              className="w-full px-4 py-3 pl-12 rounded-xl border-2 border-gray-100 bg-white text-gray-900 font-medium appearance-none cursor-pointer hover:border-gray-200 focus:border-violet-400 focus:outline-none transition-colors"
+            >
+              <optgroup label={t('regions.asiaPacific')}>
+                {REGIONS.filter(r => r.area === 'Asia Pacific').map(region => (
+                  <option key={region.code} value={region.code}>
+                    {region.flag} {t(`regions.${region.code}`)} ({region.code.toUpperCase()})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label={t('regions.americas')}>
+                {REGIONS.filter(r => r.area === 'Americas').map(region => (
+                  <option key={region.code} value={region.code}>
+                    {region.flag} {t(`regions.${region.code}`)} ({region.code.toUpperCase()})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label={t('regions.europe')}>
+                {REGIONS.filter(r => r.area === 'Europe').map(region => (
+                  <option key={region.code} value={region.code}>
+                    {region.flag} {t(`regions.${region.code}`)} ({region.code.toUpperCase()})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 pointer-events-none text-lg">
+              {REGIONS.find(r => r.code === formData.region)?.flag}
+            </div>
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
+              <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
           </div>
         </section>
 

@@ -5,9 +5,119 @@ use axum::{
     response::{IntoResponse, Response},
     body::Body,
 };
+use fred::interfaces::{KeysInterface, LuaInterface};
 use std::{net::SocketAddr, sync::Arc};
 
 use crate::state::AppState;
+
+/// Brute force protection configuration
+#[derive(Clone)]
+pub struct BruteForceConfig {
+    /// Maximum failed attempts before lockout
+    pub max_attempts: i64,
+    /// Lockout duration in seconds
+    pub lockout_secs: u64,
+    /// Window for counting attempts in seconds
+    pub attempt_window_secs: u64,
+}
+
+impl Default for BruteForceConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: std::env::var("BRUTE_FORCE_MAX_ATTEMPTS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(5),
+            lockout_secs: std::env::var("BRUTE_FORCE_LOCKOUT_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(900), // 15 minutes
+            attempt_window_secs: std::env::var("BRUTE_FORCE_WINDOW_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(300), // 5 minutes
+        }
+    }
+}
+
+/// Check if an IP is currently locked out due to brute force protection
+pub async fn is_ip_locked_out(
+    redis: &fred::prelude::RedisClient,
+    ip: &str,
+    key_prefix: &str,
+) -> bool {
+    let lockout_key = format!("{}lockout:{}", key_prefix, ip);
+    let exists: Result<bool, _> = redis.exists(&lockout_key).await;
+    exists.unwrap_or(false)
+}
+
+/// Record a failed authentication attempt and potentially lock out the IP
+pub async fn record_failed_attempt(
+    redis: &fred::prelude::RedisClient,
+    ip: &str,
+    key_prefix: &str,
+) {
+    let config = BruteForceConfig::default();
+    let attempts_key = format!("{}attempts:{}", key_prefix, ip);
+    let lockout_key = format!("{}lockout:{}", key_prefix, ip);
+
+    // Increment failed attempts using Lua script for atomicity
+    let lua_script = r#"
+        local attempts = redis.call('INCR', KEYS[1])
+        if attempts == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        if attempts >= tonumber(ARGV[2]) then
+            redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])
+            redis.call('DEL', KEYS[1])
+        end
+        return attempts
+    "#;
+
+    let result: Result<i64, _> = LuaInterface::eval(
+        redis,
+        lua_script,
+        vec![attempts_key, lockout_key],
+        vec![
+            config.attempt_window_secs.to_string(),
+            config.max_attempts.to_string(),
+            config.lockout_secs.to_string(),
+        ],
+    )
+    .await;
+
+    if let Ok(attempts) = result {
+        if attempts >= config.max_attempts {
+            tracing::warn!(
+                "IP {} locked out after {} failed attempts (lockout: {}s)",
+                ip,
+                attempts,
+                config.lockout_secs
+            );
+        }
+    }
+}
+
+/// Clear failed attempts after successful authentication
+pub async fn clear_failed_attempts(
+    redis: &fred::prelude::RedisClient,
+    ip: &str,
+    key_prefix: &str,
+) {
+    let attempts_key = format!("{}attempts:{}", key_prefix, ip);
+    let _ = KeysInterface::del::<(), _>(redis, &attempts_key).await;
+}
+
+/// Get remaining lockout time in seconds
+pub async fn get_lockout_remaining(
+    redis: &fred::prelude::RedisClient,
+    ip: &str,
+    key_prefix: &str,
+) -> Option<i64> {
+    let lockout_key = format!("{}lockout:{}", key_prefix, ip);
+    let ttl: Result<i64, _> = redis.ttl(&lockout_key).await;
+    ttl.ok().filter(|&t| t > 0)
+}
 
 /// Rate limit configuration
 #[derive(Clone)]

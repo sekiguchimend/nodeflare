@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{ConnectInfo, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Redirect, Response},
     Json,
@@ -9,9 +9,13 @@ use mcp_auth::GitHubOAuth;
 use mcp_common::types::{AuthResponse, RefreshTokenRequest, UserResponse};
 use mcp_db::{UserRepository, WorkspaceRepository};
 use serde::Deserialize;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::extractors::AuthUser;
+use crate::middleware::rate_limit::{
+    clear_failed_attempts, get_lockout_remaining, is_ip_locked_out, record_failed_attempt,
+};
 use crate::state::AppState;
 
 const CSRF_TOKEN_PREFIX: &str = "csrf:oauth:";
@@ -65,15 +69,39 @@ pub async fn github_login(State(state): State<Arc<AppState>>) -> impl IntoRespon
     }
 }
 
+const AUTH_BRUTE_FORCE_PREFIX: &str = "bf:auth:";
+
 pub async fn github_callback(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Query(query): Query<GitHubCallbackQuery>,
 ) -> Result<Response, (StatusCode, String)> {
+    let ip = addr.ip().to_string();
+
+    // Check if IP is locked out due to brute force
+    if is_ip_locked_out(&state.redis, &ip, AUTH_BRUTE_FORCE_PREFIX).await {
+        let remaining = get_lockout_remaining(&state.redis, &ip, AUTH_BRUTE_FORCE_PREFIX)
+            .await
+            .unwrap_or(0);
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            format!(
+                "Too many failed attempts. Please try again in {} seconds.",
+                remaining
+            ),
+        ));
+    }
+
     // Validate CSRF token (state parameter)
-    let csrf_state = query.state.as_ref().ok_or((
-        StatusCode::BAD_REQUEST,
-        "Missing state parameter".to_string(),
-    ))?;
+    let csrf_state = query.state.as_ref().ok_or_else(|| {
+        // Record failed attempt for missing state
+        let redis = state.redis.clone();
+        let ip_clone = ip.clone();
+        tokio::spawn(async move {
+            record_failed_attempt(&redis, &ip_clone, AUTH_BRUTE_FORCE_PREFIX).await;
+        });
+        (StatusCode::BAD_REQUEST, "Missing state parameter".to_string())
+    })?;
 
     let csrf_key = format!("{}{}", CSRF_TOKEN_PREFIX, csrf_state);
     let csrf_exists: Option<String> = state
@@ -83,6 +111,8 @@ pub async fn github_callback(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if csrf_exists.is_none() {
+        // Record failed attempt for invalid/expired state
+        record_failed_attempt(&state.redis, &ip, AUTH_BRUTE_FORCE_PREFIX).await;
         return Err((
             StatusCode::BAD_REQUEST,
             "Invalid or expired state parameter".to_string(),
@@ -204,6 +234,9 @@ pub async fn github_callback(
         if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
     );
 
+    // Clear failed attempts on successful login
+    clear_failed_attempts(&state.redis, &ip, AUTH_BRUTE_FORCE_PREFIX).await;
+
     let frontend_callback_url = format!("{}/auth/callback", state.config.server.frontend_url);
 
     let mut headers = HeaderMap::new();
@@ -236,10 +269,29 @@ fn extract_domain(url: &str) -> String {
         .to_string()
 }
 
+const REFRESH_BRUTE_FORCE_PREFIX: &str = "bf:refresh:";
+
 pub async fn refresh_token(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(body): Json<RefreshTokenRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, String)> {
+    let ip = addr.ip().to_string();
+
+    // Check if IP is locked out due to brute force
+    if is_ip_locked_out(&state.redis, &ip, REFRESH_BRUTE_FORCE_PREFIX).await {
+        let remaining = get_lockout_remaining(&state.redis, &ip, REFRESH_BRUTE_FORCE_PREFIX)
+            .await
+            .unwrap_or(0);
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            format!(
+                "Too many failed attempts. Please try again in {} seconds.",
+                remaining
+            ),
+        ));
+    }
+
     let token_hash = mcp_auth::jwt::hash_token(&body.refresh_token);
 
     // Find refresh token
@@ -251,7 +303,15 @@ pub async fn refresh_token(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let (user_id, expires_at) = record.ok_or((StatusCode::UNAUTHORIZED, "Invalid refresh token".to_string()))?;
+    let (user_id, expires_at) = record.ok_or_else(|| {
+        // Record failed attempt for invalid token
+        let redis = state.redis.clone();
+        let ip_clone = ip.clone();
+        tokio::spawn(async move {
+            record_failed_attempt(&redis, &ip_clone, REFRESH_BRUTE_FORCE_PREFIX).await;
+        });
+        (StatusCode::UNAUTHORIZED, "Invalid refresh token".to_string())
+    })?;
 
     // Check expiration
     if expires_at < chrono::Utc::now() {
@@ -261,8 +321,13 @@ pub async fn refresh_token(
             .execute(&state.db)
             .await
             .ok();
+        // Record failed attempt for expired token
+        record_failed_attempt(&state.redis, &ip, REFRESH_BRUTE_FORCE_PREFIX).await;
         return Err((StatusCode::UNAUTHORIZED, "Refresh token expired".to_string()));
     }
+
+    // Clear failed attempts on successful token validation
+    clear_failed_attempts(&state.redis, &ip, REFRESH_BRUTE_FORCE_PREFIX).await;
 
     // Get user
     let user = UserRepository::find_by_id(&state.db, user_id)

@@ -19,6 +19,25 @@ export type Visibility = 'public' | 'private' | 'team';
 export type ServerStatus = 'pending' | 'building' | 'deploying' | 'running' | 'stopped' | 'failed' | 'inactive';
 export type DeploymentStatus = 'pending' | 'building' | 'deploying' | 'success' | 'failed';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
+export type Region = 'nrt' | 'sin' | 'hkg' | 'syd' | 'iad' | 'sjc' | 'lax' | 'sea' | 'ams' | 'fra' | 'lhr';
+
+// Region metadata for UI
+export const REGIONS: { code: Region; city: string; area: string; flag: string }[] = [
+  // Asia Pacific
+  { code: 'nrt', city: 'Tokyo', area: 'Asia Pacific', flag: '🇯🇵' },
+  { code: 'sin', city: 'Singapore', area: 'Asia Pacific', flag: '🇸🇬' },
+  { code: 'hkg', city: 'Hong Kong', area: 'Asia Pacific', flag: '🇭🇰' },
+  { code: 'syd', city: 'Sydney', area: 'Asia Pacific', flag: '🇦🇺' },
+  // Americas
+  { code: 'iad', city: 'Virginia', area: 'Americas', flag: '🇺🇸' },
+  { code: 'sjc', city: 'San Jose', area: 'Americas', flag: '🇺🇸' },
+  { code: 'lax', city: 'Los Angeles', area: 'Americas', flag: '🇺🇸' },
+  { code: 'sea', city: 'Seattle', area: 'Americas', flag: '🇺🇸' },
+  // Europe
+  { code: 'ams', city: 'Amsterdam', area: 'Europe', flag: '🇳🇱' },
+  { code: 'fra', city: 'Frankfurt', area: 'Europe', flag: '🇩🇪' },
+  { code: 'lhr', city: 'London', area: 'Europe', flag: '🇬🇧' },
+];
 
 export interface McpServer {
   id: string;
@@ -32,6 +51,7 @@ export interface McpServer {
   visibility: Visibility;
   status: ServerStatus;
   endpoint_url: string | null;
+  region: Region;
   config: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -123,6 +143,7 @@ export interface CreateServerRequest {
   github_installation_id?: number;
   runtime: Runtime;
   visibility: Visibility;
+  region?: Region;
   config?: Record<string, unknown>;
 }
 
@@ -131,6 +152,7 @@ export interface UpdateServerRequest {
   description?: string;
   github_branch?: string;
   visibility?: Visibility;
+  region?: Region;
   config?: Record<string, unknown>;
 }
 

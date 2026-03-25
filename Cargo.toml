@@ -8,6 +8,7 @@ members = [
     "crates/github",
     "crates/container",
     "crates/mcp-runtime",
+    "crates/email",
     "crates/api",
     "crates/proxy",
     "crates/builder",
@@ -31,7 +32,7 @@ async-trait = "0.1"
 axum = { version = "0.7", features = ["ws", "macros"] }
 axum-extra = { version = "0.9", features = ["typed-header", "cookie"] }
 tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip", "request-id", "timeout", "set-header"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip", "request-id", "timeout", "set-header", "limit"] }
 hyper = { version = "1.5", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 

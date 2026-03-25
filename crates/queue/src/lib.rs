@@ -12,6 +12,8 @@ pub struct BuildJob {
     pub runtime: String,
     /// GitHub App installation ID (None for public repos)
     pub github_installation_id: Option<i64>,
+    /// Target region for deployment
+    pub region: String,
 }
 
 /// Deploy job - triggered after a successful build
@@ -21,6 +23,8 @@ pub struct DeployJob {
     pub server_id: Uuid,
     pub image_url: String,
     pub secrets: Vec<SecretEnv>,
+    /// Target region for deployment
+    pub region: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

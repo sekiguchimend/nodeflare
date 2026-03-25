@@ -188,9 +188,9 @@ pub async fn submit_contact(
     ContactMessageRepository::create(
         &state.db,
         CreateContactMessage {
-            name,
-            email,
-            message,
+            name: name.clone(),
+            email: email.clone(),
+            message: message.clone(),
         },
     )
     .await
@@ -198,6 +198,25 @@ pub async fn submit_contact(
         tracing::error!("Failed to save contact message: {}", e);
         AppError::internal("Failed to save message")
     })?;
+
+    // Send email notification to admin (non-blocking)
+    if let Some(ref email_service) = state.email {
+        let admin_email = std::env::var("ADMIN_EMAIL").unwrap_or_default();
+        if !admin_email.is_empty() {
+            let email_service = email_service.clone();
+            let sender_name = name.clone();
+            let sender_email = email.clone();
+            let msg = message.clone();
+            tokio::spawn(async move {
+                if let Err(e) = email_service
+                    .send_contact_notification(&admin_email, &sender_name, &sender_email, &msg)
+                    .await
+                {
+                    tracing::error!("Failed to send contact notification email: {}", e);
+                }
+            });
+        }
+    }
 
     tracing::info!("Contact message received from IP: {}", ip);
 

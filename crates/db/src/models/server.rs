@@ -19,6 +19,7 @@ pub struct McpServer {
     pub status: String,
     pub endpoint_url: Option<String>,
     pub rate_limit_per_minute: Option<i32>,
+    pub region: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -70,6 +71,7 @@ pub struct CreateServer {
     pub github_installation_id: Option<i64>,
     pub runtime: Runtime,
     pub visibility: Visibility,
+    pub region: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -80,4 +82,5 @@ pub struct UpdateServer {
     pub visibility: Option<Visibility>,
     pub status: Option<ServerStatus>,
     pub endpoint_url: Option<String>,
+    pub region: Option<String>,
 }

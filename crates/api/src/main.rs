@@ -12,6 +12,7 @@ use tokio::net::TcpListener;
 use tower_http::{
     compression::CompressionLayer,
     cors::CorsLayer,
+    limit::RequestBodyLimitLayer,
     set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
@@ -199,10 +200,17 @@ fn create_router(state: Arc<AppState>) -> Router {
         router
     };
 
+    // Get request body limit from env (default: 1MB)
+    let body_limit: usize = std::env::var("REQUEST_BODY_LIMIT_BYTES")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1024 * 1024); // 1MB default
+
     router
         // Middleware
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
+        .layer(RequestBodyLimitLayer::new(body_limit))
         .layer(cors)
         // Security headers
         .layer(SetResponseHeaderLayer::overriding(

@@ -2,6 +2,7 @@ use chrono::{Duration, Utc};
 use mcp_db::models::CreateApiKey;
 use rand::Rng;
 use ring::digest::{digest, SHA256};
+use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 const API_KEY_PREFIX: &str = "mcp_";
@@ -48,9 +49,12 @@ impl ApiKeyService {
         hex::encode(hash.as_ref())
     }
 
+    /// Verify an API key against its hash using constant-time comparison.
+    /// This prevents timing attacks that could be used to guess valid API keys.
     pub fn verify(key: &str, hash: &str) -> bool {
         let computed_hash = Self::hash_key(key);
-        computed_hash == hash
+        // Use constant-time comparison to prevent timing attacks
+        computed_hash.as_bytes().ct_eq(hash.as_bytes()).into()
     }
 
     pub fn create_api_key_data(

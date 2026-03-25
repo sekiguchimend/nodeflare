@@ -14,7 +14,7 @@ use mcp_db::{ApiKey, McpServer, ServerRepository};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::TcpListener;
-use tower_http::trace::TraceLayer;
+use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod auth;
@@ -66,18 +66,29 @@ async fn main() -> Result<()> {
         request_cache,
     });
 
+    // Get request body limit from env (default: 10MB for proxy)
+    let body_limit: usize = std::env::var("PROXY_BODY_LIMIT_BYTES")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10 * 1024 * 1024); // 10MB default for proxy
+
     let app = Router::new()
         .route("/health", any(health_check))
         // Subdomain-based routing: {slug}.mcp.cloud/* -> MCP server
         .fallback(any(proxy_handler))
         .layer(TraceLayer::new_for_http())
+        .layer(RequestBodyLimitLayer::new(body_limit))
         .with_state(state);
 
     let addr = format!("{}:{}", config.server.host, config.server.proxy_port);
     let listener = TcpListener::bind(&addr).await?;
     tracing::info!("Proxy gateway listening on {}", addr);
 
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
@@ -89,18 +100,20 @@ async fn health_check() -> &'static str {
 async fn proxy_handler(
     State(state): State<Arc<ProxyState>>,
     Host(host): Host,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
     uri: Uri,
     request: Request<Body>,
 ) -> Result<Response, ProxyError> {
     let start = Instant::now();
+    let client_ip = addr.ip().to_string();
 
     // 1. Extract server slug from subdomain
     // e.g., "my-server.mcp.cloud" -> "my-server"
     let server_slug = extract_subdomain(&host, &state.config.server.proxy_base_domain)?;
 
-    // 2. Extract and validate API key
+    // 2. Extract and validate API key (with brute force protection)
     let api_key = auth::extract_api_key(&request)?;
-    let api_key_record = auth::validate_api_key(&state, &api_key).await?;
+    let api_key_record = auth::validate_api_key(&state, &api_key, &client_ip).await?;
 
     // 3. Resolve server by slug
     let server = resolve_server(&state, &server_slug).await?;

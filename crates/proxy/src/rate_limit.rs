@@ -9,6 +9,98 @@ use crate::{ProxyError, ProxyState};
 const DEFAULT_RATE_LIMIT: i32 = 100; // requests per minute
 const WINDOW_SIZE_SECONDS: i64 = 60;
 
+// Brute force protection for API key validation
+const API_KEY_BRUTE_FORCE_PREFIX: &str = "bf:apikey:";
+
+/// Brute force protection configuration
+struct BruteForceConfig {
+    max_attempts: i64,
+    lockout_secs: u64,
+    attempt_window_secs: u64,
+}
+
+impl Default for BruteForceConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: std::env::var("API_KEY_BRUTE_FORCE_MAX_ATTEMPTS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10),
+            lockout_secs: std::env::var("API_KEY_BRUTE_FORCE_LOCKOUT_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(600), // 10 minutes
+            attempt_window_secs: std::env::var("API_KEY_BRUTE_FORCE_WINDOW_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(300), // 5 minutes
+        }
+    }
+}
+
+/// Check if an IP is currently locked out due to API key brute force
+pub async fn is_api_key_locked_out(state: &ProxyState, ip: &str) -> bool {
+    let lockout_key = format!("{}lockout:{}", API_KEY_BRUTE_FORCE_PREFIX, ip);
+    let exists: Result<bool, _> = state.redis.exists(&lockout_key).await;
+    exists.unwrap_or(false)
+}
+
+/// Get remaining lockout time in seconds for API key brute force
+pub async fn get_api_key_lockout_remaining(state: &ProxyState, ip: &str) -> Option<i64> {
+    let lockout_key = format!("{}lockout:{}", API_KEY_BRUTE_FORCE_PREFIX, ip);
+    let ttl: Result<i64, _> = state.redis.ttl(&lockout_key).await;
+    ttl.ok().filter(|&t| t > 0)
+}
+
+/// Record a failed API key attempt and potentially lock out the IP
+pub async fn record_api_key_failed_attempt(state: &ProxyState, ip: &str) {
+    let config = BruteForceConfig::default();
+    let attempts_key = format!("{}attempts:{}", API_KEY_BRUTE_FORCE_PREFIX, ip);
+    let lockout_key = format!("{}lockout:{}", API_KEY_BRUTE_FORCE_PREFIX, ip);
+
+    let lua_script = r#"
+        local attempts = redis.call('INCR', KEYS[1])
+        if attempts == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        if attempts >= tonumber(ARGV[2]) then
+            redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])
+            redis.call('DEL', KEYS[1])
+        end
+        return attempts
+    "#;
+
+    let result: Result<i64, _> = state
+        .redis
+        .eval(
+            lua_script,
+            &[attempts_key, lockout_key],
+            &[
+                config.attempt_window_secs.to_string(),
+                config.max_attempts.to_string(),
+                config.lockout_secs.to_string(),
+            ],
+        )
+        .await;
+
+    if let Ok(attempts) = result {
+        if attempts >= config.max_attempts {
+            tracing::warn!(
+                "IP {} locked out after {} failed API key attempts (lockout: {}s)",
+                ip,
+                attempts,
+                config.lockout_secs
+            );
+        }
+    }
+}
+
+/// Clear failed API key attempts after successful validation
+pub async fn clear_api_key_failed_attempts(state: &ProxyState, ip: &str) {
+    let attempts_key = format!("{}attempts:{}", API_KEY_BRUTE_FORCE_PREFIX, ip);
+    let _: Result<(), _> = state.redis.del(&attempts_key).await;
+}
+
 /// Lua script for atomic sliding window rate limiting
 /// This prevents race conditions by performing all operations atomically
 const RATE_LIMIT_SCRIPT: &str = r#"

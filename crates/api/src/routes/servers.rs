@@ -49,6 +49,7 @@ pub async fn list_all(
                 visibility,
                 status,
                 endpoint_url: s.endpoint_url,
+                region: s.region,
                 created_at: s.created_at,
                 updated_at: s.updated_at,
             }
@@ -97,6 +98,7 @@ pub async fn list(
                 visibility,
                 status,
                 endpoint_url: s.endpoint_url,
+                region: s.region,
                 created_at: s.created_at,
                 updated_at: s.updated_at,
             }
@@ -272,6 +274,7 @@ pub async fn create(
             github_installation_id: body.github_installation_id,
             runtime,
             visibility: body.visibility.clone().unwrap_or_default(),
+            region: body.region.clone().unwrap_or_else(|| "nrt".to_string()),
         },
     )
     .await
@@ -308,6 +311,7 @@ pub async fn create(
         visibility,
         status,
         endpoint_url: server.endpoint_url,
+        region: server.region,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))
@@ -348,6 +352,7 @@ pub async fn get(
         visibility,
         status,
         endpoint_url: server.endpoint_url,
+        region: server.region,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))
@@ -389,6 +394,7 @@ pub async fn update(
             visibility: body.visibility,
             status: None,
             endpoint_url: None,
+            region: body.region,
         },
     )
     .await
@@ -409,6 +415,7 @@ pub async fn update(
         visibility,
         status,
         endpoint_url: server.endpoint_url,
+        region: server.region,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))
@@ -581,6 +588,7 @@ pub async fn deploy(
         commit_sha: deployment.commit_sha.clone(),
         runtime: server.runtime.clone(),
         github_installation_id: server.github_installation_id,
+        region: server.region.clone(),
     };
 
     state
@@ -664,6 +672,7 @@ pub async fn stop(
         visibility,
         status,
         endpoint_url: server.endpoint_url,
+        region: server.region,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))

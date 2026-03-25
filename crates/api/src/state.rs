@@ -3,6 +3,7 @@ use mcp_auth::{CryptoService, JwtService};
 use mcp_billing::{BillingService, WebhookHandler};
 use mcp_common::AppConfig;
 use mcp_db::DbPool;
+use mcp_email::EmailService;
 use mcp_github::GitHubApp;
 use mcp_queue::JobQueue;
 
@@ -19,6 +20,7 @@ pub struct AppState {
     pub ws_manager: WsManager,
     pub billing: Option<BillingService>,
     pub webhook_handler: Option<WebhookHandler>,
+    pub email: Option<EmailService>,
 }
 
 impl AppState {
@@ -59,6 +61,18 @@ impl AppState {
             }
         };
 
+        // Initialize Resend email service (optional)
+        let email = match EmailService::from_env() {
+            Ok(service) => {
+                tracing::info!("Resend email service initialized");
+                Some(service)
+            }
+            Err(e) => {
+                tracing::warn!("Email service not configured: {} - email features disabled", e);
+                None
+            }
+        };
+
         Self {
             config,
             db,
@@ -70,6 +84,7 @@ impl AppState {
             ws_manager,
             billing,
             webhook_handler,
+            email,
         }
     }
 }
