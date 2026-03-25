@@ -15,6 +15,18 @@ use uuid::Uuid;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
+/// Response for adding a region
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+pub enum AddRegionResponse {
+    /// Region added successfully (existing subscription updated)
+    #[serde(rename = "added")]
+    Added { region: RegionResponse },
+    /// Checkout required (first region, needs subscription)
+    #[serde(rename = "checkout_required")]
+    CheckoutRequired { checkout_url: String },
+}
+
 /// Region info for responses
 #[derive(Debug, Serialize)]
 pub struct RegionResponse {
@@ -71,12 +83,13 @@ pub struct AddRegionRequest {
 }
 
 /// Add a new region to a server (triggers deployment to that region)
+/// This always requires Stripe Checkout confirmation before adding
 pub async fn add(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
     Path((workspace_id, server_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<AddRegionRequest>,
-) -> Result<Json<RegionResponse>, (StatusCode, String)> {
+) -> Result<Json<AddRegionResponse>, (StatusCode, String)> {
     // Verify membership and permission
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
@@ -97,6 +110,12 @@ pub async fn add(
     if !valid_regions.contains(&body.region.as_str()) {
         return Err((StatusCode::BAD_REQUEST, "Invalid region code".to_string()));
     }
+
+    // Get workspace for billing info
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, server_id)
@@ -121,38 +140,81 @@ pub async fn add(
         ));
     }
 
-    // Create the region record
-    let region = ServerRegionRepository::create(
-        &state.db,
-        CreateServerRegion {
+    let billing = state.billing.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing service not configured".to_string()))?;
+
+    let customer_id = workspace.stripe_customer_id.as_ref()
+        .ok_or((StatusCode::BAD_REQUEST, "No billing account. Please set up billing first.".to_string()))?;
+
+    // Check if workspace already has a region subscription
+    // If yes, just increment quantity and add region directly
+    // If no, redirect to checkout for first-time subscription
+    if let Some(region_subscription_item_id) = &workspace.stripe_region_subscription_item_id {
+        // Existing subscription - increment quantity and add region directly
+        billing
+            .add_region_billing(
+                "", // subscription_id not needed when we have item_id
+                Some(region_subscription_item_id),
+            )
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Billing error: {}", e)))?;
+
+        // Create the region record
+        let region = ServerRegionRepository::create(
+            &state.db,
+            CreateServerRegion {
+                server_id,
+                region: body.region.clone(),
+                is_primary: false,
+            },
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        tracing::info!(
+            "Added region {} to server {} (workspace {}) - subscription quantity incremented",
+            body.region,
             server_id,
-            region: body.region.clone(),
-            is_primary: false,
-        },
-    )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            workspace_id
+        );
 
-    // TODO: Trigger deployment to the new region
-    // This would enqueue a deploy job for the new region
+        Ok(Json(AddRegionResponse::Added {
+            region: RegionResponse {
+                region: region.region,
+                is_primary: region.is_primary,
+                status: region.status,
+                endpoint_url: region.endpoint_url,
+                machine_id: region.machine_id,
+            },
+        }))
+    } else {
+        // No existing region subscription - redirect to checkout
+        let session = billing
+            .create_region_checkout_session_with_metadata(
+                customer_id,
+                workspace_id,
+                server_id,
+                &body.region,
+            )
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Billing error: {}", e)))?;
 
-    tracing::info!(
-        "Added region {} to server {} (workspace {})",
-        body.region,
-        server_id,
-        workspace_id
-    );
+        let checkout_url = session.url
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "No checkout URL returned".to_string()))?;
 
-    Ok(Json(RegionResponse {
-        region: region.region,
-        is_primary: region.is_primary,
-        status: region.status,
-        endpoint_url: region.endpoint_url,
-        machine_id: region.machine_id,
-    }))
+        tracing::info!(
+            "Created region checkout session for workspace {} server {} region {} (first region)",
+            workspace_id,
+            server_id,
+            body.region
+        );
+
+        Ok(Json(AddRegionResponse::CheckoutRequired { checkout_url }))
+    }
 }
 
 /// Remove a region from a server
+/// This also handles Stripe billing - decrements or removes the region subscription item
 pub async fn remove(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
@@ -170,6 +232,12 @@ pub async fn remove(
             "Insufficient permissions".to_string(),
         ));
     }
+
+    // Get workspace for billing info
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, server_id)
@@ -193,6 +261,28 @@ pub async fn remove(
             StatusCode::BAD_REQUEST,
             "Cannot delete primary region".to_string(),
         ));
+    }
+
+    // Handle Stripe billing - decrement region count
+    if let Some(billing) = state.billing.as_ref() {
+        if let Some(region_item_id) = &workspace.stripe_region_subscription_item_id {
+            let updated_item_id = billing
+                .remove_region_billing(region_item_id)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Billing error: {}", e)))?;
+
+            // If subscription item was deleted, clear it from workspace
+            if updated_item_id.is_none() {
+                WorkspaceRepository::update_region_subscription_item(&state.db, workspace_id, None)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+                tracing::info!(
+                    "Removed region subscription item from workspace {} (no more additional regions)",
+                    workspace_id
+                );
+            }
+        }
     }
 
     // TODO: Stop and delete the machine in Fly.io before removing from DB

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
-use mcp_db::{DbPool, WorkspaceRepository};
-use stripe::{Event, EventObject, EventType, Webhook};
+use mcp_db::{CreateServerRegion, DbPool, ServerRegionRepository, WorkspaceRepository};
+use stripe::{Client, Event, EventObject, EventType, Subscription, SubscriptionId, Webhook};
 use uuid::Uuid;
 
 use crate::plans::{get_plan_by_price_id, Plan};
@@ -9,13 +9,15 @@ use crate::plans::{get_plan_by_price_id, Plan};
 pub struct WebhookHandler {
     webhook_secret: String,
     db: DbPool,
+    stripe_client: Client,
 }
 
 impl WebhookHandler {
-    pub fn new(webhook_secret: &str, db: DbPool) -> Self {
+    pub fn new(webhook_secret: &str, db: DbPool, stripe_api_key: &str) -> Self {
         Self {
             webhook_secret: webhook_secret.to_string(),
             db,
+            stripe_client: Client::new(stripe_api_key),
         }
     }
 
@@ -60,6 +62,18 @@ impl WebhookHandler {
         if let EventObject::CheckoutSession(session) = event.data.object {
             tracing::info!("Checkout completed for session: {}", session.id);
 
+            // Check if this is a region addition checkout
+            let checkout_type = session
+                .metadata
+                .as_ref()
+                .and_then(|m| m.get("type"))
+                .map(|s| s.as_str());
+
+            if checkout_type == Some("region_addition") {
+                return self.handle_region_checkout_completed(&session).await;
+            }
+
+            // Regular plan subscription checkout
             // Get workspace ID from metadata
             let workspace_id = session
                 .metadata
@@ -98,6 +112,96 @@ impl WebhookHandler {
                 subscription_id
             );
         }
+
+        Ok(())
+    }
+
+    /// Handle checkout completion for region addition
+    async fn handle_region_checkout_completed(&self, session: &stripe::CheckoutSession) -> Result<()> {
+        let metadata = session.metadata.as_ref()
+            .ok_or_else(|| anyhow!("Missing metadata in region checkout session"))?;
+
+        // Extract metadata
+        let workspace_id = metadata
+            .get("workspace_id")
+            .and_then(|id| Uuid::parse_str(id).ok())
+            .ok_or_else(|| anyhow!("Missing workspace_id in region checkout metadata"))?;
+
+        let server_id = metadata
+            .get("server_id")
+            .and_then(|id| Uuid::parse_str(id).ok())
+            .ok_or_else(|| anyhow!("Missing server_id in region checkout metadata"))?;
+
+        let region = metadata
+            .get("region")
+            .ok_or_else(|| anyhow!("Missing region in region checkout metadata"))?;
+
+        // Get subscription ID for tracking
+        let subscription_id = session
+            .subscription
+            .as_ref()
+            .map(|s| s.id().to_string());
+
+        tracing::info!(
+            "Processing region addition: workspace={}, server={}, region={}, subscription={:?}",
+            workspace_id, server_id, region, subscription_id
+        );
+
+        // Check if region already exists (in case of duplicate webhook)
+        let existing = ServerRegionRepository::find_by_server_and_region(&self.db, server_id, region)
+            .await?;
+
+        if existing.is_some() {
+            tracing::warn!(
+                "Region {} already exists for server {}, skipping duplicate",
+                region, server_id
+            );
+            return Ok(());
+        }
+
+        // Create the region record
+        let created_region = ServerRegionRepository::create(
+            &self.db,
+            CreateServerRegion {
+                server_id,
+                region: region.clone(),
+                is_primary: false,
+            },
+        )
+        .await?;
+
+        tracing::info!(
+            "Created region {} for server {} (region_id: {})",
+            region, server_id, created_region.id
+        );
+
+        // Fetch the subscription to get the subscription item ID
+        if let Some(sub_id) = subscription_id {
+            let subscription_id: SubscriptionId = sub_id.parse()
+                .map_err(|_| anyhow!("Invalid subscription ID"))?;
+
+            let subscription = Subscription::retrieve(&self.stripe_client, &subscription_id, &[])
+                .await
+                .map_err(|e| anyhow!("Failed to retrieve subscription: {}", e))?;
+
+            // Get the first subscription item ID (should be the region price)
+            let item_id = subscription.items.data
+                .first()
+                .map(|item| item.id.as_str().to_string())
+                .ok_or_else(|| anyhow!("No subscription items found"))?;
+
+            // Store the subscription item ID for future quantity updates
+            WorkspaceRepository::update_region_subscription_item(&self.db, workspace_id, Some(&item_id))
+                .await?;
+
+            tracing::info!(
+                "Updated workspace {} with region subscription item {}",
+                workspace_id, item_id
+            );
+        }
+
+        // TODO: Trigger deployment to the new region
+        // This would enqueue a deploy job for the new region
 
         Ok(())
     }

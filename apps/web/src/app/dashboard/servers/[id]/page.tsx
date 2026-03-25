@@ -198,7 +198,7 @@ export default function ServerDetailPage() {
             <h1 className="text-2xl font-semibold text-gray-900">{server.name}</h1>
             <p className="text-sm text-gray-500">{server.github_repo}</p>
           </div>
-          <span className={`ml-2 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 ${statusStyle.bg} ${statusStyle.text}`}>
+          <span className={`ml-2 text-sm font-medium flex items-center gap-2 ${statusStyle.text}`}>
             <span className={`w-2 h-2 rounded-full ${statusStyle.dot}`} />
             {t(`status.${server.status}`)}
           </span>
@@ -932,6 +932,7 @@ function RegionsTab({
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Get cost estimate
   const { data: costEstimate } = useQuery<RegionCostEstimate>({
@@ -942,11 +943,17 @@ function RegionsTab({
   const addMutation = useMutation({
     mutationFn: (region: Region) =>
       api.post(`/workspaces/${workspaceId}/servers/${serverId}/regions`, { region }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['servers', serverId, 'regions'] });
-      queryClient.invalidateQueries({ queryKey: ['region-cost', workspaceId] });
-      setIsAdding(false);
-      setSelectedRegion(null);
+    onSuccess: (data: { type: string; checkout_url?: string; region?: unknown }) => {
+      if (data.type === 'checkout_required' && data.checkout_url) {
+        // First region - redirect to Stripe checkout for subscription
+        window.location.href = data.checkout_url;
+      } else if (data.type === 'added') {
+        // Subsequent regions - added directly (subscription quantity incremented)
+        queryClient.invalidateQueries({ queryKey: ['servers', serverId, 'regions'] });
+        queryClient.invalidateQueries({ queryKey: ['region-cost', workspaceId] });
+        setIsAdding(false);
+        setSelectedRegion(null);
+      }
     },
   });
 
@@ -975,16 +982,15 @@ function RegionsTab({
     <div className="space-y-6">
       {/* Info Banner */}
       <div className="p-4 rounded-xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
+        <div>
+          <h3 className="font-semibold text-violet-900 flex items-center gap-2">
             <svg className="w-5 h-5 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
               <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
             </svg>
-          </div>
-          <div>
-            <h3 className="font-semibold text-violet-900">{t('regions.multiRegionTitle')}</h3>
-            <p className="text-sm text-violet-700 mt-1">{t('regions.multiRegionDesc')}</p>
+            {t('regions.multiRegionTitle')}
+          </h3>
+          <p className="text-sm text-violet-700 mt-1">{t('regions.multiRegionDesc')}</p>
             {costEstimate && costEstimate.additional_regions > 0 && (
               <p className="text-sm text-violet-600 mt-2 font-medium">
                 {t('regions.currentCost', {
@@ -993,7 +999,6 @@ function RegionsTab({
                 })}
               </p>
             )}
-          </div>
         </div>
       </div>
 
@@ -1022,7 +1027,7 @@ function RegionsTab({
                         {t('regions.primary')}
                       </span>
                     )}
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${style.bg} ${style.text}`}>
+                    <span className={`text-xs font-medium flex items-center gap-1.5 ${style.text}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
                       {t(`status.${region.status}`)}
                     </span>
@@ -1093,13 +1098,39 @@ function RegionsTab({
                   <div className="text-sm text-gray-600">
                     {t('regions.priceInfo')}
                   </div>
-                  <Button
-                    onClick={() => selectedRegion && addMutation.mutate(selectedRegion)}
-                    disabled={!selectedRegion || addMutation.isPending}
-                    className="bg-violet-600 hover:bg-violet-700"
-                  >
-                    {addMutation.isPending ? tCommon('loading') : t('regions.addRegion')}
-                  </Button>
+                  <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        onClick={() => setShowConfirmDialog(true)}
+                        disabled={!selectedRegion || addMutation.isPending}
+                        className="bg-violet-600 hover:bg-violet-700"
+                      >
+                        {addMutation.isPending ? tCommon('loading') : t('regions.addRegion')}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{t('regions.confirmTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {t('regions.confirmDesc', { region: selectedRegion?.toUpperCase() })}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            if (selectedRegion) {
+                              addMutation.mutate(selectedRegion);
+                            }
+                            setShowConfirmDialog(false);
+                          }}
+                          className="bg-violet-600 hover:bg-violet-700"
+                        >
+                          {t('regions.confirmAdd')}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             </div>

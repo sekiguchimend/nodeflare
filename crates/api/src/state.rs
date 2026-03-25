@@ -51,7 +51,7 @@ impl AppState {
                 let base_url = std::env::var("APP_URL")
                     .unwrap_or_else(|_| "http://localhost:3000".to_string());
                 let billing = BillingService::new(&secret_key, &base_url);
-                let webhook = WebhookHandler::new(&webhook_secret, db.clone());
+                let webhook = WebhookHandler::new(&webhook_secret, db.clone(), &secret_key);
                 tracing::info!("Stripe billing initialized");
                 (Some(billing), Some(webhook))
             }
