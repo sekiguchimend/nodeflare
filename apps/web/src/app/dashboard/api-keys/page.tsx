@@ -154,7 +154,7 @@ export default function ApiKeysPage() {
             <p className="text-gray-500">{t('empty')}</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div>
             {apiKeys?.map((apiKey, index) => (
               <ApiKeyRow
                 key={apiKey.id}
@@ -162,7 +162,8 @@ export default function ApiKeysPage() {
                 workspaceId={workspaceId!}
                 t={t}
                 tCommon={tCommon}
-                index={index}
+                isFirst={index === 0}
+                isLast={index === apiKeys.length - 1}
               />
             ))}
           </div>
@@ -368,16 +369,17 @@ function ApiKeyRow({
   workspaceId,
   t,
   tCommon,
-  index
+  isFirst,
+  isLast
 }: {
   apiKey: ApiKey;
   workspaceId: string;
   t: (key: string, values?: Record<string, string | number>) => string;
   tCommon: (key: string) => string;
-  index: number;
+  isFirst: boolean;
+  isLast: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [isHovered, setIsHovered] = useState(false);
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/workspaces/${workspaceId}/api-keys/${apiKey.id}`),
@@ -386,66 +388,77 @@ function ApiKeyRow({
     },
   });
 
-  const colors = [
-    'from-violet-400 to-purple-500',
-    'from-blue-400 to-cyan-500',
-    'from-emerald-400 to-teal-500',
-    'from-amber-400 to-orange-500',
-    'from-pink-400 to-rose-500',
-  ];
+  const formatLastUsed = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return '今';
+    if (diffMins < 60) return `${diffMins}分前`;
+    if (diffHours < 24) return `${diffHours}時間前`;
+    if (diffDays < 7) return `${diffDays}日前`;
+    return date.toLocaleDateString();
+  };
 
   return (
     <div
-      className="group p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-md transition-all"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      className={`group flex items-center gap-4 px-4 py-3 bg-white border-x border-b border-gray-200 hover:bg-gray-50 transition-colors ${
+        isFirst ? 'border-t rounded-t-lg' : ''
+      } ${isLast ? 'rounded-b-lg' : ''}`}
     >
-      <div className="flex items-center gap-4">
-        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${colors[index % colors.length]} flex items-center justify-center flex-shrink-0`}>
-          <span className="text-white font-bold text-sm">{apiKey.name.charAt(0).toUpperCase()}</span>
-        </div>
+      {/* Key Icon */}
+      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+        <svg className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900">{apiKey.name}</span>
-            <code className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{apiKey.key_prefix}...</code>
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+      {/* Main Content */}
+      <div className="flex-1 min-w-0">
+        {/* Top Row: Name + Last Used */}
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-gray-900">{apiKey.name}</span>
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            <span>{new Date(apiKey.created_at).toLocaleDateString()}に作成</span>
             {apiKey.last_used_at && (
-              <span className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                {t('lastUsed', { date: new Date(apiKey.last_used_at).toLocaleDateString() })}
-              </span>
+              <>
+                <span className="text-gray-300">•</span>
+                <span>{formatLastUsed(apiKey.last_used_at)}に使用</span>
+              </>
             )}
           </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {apiKey.scopes?.map((scope) => (
-              <span
-                key={scope}
-                className="inline-flex items-center px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full"
-              >
-                {scope === '*' ? t('scopes.fullAccess') : scope}
-              </span>
-            ))}
-          </div>
         </div>
-
-        <button
-          onClick={() => {
-            if (confirm(t('revokeConfirm'))) {
-              deleteMutation.mutate();
+        {/* Bottom Row: Key Prefix + Scopes */}
+        <div className="flex items-center gap-2 mt-1">
+          <code className="text-xs text-gray-500 font-mono">{apiKey.key_prefix}...</code>
+          <span className="text-gray-300">•</span>
+          <span className="text-xs text-gray-500">
+            {apiKey.scopes?.includes('*')
+              ? t('scopes.fullAccess')
+              : apiKey.scopes?.slice(0, 2).join(', ') + (apiKey.scopes && apiKey.scopes.length > 2 ? ` +${apiKey.scopes.length - 2}` : '')
             }
-          }}
-          className={`px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-all ${
-            isHovered ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          {t('revoke')}
-        </button>
+          </span>
+        </div>
       </div>
+
+      {/* Delete Button */}
+      <button
+        onClick={() => {
+          if (confirm(t('revokeConfirm'))) {
+            deleteMutation.mutate();
+          }
+        }}
+        disabled={deleteMutation.isPending}
+        className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+        title={t('revoke')}
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
     </div>
   );
 }
