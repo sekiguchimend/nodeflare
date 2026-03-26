@@ -179,6 +179,14 @@ pub fn api_router() -> Router<Arc<AppState>> {
             "/workspaces/:workspace_id/billing/invoices",
             get(billing::list_invoices),
         )
+        .route(
+            "/workspaces/:workspace_id/billing/payment-method",
+            get(billing::get_payment_method),
+        )
+        .route(
+            "/workspaces/:workspace_id/billing/settings",
+            get(billing::get_billing_settings).patch(billing::update_billing_settings),
+        )
         // Stripe webhook (no auth required)
         .route("/webhooks/stripe", post(billing::handle_webhook))
         // Contact (no auth required)

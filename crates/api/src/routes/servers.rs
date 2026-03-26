@@ -50,6 +50,7 @@ pub async fn list_all(
                 status,
                 endpoint_url: s.endpoint_url,
                 region: s.region,
+                root_directory: s.root_directory,
                 created_at: s.created_at,
                 updated_at: s.updated_at,
             }
@@ -99,6 +100,7 @@ pub async fn list(
                 status,
                 endpoint_url: s.endpoint_url,
                 region: s.region,
+                root_directory: s.root_directory,
                 created_at: s.created_at,
                 updated_at: s.updated_at,
             }
@@ -275,6 +277,7 @@ pub async fn create(
             runtime,
             visibility: body.visibility.clone().unwrap_or_default(),
             region: body.region.clone().unwrap_or_else(|| "nrt".to_string()),
+            root_directory: body.root_directory.clone().unwrap_or_default(),
         },
     )
     .await
@@ -312,6 +315,7 @@ pub async fn create(
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,
+        root_directory: server.root_directory,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))
@@ -353,6 +357,7 @@ pub async fn get(
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,
+        root_directory: server.root_directory,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))
@@ -395,6 +400,7 @@ pub async fn update(
             status: None,
             endpoint_url: None,
             region: body.region,
+            root_directory: body.root_directory,
         },
     )
     .await
@@ -416,6 +422,7 @@ pub async fn update(
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,
+        root_directory: server.root_directory,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))
@@ -673,6 +680,7 @@ pub async fn stop(
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,
+        root_directory: server.root_directory,
         created_at: server.created_at,
         updated_at: server.updated_at,
     }))

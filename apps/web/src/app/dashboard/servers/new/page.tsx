@@ -124,7 +124,9 @@ export default function NewServerPage() {
     runtime: 'node',
     visibility: 'private',
     region: 'nrt',
+    root_directory: '',
   });
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const generateSlug = (name: string) => {
     return name
@@ -365,6 +367,39 @@ export default function NewServerPage() {
                 />
               </div>
             </div>
+
+            {/* Advanced Settings Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {t('create.advancedSettings')}
+            </button>
+
+            {/* Root Directory (Advanced) */}
+            {showAdvanced && (
+              <div className="pl-6 border-l-2 border-gray-100">
+                <Label htmlFor="root_directory" className="text-gray-700">{t('create.rootDirectory')}</Label>
+                <p className="text-xs text-gray-500 mt-1 mb-2">{t('create.rootDirectoryHelp')}</p>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white">
+                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z" />
+                  </svg>
+                  <input
+                    id="root_directory"
+                    type="text"
+                    placeholder="packages/mcp-server"
+                    value={formData.root_directory || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, root_directory: e.target.value }))}
+                    className="flex-1 bg-transparent text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

@@ -52,6 +52,7 @@ export interface McpServer {
   status: ServerStatus;
   endpoint_url: string | null;
   region: Region;
+  root_directory: string;
   config: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -144,6 +145,7 @@ export interface CreateServerRequest {
   runtime: Runtime;
   visibility: Visibility;
   region?: Region;
+  root_directory?: string;
   config?: Record<string, unknown>;
 }
 
@@ -153,6 +155,7 @@ export interface UpdateServerRequest {
   github_branch?: string;
   visibility?: Visibility;
   region?: Region;
+  root_directory?: string;
   config?: Record<string, unknown>;
 }
 

@@ -753,6 +753,7 @@ function SettingsTab({
   const [visibility, setVisibility] = useState(server.visibility);
   const [branch, setBranch] = useState(server.github_branch);
   const [region, setRegion] = useState<Region>(server.region);
+  const [rootDirectory, setRootDirectory] = useState(server.root_directory || '');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -764,6 +765,7 @@ function SettingsTab({
         visibility,
         github_branch: branch,
         region,
+        root_directory: rootDirectory || null,
       });
       queryClient.invalidateQueries({ queryKey: ['servers'] });
     } catch (error) {
@@ -803,6 +805,18 @@ function SettingsTab({
             id="branch"
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
+            className="bg-white"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="rootDirectory" className="text-gray-700">{t('create.rootDirectory')}</Label>
+          <p className="text-xs text-gray-500">{t('create.rootDirectoryHelp')}</p>
+          <Input
+            id="rootDirectory"
+            value={rootDirectory}
+            onChange={(e) => setRootDirectory(e.target.value)}
+            placeholder="packages/mcp-server"
             className="bg-white"
           />
         </div>

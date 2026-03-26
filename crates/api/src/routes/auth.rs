@@ -140,39 +140,72 @@ pub async fn github_callback(
     let access_token = oauth
         .exchange_code(&query.code)
         .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("GitHub code exchange failed: {}", e);
+            (StatusCode::BAD_REQUEST, e.to_string())
+        })?;
 
     // Get user info from GitHub
     let github_user = oauth
         .get_user(&access_token)
         .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("GitHub get user failed: {}", e);
+            (StatusCode::BAD_REQUEST, e.to_string())
+        })?;
+
+    // Get primary email if not provided
+    let email = match &github_user.email {
+        Some(e) if !e.is_empty() => e.clone(),
+        _ => {
+            oauth
+                .get_primary_email(&access_token)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| format!("{}@users.noreply.github.com", github_user.id))
+        }
+    };
+
+    tracing::info!("GitHub user: id={}, login={}, email={}", github_user.id, github_user.login, email);
 
     // Upsert user in database
     let user = UserRepository::upsert_from_github(
         &state.db,
         github_user.id,
-        &github_user.email.unwrap_or_default(),
-        &github_user.name.unwrap_or(github_user.login),
+        &email,
+        &github_user.name.clone().unwrap_or(github_user.login.clone()),
         github_user.avatar_url.as_deref(),
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| {
+        tracing::error!("User upsert failed: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
 
     // Encrypt and store GitHub access token
     let (encrypted_token, nonce) = state
         .crypto
         .encrypt_string(&access_token)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Token encryption failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     UserRepository::update_github_token(&state.db, user.id, &encrypted_token, &nonce)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Update GitHub token failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     // Check if user has any workspaces, if not create a personal one
     let workspaces = WorkspaceRepository::list_by_user(&state.db, user.id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("List workspaces failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     let workspace_id = if workspaces.is_empty() {
         // Create personal workspace
@@ -185,7 +218,10 @@ pub async fn github_callback(
             },
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Create workspace failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
         Some(ws.id)
     } else {
         Some(workspaces[0].id)
@@ -195,7 +231,10 @@ pub async fn github_callback(
     let access_token = state
         .jwt
         .generate_token(user.id, workspace_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("JWT generation failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     // Generate refresh token
     let refresh = mcp_auth::jwt::RefreshToken::generate(
@@ -212,7 +251,10 @@ pub async fn github_callback(
     .bind(refresh.expires_at)
     .execute(&state.db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| {
+        tracing::error!("Refresh token insert failed: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
 
     // Set tokens as HTTP-only secure cookies
     let is_production = state.config.is_production();

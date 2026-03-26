@@ -16,6 +16,7 @@ pub struct Workspace {
     pub stripe_region_subscription_item_id: Option<String>,
     pub subscription_status: Option<String>,
     pub current_period_end: Option<DateTime<Utc>>,
+    pub auto_email_invoices: Option<bool>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -76,6 +77,7 @@ pub struct WorkspaceWithRole {
     pub stripe_region_subscription_item_id: Option<String>,
     pub subscription_status: Option<String>,
     pub current_period_end: Option<DateTime<Utc>>,
+    pub auto_email_invoices: Option<bool>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub role: String,

@@ -246,6 +246,9 @@
       "private": "プライベート",
       "branch": "ブランチ",
       "branchPlaceholder": "main",
+      "advancedSettings": "詳細設定",
+      "rootDirectory": "ルートディレクトリ",
+      "rootDirectoryHelp": "モノレポの場合、MCPサーバーのコードがあるサブディレクトリを指定してください",
       "runtime": "ランタイム",
       "runtimeNode": "Node.js",
       "runtimePython": "Python",
@@ -516,6 +519,42 @@
     "planLimits": "プラン上限",
     "planLimitsDesc": "現在のプランに基づく使用上限",
     "limit": "上限",
+    "summary": {
+      "title": "今月の請求サマリー",
+      "nextBillingDate": "次回請求日",
+      "estimatedAmount": "次回請求予定額",
+      "currentCycle": "現在の請求期間",
+      "to": "〜"
+    },
+    "breakdown": {
+      "title": "請求内訳",
+      "item": "項目",
+      "quantity": "数量",
+      "unitPrice": "単価",
+      "subtotal": "小計",
+      "planBase": "基本プラン",
+      "additionalRegions": "追加リージョン",
+      "perRegion": "リージョンあたり",
+      "total": "合計",
+      "taxNote": "※表示価格は税込みです"
+    },
+    "usage": {
+      "title": "今月の使用状況",
+      "servers": "サーバー",
+      "deployments": "デプロイ",
+      "requests": "リクエスト",
+      "regions": "追加リージョン",
+      "of": "/ {max}",
+      "unlimited": "無制限"
+    },
+    "paymentMethod": {
+      "title": "支払い方法",
+      "card": "カード",
+      "endingIn": "**** {last4}",
+      "expires": "有効期限",
+      "change": "支払い方法を変更",
+      "noMethod": "支払い方法が設定されていません"
+    },
     "interval": {
       "monthly": "月額",
       "yearly": "年額",

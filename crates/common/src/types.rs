@@ -420,6 +420,8 @@ pub struct CreateServerRequest {
     pub runtime: Option<Runtime>,
     pub visibility: Option<Visibility>,
     pub region: Option<String>,
+    #[validate(length(max = 255))]
+    pub root_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
@@ -430,6 +432,8 @@ pub struct UpdateServerRequest {
     pub github_branch: Option<String>,
     pub visibility: Option<Visibility>,
     pub region: Option<String>,
+    #[validate(length(max = 255))]
+    pub root_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
@@ -491,6 +495,7 @@ pub struct ServerResponse {
     pub status: ServerStatus,
     pub endpoint_url: Option<String>,
     pub region: String,
+    pub root_directory: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

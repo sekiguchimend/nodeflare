@@ -246,6 +246,9 @@
       "private": "Private",
       "branch": "Branch",
       "branchPlaceholder": "main",
+      "advancedSettings": "Advanced Settings",
+      "rootDirectory": "Root Directory",
+      "rootDirectoryHelp": "For monorepos, specify the subdirectory where the MCP server code is located",
       "runtime": "Runtime",
       "runtimeNode": "Node.js",
       "runtimePython": "Python",
@@ -516,6 +519,42 @@
     "planLimits": "Plan Limits",
     "planLimitsDesc": "Usage limits based on your current plan",
     "limit": "Limit",
+    "summary": {
+      "title": "Billing Summary",
+      "nextBillingDate": "Next billing date",
+      "estimatedAmount": "Estimated amount",
+      "currentCycle": "Current billing cycle",
+      "to": "to"
+    },
+    "breakdown": {
+      "title": "Billing Breakdown",
+      "item": "Item",
+      "quantity": "Quantity",
+      "unitPrice": "Unit Price",
+      "subtotal": "Subtotal",
+      "planBase": "Base Plan",
+      "additionalRegions": "Additional Regions",
+      "perRegion": "per region",
+      "total": "Total",
+      "taxNote": "* Prices include tax"
+    },
+    "usage": {
+      "title": "Current Usage",
+      "servers": "Servers",
+      "deployments": "Deployments",
+      "requests": "Requests",
+      "regions": "Additional Regions",
+      "of": "/ {max}",
+      "unlimited": "Unlimited"
+    },
+    "paymentMethod": {
+      "title": "Payment Method",
+      "card": "Card",
+      "endingIn": "**** {last4}",
+      "expires": "Expires",
+      "change": "Change payment method",
+      "noMethod": "No payment method on file"
+    },
     "interval": {
       "monthly": "Monthly",
       "yearly": "Yearly",

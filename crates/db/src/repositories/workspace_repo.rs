@@ -15,7 +15,7 @@ impl WorkspaceRepository {
         let workspace = sqlx::query_as::<_, Workspace>(
             r#"
             SELECT id, name, slug, plan, owner_id, stripe_customer_id, stripe_subscription_id, stripe_region_subscription_item_id,
-                   subscription_status, current_period_end, created_at, updated_at
+                   subscription_status, current_period_end, auto_email_invoices, created_at, updated_at
             FROM workspaces
             WHERE id = $1
             "#,
@@ -31,7 +31,7 @@ impl WorkspaceRepository {
         let workspace = sqlx::query_as::<_, Workspace>(
             r#"
             SELECT id, name, slug, plan, owner_id, stripe_customer_id, stripe_subscription_id, stripe_region_subscription_item_id,
-                   subscription_status, current_period_end, created_at, updated_at
+                   subscription_status, current_period_end, auto_email_invoices, created_at, updated_at
             FROM workspaces
             WHERE slug = $1
             "#,
@@ -48,7 +48,7 @@ impl WorkspaceRepository {
             r#"
             SELECT w.id, w.name, w.slug, w.plan, w.owner_id, w.stripe_customer_id,
                    w.stripe_subscription_id, w.stripe_region_subscription_item_id,
-                   w.subscription_status, w.current_period_end,
+                   w.subscription_status, w.current_period_end, w.auto_email_invoices,
                    w.created_at, w.updated_at, wm.role
             FROM workspaces w
             INNER JOIN workspace_members wm ON w.id = wm.workspace_id
@@ -73,7 +73,8 @@ impl WorkspaceRepository {
             INSERT INTO workspaces (name, slug, owner_id)
             VALUES ($1, $2, $3)
             RETURNING id, name, slug, plan, owner_id, stripe_customer_id, stripe_subscription_id,
-                      stripe_region_subscription_item_id, subscription_status, current_period_end, created_at, updated_at
+                      stripe_region_subscription_item_id, subscription_status, current_period_end,
+                      auto_email_invoices, created_at, updated_at
             "#,
         )
         .bind(&data.name)
@@ -116,7 +117,8 @@ impl WorkspaceRepository {
                 updated_at = NOW()
             WHERE id = $1
             RETURNING id, name, slug, plan, owner_id, stripe_customer_id, stripe_subscription_id,
-                      stripe_region_subscription_item_id, subscription_status, current_period_end, created_at, updated_at
+                      stripe_region_subscription_item_id, subscription_status, current_period_end,
+                      auto_email_invoices, created_at, updated_at
             "#,
         )
         .bind(id)
@@ -254,7 +256,7 @@ impl WorkspaceRepository {
         let workspace = sqlx::query_as::<_, Workspace>(
             r#"
             SELECT id, name, slug, plan, owner_id, stripe_customer_id, stripe_subscription_id, stripe_region_subscription_item_id,
-                   subscription_status, current_period_end, created_at, updated_at
+                   subscription_status, current_period_end, auto_email_invoices, created_at, updated_at
             FROM workspaces
             WHERE stripe_customer_id = $1
             "#,
@@ -441,7 +443,7 @@ impl WorkspaceRepository {
         let workspaces = sqlx::query_as::<_, Workspace>(
             r#"
             SELECT id, name, slug, plan, owner_id, stripe_customer_id, stripe_subscription_id, stripe_region_subscription_item_id,
-                   subscription_status, current_period_end, created_at, updated_at
+                   subscription_status, current_period_end, auto_email_invoices, created_at, updated_at
             FROM workspaces
             WHERE owner_id = $1
             ORDER BY created_at DESC
@@ -454,5 +456,28 @@ impl WorkspaceRepository {
         .await?;
 
         Ok(workspaces)
+    }
+
+    /// Update billing settings
+    pub async fn update_billing_settings(
+        pool: &PgPool,
+        id: Uuid,
+        auto_email_invoices: bool,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE workspaces
+            SET
+                auto_email_invoices = $2,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(auto_email_invoices)
+        .execute(pool)
+        .await?;
+
+        Ok(())
     }
 }
