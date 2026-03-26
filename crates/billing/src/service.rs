@@ -136,6 +136,41 @@ impl BillingService {
             .map_err(|e| anyhow!("Failed to get customer: {}", e))
     }
 
+    /// Get default payment method for a customer
+    pub async fn get_default_payment_method(&self, customer_id: &str) -> Result<Option<PaymentMethodDetails>> {
+        let id: CustomerId = customer_id.parse().map_err(|_| anyhow!("Invalid customer ID"))?;
+
+        // List payment methods for the customer
+        let mut params = stripe::ListPaymentMethods::new();
+        params.customer = Some(id);
+        params.type_ = Some(stripe::PaymentMethodTypeFilter::Card);
+        params.limit = Some(1);
+
+        let payment_methods = stripe::PaymentMethod::list(&self.client, &params)
+            .await
+            .map_err(|e| anyhow!("Failed to list payment methods: {}", e))?;
+
+        if let Some(pm) = payment_methods.data.first() {
+            if let Some(card) = &pm.card {
+                // card.brand and card.last4 are Strings
+                let brand = if card.brand.is_empty() {
+                    "card".to_string()
+                } else {
+                    card.brand.to_lowercase()
+                };
+
+                return Ok(Some(PaymentMethodDetails {
+                    brand,
+                    last4: card.last4.clone(),
+                    exp_month: card.exp_month as u32,
+                    exp_year: card.exp_year as u32,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
     /// Get plan from subscription
     pub fn get_plan_from_subscription(&self, subscription: &Subscription) -> Plan {
         subscription
@@ -388,6 +423,15 @@ impl BillingService {
             .await
             .map_err(|e| anyhow!("Failed to create region checkout session: {}", e))
     }
+}
+
+/// Payment method details
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PaymentMethodDetails {
+    pub brand: String,
+    pub last4: String,
+    pub exp_month: u32,
+    pub exp_year: u32,
 }
 
 /// Subscription status response

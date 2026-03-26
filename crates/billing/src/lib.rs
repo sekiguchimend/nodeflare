@@ -3,5 +3,5 @@ pub mod service;
 pub mod webhook;
 
 pub use plans::{Plan, PlanLimits, PLANS};
-pub use service::BillingService;
+pub use service::{BillingService, PaymentMethodDetails};
 pub use webhook::WebhookHandler;

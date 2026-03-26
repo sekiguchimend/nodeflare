@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use mcp_billing::{BillingService, Plan, WebhookHandler, PLANS};
+use mcp_billing::{BillingService, PaymentMethodDetails, Plan, WebhookHandler, PLANS};
 use mcp_db::WorkspaceRepository;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -450,68 +450,12 @@ pub async fn get_payment_method(
     let billing = state.billing.as_ref()
         .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing not configured".to_string()))?;
 
-    let customer = billing
-        .get_customer(&customer_id)
+    // Get payment methods for customer using Stripe API
+    let payment_method = billing
+        .get_default_payment_method(&customer_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    // Get default payment method from customer
-    let payment_method = if let Some(default_source) = customer.default_source {
-        // Try to get payment method details
-        match default_source {
-            stripe::Expandable::Id(id) => {
-                // Just return the ID, frontend will show generic
-                Some(PaymentMethodDetails {
-                    brand: "card".to_string(),
-                    last4: "****".to_string(),
-                    exp_month: 0,
-                    exp_year: 0,
-                })
-            }
-            stripe::Expandable::Object(source) => {
-                if let stripe::PaymentSource::Card(card) = *source {
-                    Some(PaymentMethodDetails {
-                        brand: card.brand.unwrap_or_default(),
-                        last4: card.last4.unwrap_or_else(|| "****".to_string()),
-                        exp_month: card.exp_month.unwrap_or(0) as u32,
-                        exp_year: card.exp_year.unwrap_or(0) as u32,
-                    })
-                } else {
-                    None
-                }
-            }
-        }
-    } else if let Some(invoice_settings) = customer.invoice_settings {
-        // Try default payment method from invoice settings
-        if let Some(pm) = invoice_settings.default_payment_method {
-            match pm {
-                stripe::Expandable::Id(_) => {
-                    Some(PaymentMethodDetails {
-                        brand: "card".to_string(),
-                        last4: "****".to_string(),
-                        exp_month: 0,
-                        exp_year: 0,
-                    })
-                }
-                stripe::Expandable::Object(pm_obj) => {
-                    if let Some(card) = pm_obj.card {
-                        Some(PaymentMethodDetails {
-                            brand: card.brand.map(|b| b.to_string()).unwrap_or_else(|| "card".to_string()),
-                            last4: card.last4.unwrap_or_else(|| "****".to_string()),
-                            exp_month: card.exp_month as u32,
-                            exp_year: card.exp_year as u32,
-                        })
-                    } else {
-                        None
-                    }
-                }
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+        .ok()
+        .flatten();
 
     Ok(Json(PaymentMethodResponse { payment_method }))
 }
@@ -519,14 +463,6 @@ pub async fn get_payment_method(
 #[derive(Debug, Serialize)]
 pub struct PaymentMethodResponse {
     pub payment_method: Option<PaymentMethodDetails>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PaymentMethodDetails {
-    pub brand: String,
-    pub last4: String,
-    pub exp_month: u32,
-    pub exp_year: u32,
 }
 
 /// List invoices for a workspace
