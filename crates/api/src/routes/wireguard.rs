@@ -25,11 +25,64 @@ fn default_region() -> String {
 }
 
 #[derive(Debug, Serialize)]
+pub struct WireGuardPeerResponse {
+    pub name: String,
+    pub region: String,
+    pub peer_ip: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct WireGuardConfigResponse {
     pub peer_name: String,
     pub config_file: String,
     pub peer_ip: String,
     pub instructions: Vec<String>,
+}
+
+/// List WireGuard peers for a workspace
+pub async fn list_wireguard_peers(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(workspace_id): Path<Uuid>,
+) -> Result<Json<Vec<WireGuardPeerResponse>>, (StatusCode, String)> {
+    // Verify user is member
+    let _member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
+
+    // Get workspace for filtering peers by prefix
+    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+
+    // Get Fly.io runtime
+    let fly_runtime = state.fly_runtime.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Fly.io runtime not configured".to_string(),
+    ))?;
+
+    let org_slug = std::env::var("FLY_ORG").unwrap_or_else(|_| "personal".to_string());
+
+    // List all peers and filter by workspace prefix
+    let all_peers = fly_runtime
+        .list_wireguard_peers(&org_slug)
+        .await
+        .map_err(|e: anyhow::Error| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let workspace_prefix = format!("{}-", workspace.slug);
+    let filtered_peers: Vec<WireGuardPeerResponse> = all_peers
+        .into_iter()
+        .filter(|p| p.name.starts_with(&workspace_prefix))
+        .map(|p| WireGuardPeerResponse {
+            name: p.name,
+            region: p.region,
+            peer_ip: p.peerip,
+        })
+        .collect();
+
+    Ok(Json(filtered_peers))
 }
 
 /// Create a WireGuard peer for accessing MCP servers directly

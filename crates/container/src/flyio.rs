@@ -285,14 +285,12 @@ pub struct ExecResponse {
     pub exit_code: i32,
 }
 
-/// WireGuard peer configuration
+/// WireGuard peer info (for listing)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WireGuardPeer {
+pub struct WireGuardPeerInfo {
     pub name: String,
-    pub pubkey: String,
+    pub region: String,
     pub peerip: String,
-    pub endpoint: String,
-    pub private_key: Option<String>,
 }
 
 /// WireGuard configuration for client
@@ -450,6 +448,72 @@ impl FlyioRuntime {
         }
 
         Ok(())
+    }
+
+    /// List WireGuard peers for an organization
+    pub async fn list_wireguard_peers(&self, org_slug: &str) -> Result<Vec<WireGuardPeerInfo>> {
+        let query = r#"
+            query GetWireGuardPeers($slug: String!) {
+                organization(slug: $slug) {
+                    wireGuardPeers {
+                        nodes {
+                            name
+                            region
+                            peerip
+                        }
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "slug": org_slug
+        });
+
+        let response = self
+            .http_client
+            .post(FLY_GRAPHQL_URL)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .json(&serde_json::json!({
+                "query": query,
+                "variables": variables
+            }))
+            .send()
+            .await
+            .context("Failed to list WireGuard peers")?;
+
+        if !response.status().is_success() {
+            let error = response.text().await.unwrap_or_default();
+            anyhow::bail!("Failed to list WireGuard peers: {}", error);
+        }
+
+        let result: serde_json::Value = response.json().await?;
+
+        if let Some(errors) = result.get("errors") {
+            anyhow::bail!("GraphQL error: {}", errors);
+        }
+
+        let nodes = result
+            .get("data")
+            .and_then(|d| d.get("organization"))
+            .and_then(|o| o.get("wireGuardPeers"))
+            .and_then(|w| w.get("nodes"))
+            .and_then(|n| n.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let peers: Vec<WireGuardPeerInfo> = nodes
+            .into_iter()
+            .filter_map(|node| {
+                Some(WireGuardPeerInfo {
+                    name: node.get("name")?.as_str()?.to_string(),
+                    region: node.get("region")?.as_str()?.to_string(),
+                    peerip: node.get("peerip")?.as_str()?.to_string(),
+                })
+            })
+            .collect();
+
+        Ok(peers)
     }
 
     /// Generate WireGuard configuration file content

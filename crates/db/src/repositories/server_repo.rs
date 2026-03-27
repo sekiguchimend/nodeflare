@@ -1,5 +1,5 @@
 use crate::models::{CreateServer, McpServer, UpdateServer};
-use mcp_common::types::{Runtime, ServerStatus, Visibility};
+use mcp_common::types::{AccessMode, Runtime, ServerStatus, Visibility};
 use mcp_common::Result;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ impl ServerRepository {
         let server = sqlx::query_as::<_, McpServer>(
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
-                   github_installation_id, runtime, visibility, status, endpoint_url,
+                   github_installation_id, runtime, visibility, access_mode, status, endpoint_url,
                    rate_limit_per_minute, region, root_directory, created_at, updated_at
             FROM mcp_servers
             WHERE id = $1
@@ -34,7 +34,7 @@ impl ServerRepository {
         let server = sqlx::query_as::<_, McpServer>(
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
-                   github_installation_id, runtime, visibility, status, endpoint_url,
+                   github_installation_id, runtime, visibility, access_mode, status, endpoint_url,
                    rate_limit_per_minute, region, root_directory, created_at, updated_at
             FROM mcp_servers
             WHERE workspace_id = $1 AND slug = $2
@@ -53,7 +53,7 @@ impl ServerRepository {
         let server = sqlx::query_as::<_, McpServer>(
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
-                   github_installation_id, runtime, visibility, status, endpoint_url,
+                   github_installation_id, runtime, visibility, access_mode, status, endpoint_url,
                    rate_limit_per_minute, region, root_directory, created_at, updated_at
             FROM mcp_servers
             WHERE slug = $1 AND visibility = 'public' AND status = 'running'
@@ -75,7 +75,7 @@ impl ServerRepository {
         let servers = sqlx::query_as::<_, McpServer>(
             r#"
             SELECT id, workspace_id, name, slug, description, github_repo, github_branch,
-                   github_installation_id, runtime, visibility, status, endpoint_url,
+                   github_installation_id, runtime, visibility, access_mode, status, endpoint_url,
                    rate_limit_per_minute, region, root_directory, created_at, updated_at
             FROM mcp_servers
             WHERE workspace_id = $1
@@ -112,16 +112,20 @@ impl ServerRepository {
             Visibility::Team => "team",
             Visibility::Public => "public",
         };
+        let access_mode_str = match data.access_mode {
+            AccessMode::Public => "public",
+            AccessMode::VpnOnly => "vpn_only",
+        };
 
         let server = sqlx::query_as::<_, McpServer>(
             r#"
             INSERT INTO mcp_servers (
                 workspace_id, name, slug, description, github_repo, github_branch,
-                github_installation_id, runtime, visibility, region, root_directory
+                github_installation_id, runtime, visibility, access_mode, region, root_directory
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING id, workspace_id, name, slug, description, github_repo, github_branch,
-                      github_installation_id, runtime, visibility, status, endpoint_url,
+                      github_installation_id, runtime, visibility, access_mode, status, endpoint_url,
                       rate_limit_per_minute, region, root_directory, created_at, updated_at
             "#,
         )
@@ -134,6 +138,7 @@ impl ServerRepository {
         .bind(data.github_installation_id)
         .bind(runtime_str)
         .bind(visibility_str)
+        .bind(access_mode_str)
         .bind(&data.region)
         .bind(&data.root_directory)
         .fetch_one(pool)
@@ -147,6 +152,11 @@ impl ServerRepository {
             Visibility::Private => "private",
             Visibility::Team => "team",
             Visibility::Public => "public",
+        });
+
+        let access_mode_str = data.access_mode.map(|a| match a {
+            AccessMode::Public => "public",
+            AccessMode::VpnOnly => "vpn_only",
         });
 
         let status_str = data.status.map(|s| match s {
@@ -166,14 +176,15 @@ impl ServerRepository {
                 description = COALESCE($3, description),
                 github_branch = COALESCE($4, github_branch),
                 visibility = COALESCE($5, visibility),
-                status = COALESCE($6, status),
-                endpoint_url = COALESCE($7, endpoint_url),
-                region = COALESCE($8, region),
-                root_directory = COALESCE($9, root_directory),
+                access_mode = COALESCE($6, access_mode),
+                status = COALESCE($7, status),
+                endpoint_url = COALESCE($8, endpoint_url),
+                region = COALESCE($9, region),
+                root_directory = COALESCE($10, root_directory),
                 updated_at = NOW()
             WHERE id = $1
             RETURNING id, workspace_id, name, slug, description, github_repo, github_branch,
-                      github_installation_id, runtime, visibility, status, endpoint_url,
+                      github_installation_id, runtime, visibility, access_mode, status, endpoint_url,
                       rate_limit_per_minute, region, root_directory, created_at, updated_at
             "#,
         )
@@ -182,6 +193,7 @@ impl ServerRepository {
         .bind(&data.description)
         .bind(&data.github_branch)
         .bind(visibility_str)
+        .bind(access_mode_str)
         .bind(status_str)
         .bind(&data.endpoint_url)
         .bind(&data.region)
@@ -239,7 +251,7 @@ impl ServerRepository {
             SELECT DISTINCT
                 s.id, s.workspace_id, s.name, s.slug, s.description,
                 s.github_repo, s.github_branch, s.github_installation_id,
-                s.runtime, s.visibility, s.status, s.endpoint_url,
+                s.runtime, s.visibility, s.access_mode, s.status, s.endpoint_url,
                 s.rate_limit_per_minute, s.region, s.root_directory, s.created_at, s.updated_at
             FROM mcp_servers s
             INNER JOIN workspace_members wm ON s.workspace_id = wm.workspace_id

@@ -215,7 +215,7 @@ pub fn api_router() -> Router<Arc<AppState>> {
         // WireGuard VPN
         .route(
             "/workspaces/:workspace_id/wireguard",
-            post(wireguard::create_wireguard_peer),
+            get(wireguard::list_wireguard_peers).post(wireguard::create_wireguard_peer),
         )
         .route(
             "/workspaces/:workspace_id/wireguard/:peer_name",

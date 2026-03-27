@@ -16,6 +16,7 @@ export interface Workspace {
 
 export type Runtime = 'node' | 'python' | 'go' | 'rust' | 'docker';
 export type Visibility = 'public' | 'private' | 'team';
+export type AccessMode = 'public' | 'vpn_only';
 export type ServerStatus = 'pending' | 'building' | 'deploying' | 'running' | 'stopped' | 'failed' | 'inactive';
 export type DeploymentStatus = 'pending' | 'building' | 'deploying' | 'success' | 'failed';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -49,6 +50,7 @@ export interface McpServer {
   github_branch: string;
   runtime: Runtime;
   visibility: Visibility;
+  access_mode: AccessMode;
   status: ServerStatus;
   endpoint_url: string | null;
   region: Region;
@@ -144,6 +146,7 @@ export interface CreateServerRequest {
   github_installation_id?: number;
   runtime: Runtime;
   visibility: Visibility;
+  access_mode?: AccessMode;
   region?: Region;
   root_directory?: string;
   config?: Record<string, unknown>;
@@ -154,6 +157,7 @@ export interface UpdateServerRequest {
   description?: string;
   github_branch?: string;
   visibility?: Visibility;
+  access_mode?: AccessMode;
   region?: Region;
   root_directory?: string;
   config?: Record<string, unknown>;

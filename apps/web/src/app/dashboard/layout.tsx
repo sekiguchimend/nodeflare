@@ -72,7 +72,14 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (preferences?.sidebar_order) {
-      setSidebarOrder(preferences.sidebar_order);
+      // 保存された設定に含まれていない新しいナビアイテムを追加
+      const savedOrder = preferences.sidebar_order;
+      const newItems = DEFAULT_SIDEBAR_ORDER.filter(id => !savedOrder.includes(id));
+      if (newItems.length > 0) {
+        setSidebarOrder([...savedOrder, ...newItems]);
+      } else {
+        setSidebarOrder(savedOrder);
+      }
     }
   }, [preferences]);
 

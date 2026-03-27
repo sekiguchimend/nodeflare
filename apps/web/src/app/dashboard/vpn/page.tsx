@@ -6,12 +6,18 @@ import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Region, REGIONS } from '@/types';
 
 interface Workspace {
   id: string;
   name: string;
   slug: string;
+}
+
+interface WireGuardPeer {
+  name: string;
+  region: string;
+  peer_ip: string;
 }
 
 interface WireGuardConfig {
@@ -21,31 +27,89 @@ interface WireGuardConfig {
   instructions: string[];
 }
 
-interface CreateWireGuardRequest {
-  name: string;
-  region: string;
-}
+function RegionSelect({
+  value,
+  onChange,
+  t
+}: {
+  value: Region;
+  onChange: (region: Region) => void;
+  t: (key: string) => string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedRegion = REGIONS.find(r => r.code === value);
 
-const REGIONS = [
-  { code: 'nrt', name: 'Tokyo', flag: '🇯🇵' },
-  { code: 'sin', name: 'Singapore', flag: '🇸🇬' },
-  { code: 'hkg', name: 'Hong Kong', flag: '🇭🇰' },
-  { code: 'syd', name: 'Sydney', flag: '🇦🇺' },
-  { code: 'iad', name: 'Virginia', flag: '🇺🇸' },
-  { code: 'fra', name: 'Frankfurt', flag: '🇩🇪' },
-  { code: 'lhr', name: 'London', flag: '🇬🇧' },
-];
+  const groupedRegions = {
+    'Asia Pacific': REGIONS.filter(r => r.area === 'Asia Pacific'),
+    'Americas': REGIONS.filter(r => r.area === 'Americas'),
+    'Europe': REGIONS.filter(r => r.area === 'Europe'),
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-100 bg-white text-gray-900 font-medium cursor-pointer hover:border-gray-200 focus:border-violet-400 focus:outline-none transition-colors text-left"
+      >
+        <span className={`fi fi-${selectedRegion?.countryCode} text-xl`}></span>
+        <span className="flex-1">{t(`regions.${value}`)} ({value.toUpperCase()})</span>
+        <svg className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute z-20 w-full mt-2 py-2 bg-white rounded-xl border border-gray-200 shadow-xl max-h-80 overflow-y-auto">
+            {Object.entries(groupedRegions).map(([area, regions]) => (
+              <div key={area}>
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
+                  {t(`regions.${area === 'Asia Pacific' ? 'asiaPacific' : area === 'Americas' ? 'americas' : 'europe'}`)}
+                </div>
+                {regions.map(region => (
+                  <button
+                    key={region.code}
+                    type="button"
+                    onClick={() => {
+                      onChange(region.code);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-violet-50 transition-colors text-left ${
+                      value === region.code ? 'bg-violet-50 text-violet-700' : 'text-gray-700'
+                    }`}
+                  >
+                    <span className={`fi fi-${region.countryCode} text-xl`}></span>
+                    <span className="flex-1">{t(`regions.${region.code}`)} ({region.code.toUpperCase()})</span>
+                    {value === region.code && (
+                      <svg className="w-5 h-5 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function VPNPage() {
   const t = useTranslations('vpn');
+  const tServers = useTranslations('servers');
   const tCommon = useTranslations('common');
   const queryClient = useQueryClient();
 
-  const [showCreate, setShowCreate] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [peerName, setPeerName] = useState('');
-  const [selectedRegion, setSelectedRegion] = useState('nrt');
+  const [selectedRegion, setSelectedRegion] = useState<Region>('nrt');
   const [generatedConfig, setGeneratedConfig] = useState<WireGuardConfig | null>(null);
   const [copied, setCopied] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const { data: workspaces, isLoading: isLoadingWorkspaces } = useQuery<Workspace[]>({
     queryKey: ['workspaces'],
@@ -54,13 +118,29 @@ export default function VPNPage() {
 
   const workspaceId = workspaces?.[0]?.id;
 
+  const { data: peers, isLoading: isLoadingPeers } = useQuery<WireGuardPeer[]>({
+    queryKey: ['wireguard-peers', workspaceId],
+    queryFn: () => api.get(`/workspaces/${workspaceId}/wireguard`),
+    enabled: !!workspaceId,
+  });
+
   const createMutation = useMutation({
-    mutationFn: (data: CreateWireGuardRequest) =>
+    mutationFn: (data: { name: string; region: string }) =>
       api.post<WireGuardConfig>(`/workspaces/${workspaceId}/wireguard`, data),
     onSuccess: (config) => {
       setGeneratedConfig(config);
-      setShowCreate(false);
+      setShowForm(false);
       setPeerName('');
+      queryClient.invalidateQueries({ queryKey: ['wireguard-peers', workspaceId] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (name: string) =>
+      api.delete(`/workspaces/${workspaceId}/wireguard/${encodeURIComponent(name)}`),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['wireguard-peers', workspaceId] });
     },
   });
 
@@ -70,7 +150,7 @@ export default function VPNPage() {
     createMutation.mutate({ name: peerName, region: selectedRegion });
   };
 
-  const handleCopyConfig = () => {
+  const handleCopy = () => {
     if (generatedConfig) {
       navigator.clipboard.writeText(generatedConfig.config_file);
       setCopied(true);
@@ -78,7 +158,7 @@ export default function VPNPage() {
     }
   };
 
-  const handleDownloadConfig = () => {
+  const handleDownload = () => {
     if (generatedConfig) {
       const blob = new Blob([generatedConfig.config_file], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -92,240 +172,194 @@ export default function VPNPage() {
     }
   };
 
-  if (isLoadingWorkspaces) {
+  const getRegionDisplay = (code: string) => {
+    const region = REGIONS.find(r => r.code === code);
+    if (!region) return code;
+    return `${tServers(`regions.${code}`)}`;
+  };
+
+  const isLoading = isLoadingWorkspaces || isLoadingPeers;
+  const hasPeers = peers && peers.length > 0;
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-gray-600" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            {t('title')}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">{t('description')}</p>
-        </div>
-        <Button onClick={() => setShowCreate(true)} disabled={!workspaceId}>
-          <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-medium flex items-center gap-2 text-gray-400">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           </svg>
-          {t('createConnection')}
-        </Button>
-      </div>
-
-      {/* How it works */}
-      <div className="bg-white rounded-xl border p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">{t('howItWorks')}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="flex flex-col items-center text-center p-4 bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center mb-3">
-              <span className="text-violet-600 font-bold">1</span>
-            </div>
-            <p className="text-sm text-gray-600">{t('step1')}</p>
-          </div>
-          <div className="flex flex-col items-center text-center p-4 bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center mb-3">
-              <span className="text-violet-600 font-bold">2</span>
-            </div>
-            <p className="text-sm text-gray-600">{t('step2')}</p>
-          </div>
-          <div className="flex flex-col items-center text-center p-4 bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center mb-3">
-              <span className="text-violet-600 font-bold">3</span>
-            </div>
-            <p className="text-sm text-gray-600">{t('step3')}</p>
-          </div>
-          <div className="flex flex-col items-center text-center p-4 bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center mb-3">
-              <span className="text-violet-600 font-bold">4</span>
-            </div>
-            <p className="text-sm text-gray-600">{t('step4')}</p>
-          </div>
-        </div>
+          {t('title')}
+        </h1>
+        {hasPeers && !showForm && !generatedConfig && (
+          <Button size="sm" onClick={() => setShowForm(true)}>
+            + {t('createConnection')}
+          </Button>
+        )}
       </div>
 
       {/* Generated Config */}
       {generatedConfig && (
-        <div className="bg-white rounded-xl border p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20 6 9 17 4 12" />
               </svg>
               {t('configGenerated')}
-            </h2>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleCopyConfig}>
-                {copied ? (
-                  <>
-                    <svg className="w-4 h-4 mr-1 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    {tCommon('copied')}
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                    {tCommon('copy')}
-                  </>
-                )}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleDownloadConfig}>
-                <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                {t('download')}
-              </Button>
+            </div>
+            <button onClick={() => setGeneratedConfig(null)} className="text-gray-400 hover:text-gray-600 text-sm">
+              {tCommon('close')}
+            </button>
+          </div>
+
+          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded">
+            {t('importantNote')} {t('configOnlyOnce')}
+          </div>
+
+          <div className="flex gap-6 text-sm">
+            <div>
+              <span className="text-gray-500">Name:</span>
+              <span className="ml-2 font-mono">{generatedConfig.peer_name}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">IP:</span>
+              <span className="ml-2 font-mono">{generatedConfig.peer_ip}</span>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <Label className="text-gray-500">{t('peerName')}</Label>
-              <p className="font-mono text-sm bg-gray-50 p-2 rounded">{generatedConfig.peer_name}</p>
-            </div>
-            <div>
-              <Label className="text-gray-500">{t('peerIP')}</Label>
-              <p className="font-mono text-sm bg-gray-50 p-2 rounded">{generatedConfig.peer_ip}</p>
-            </div>
-            <div>
-              <Label className="text-gray-500">{t('configFile')}</Label>
-              <pre className="font-mono text-xs bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto">
-                {generatedConfig.config_file}
-              </pre>
-            </div>
-          </div>
+          <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto">
+            {generatedConfig.config_file}
+          </pre>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-medium text-blue-800 mb-2">{t('nextSteps')}</h3>
-            <ol className="list-decimal list-inside space-y-1 text-sm text-blue-700">
-              {generatedConfig.instructions.map((instruction, i) => (
-                <li key={i}>{instruction}</li>
-              ))}
-            </ol>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={handleCopy}>
+              {copied ? tCommon('copied') : tCommon('copy')}
+            </Button>
+            <Button size="sm" onClick={handleDownload}>
+              {t('download')}
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Empty state */}
-      {!generatedConfig && !showCreate && (
-        <div className="bg-white rounded-xl border p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">{t('noConnections')}</h3>
-          <p className="text-gray-500 mb-6">{t('noConnectionsDescription')}</p>
-          <Button onClick={() => setShowCreate(true)} disabled={!workspaceId}>
-            {t('createFirstConnection')}
-          </Button>
-        </div>
+      {/* Connections Table */}
+      {hasPeers && !generatedConfig && (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-500 border-b">
+              <th className="pb-2 font-medium">Name</th>
+              <th className="pb-2 font-medium">Region</th>
+              <th className="pb-2 font-medium">IP</th>
+              <th className="pb-2 font-medium w-8"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {peers.map((peer) => {
+              const region = REGIONS.find(r => r.code === peer.region);
+              return (
+                <tr key={peer.name} className="group">
+                  <td className="py-3 font-medium text-gray-900">{peer.name}</td>
+                  <td className="py-3 text-gray-600">
+                    {region && <span className={`fi fi-${region.countryCode} mr-2`}></span>}
+                    {getRegionDisplay(peer.region)}
+                  </td>
+                  <td className="py-3 font-mono text-gray-500">{peer.peer_ip}</td>
+                  <td className="py-3">
+                    <button
+                      onClick={() => setDeleteTarget(peer.name)}
+                      className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
-      {/* Create Modal */}
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">{t('createConnection')}</h2>
-            <form onSubmit={handleCreate}>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="peerName">{t('connectionName')}</Label>
-                  <Input
-                    id="peerName"
-                    value={peerName}
-                    onChange={(e) => setPeerName(e.target.value)}
-                    placeholder={t('connectionNamePlaceholder')}
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">{t('connectionNameHint')}</p>
-                </div>
-                <div>
-                  <Label>{t('region')}</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    {REGIONS.map((region) => (
-                      <button
-                        key={region.code}
-                        type="button"
-                        onClick={() => setSelectedRegion(region.code)}
-                        className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                          selectedRegion === region.code
-                            ? 'border-violet-500 bg-violet-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <span className="text-lg">{region.flag}</span>
-                        <span className="text-sm">{region.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setShowCreate(false);
-                    setPeerName('');
-                  }}
-                >
-                  {tCommon('cancel')}
-                </Button>
-                <Button type="submit" disabled={!peerName.trim() || createMutation.isPending}>
-                  {createMutation.isPending ? t('creating') : t('create')}
-                </Button>
-              </div>
-              {createMutation.isError && (
-                <p className="text-red-500 text-sm mt-2">
-                  {t('createError')}
-                </p>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Info Box */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-6">
-        <div className="flex gap-3">
-          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
+      {/* Create Form */}
+      {(showForm || !hasPeers) && !generatedConfig && (
+        <form onSubmit={handleCreate} className="space-y-5 max-w-md">
           <div>
-            <h4 className="font-medium text-amber-800">{t('requiresWireGuard')}</h4>
-            <p className="text-sm text-amber-700 mt-1">
-              {t('wireGuardInfo')}{' '}
-              <a
-                href="https://www.wireguard.com/install/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                wireguard.com/install
-              </a>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('connectionName')}</label>
+            <Input
+              value={peerName}
+              onChange={(e) => setPeerName(e.target.value)}
+              placeholder={t('connectionNamePlaceholder')}
+            />
+            <p className="text-xs text-gray-500 mt-1">{t('connectionNameHint')}</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('region')}</label>
+            <RegionSelect
+              value={selectedRegion}
+              onChange={setSelectedRegion}
+              t={tServers}
+            />
+          </div>
+
+          {createMutation.isError && (
+            <p className="text-sm text-red-600">{t('createError')}</p>
+          )}
+
+          <div className="flex gap-2">
+            {showForm && hasPeers && (
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                {tCommon('cancel')}
+              </Button>
+            )}
+            <Button type="submit" disabled={!peerName.trim() || !workspaceId || createMutation.isPending}>
+              {createMutation.isPending ? t('creating') : t('create')}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {/* Info */}
+      <p className="text-sm text-gray-500">
+        {t('wireGuardInfo')}{' '}
+        <a href="https://www.wireguard.com/install/" target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline">
+          wireguard.com/install
+        </a>
+      </p>
+
+      {/* Delete Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-5 max-w-xs w-full mx-4">
+            <p className="text-sm text-gray-700 mb-4">
+              {t('deleteConfirmMessage', { name: deleteTarget })}
             </p>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={() => setDeleteTarget(null)}>
+                {tCommon('cancel')}
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => deleteMutation.mutate(deleteTarget)}
+                disabled={deleteMutation.isPending}
+              >
+                {tCommon('delete')}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

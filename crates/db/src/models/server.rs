@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mcp_common::types::{Runtime, ServerStatus, Visibility};
+use mcp_common::types::{AccessMode, Runtime, ServerStatus, Visibility};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -16,6 +16,7 @@ pub struct McpServer {
     pub github_installation_id: Option<i64>,
     pub runtime: String,
     pub visibility: String,
+    pub access_mode: String,
     pub status: String,
     pub endpoint_url: Option<String>,
     pub rate_limit_per_minute: Option<i32>,
@@ -42,6 +43,13 @@ impl McpServer {
             "team" => Visibility::Team,
             "public" => Visibility::Public,
             _ => Visibility::Private,
+        }
+    }
+
+    pub fn access_mode(&self) -> AccessMode {
+        match self.access_mode.as_str() {
+            "vpn_only" => AccessMode::VpnOnly,
+            _ => AccessMode::Public,
         }
     }
 
@@ -72,6 +80,7 @@ pub struct CreateServer {
     pub github_installation_id: Option<i64>,
     pub runtime: Runtime,
     pub visibility: Visibility,
+    pub access_mode: AccessMode,
     pub region: String,
     pub root_directory: String,
 }
@@ -82,6 +91,7 @@ pub struct UpdateServer {
     pub description: Option<String>,
     pub github_branch: Option<String>,
     pub visibility: Option<Visibility>,
+    pub access_mode: Option<AccessMode>,
     pub status: Option<ServerStatus>,
     pub endpoint_url: Option<String>,
     pub region: Option<String>,

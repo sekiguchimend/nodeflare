@@ -50,6 +50,30 @@ impl Default for Visibility {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccessMode {
+    /// Accessible via public URL
+    Public,
+    /// Accessible via VPN only
+    VpnOnly,
+}
+
+impl Default for AccessMode {
+    fn default() -> Self {
+        Self::Public
+    }
+}
+
+impl std::fmt::Display for AccessMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccessMode::Public => write!(f, "public"),
+            AccessMode::VpnOnly => write!(f, "vpn_only"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ServerStatus {
     Inactive,
@@ -419,6 +443,7 @@ pub struct CreateServerRequest {
     pub github_installation_id: Option<i64>,
     pub runtime: Option<Runtime>,
     pub visibility: Option<Visibility>,
+    pub access_mode: Option<AccessMode>,
     pub region: Option<String>,
     #[validate(length(max = 255))]
     pub root_directory: Option<String>,
@@ -431,6 +456,7 @@ pub struct UpdateServerRequest {
     pub description: Option<String>,
     pub github_branch: Option<String>,
     pub visibility: Option<Visibility>,
+    pub access_mode: Option<AccessMode>,
     pub region: Option<String>,
     #[validate(length(max = 255))]
     pub root_directory: Option<String>,
@@ -492,6 +518,7 @@ pub struct ServerResponse {
     pub github_branch: String,
     pub runtime: Runtime,
     pub visibility: Visibility,
+    pub access_mode: AccessMode,
     pub status: ServerStatus,
     pub endpoint_url: Option<String>,
     pub region: String,

@@ -35,6 +35,7 @@ pub async fn list_all(
         .map(|s| {
             let runtime = s.runtime();
             let visibility = s.visibility();
+            let access_mode = s.access_mode();
             let status = s.status();
             ServerResponse {
                 id: s.id,
@@ -46,6 +47,7 @@ pub async fn list_all(
                 github_branch: s.github_branch,
                 runtime,
                 visibility,
+                access_mode,
                 status,
                 endpoint_url: s.endpoint_url,
                 region: s.region,
@@ -81,6 +83,7 @@ pub async fn list(
         .map(|s| {
             let runtime = s.runtime();
             let visibility = s.visibility();
+            let access_mode = s.access_mode();
             let status = s.status();
             ServerResponse {
                 id: s.id,
@@ -92,6 +95,7 @@ pub async fn list(
                 github_branch: s.github_branch,
                 runtime,
                 visibility,
+                access_mode,
                 status,
                 endpoint_url: s.endpoint_url,
                 region: s.region,
@@ -261,6 +265,7 @@ pub async fn create(
             github_installation_id: body.github_installation_id,
             runtime,
             visibility: body.visibility.clone().unwrap_or_default(),
+            access_mode: body.access_mode.clone().unwrap_or_default(),
             region: body.region.clone().unwrap_or_else(|| "nrt".to_string()),
             root_directory: body.root_directory.clone().unwrap_or_default(),
         },
@@ -286,6 +291,7 @@ pub async fn create(
 
     let runtime = server.runtime();
     let visibility = server.visibility();
+    let access_mode = server.access_mode();
     let status = server.status();
     Ok(Json(ServerResponse {
         id: server.id,
@@ -297,6 +303,7 @@ pub async fn create(
         github_branch: server.github_branch,
         runtime,
         visibility,
+        access_mode,
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,
@@ -324,6 +331,7 @@ pub async fn get(
 
     let runtime = server.runtime();
     let visibility = server.visibility();
+    let access_mode = server.access_mode();
     let status = server.status();
     Ok(Json(ServerResponse {
         id: server.id,
@@ -335,6 +343,7 @@ pub async fn get(
         github_branch: server.github_branch,
         runtime,
         visibility,
+        access_mode,
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,
@@ -370,6 +379,7 @@ pub async fn update(
             description: body.description,
             github_branch: body.github_branch,
             visibility: body.visibility,
+            access_mode: body.access_mode,
             status: None,
             endpoint_url: None,
             region: body.region,
@@ -380,6 +390,7 @@ pub async fn update(
 
     let runtime = server.runtime();
     let visibility = server.visibility();
+    let access_mode = server.access_mode();
     let status = server.status();
     Ok(Json(ServerResponse {
         id: server.id,
@@ -391,6 +402,7 @@ pub async fn update(
         github_branch: server.github_branch,
         runtime,
         visibility,
+        access_mode,
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,
@@ -617,6 +629,7 @@ pub async fn stop(
 
     let runtime = server.runtime();
     let visibility = server.visibility();
+    let access_mode = server.access_mode();
     let status = server.status();
     Ok(Json(ServerResponse {
         id: server.id,
@@ -628,6 +641,7 @@ pub async fn stop(
         github_branch: server.github_branch,
         runtime,
         visibility,
+        access_mode,
         status,
         endpoint_url: server.endpoint_url,
         region: server.region,

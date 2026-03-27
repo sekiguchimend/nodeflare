@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { McpServer, Deployment, Tool, Secret, Region, REGIONS, ServerRegion, RegionCostEstimate } from '@/types';
+import { McpServer, Deployment, Tool, Secret, Region, REGIONS, ServerRegion, RegionCostEstimate, AccessMode } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -998,6 +998,7 @@ function SettingsTab({
   const [name, setName] = useState(server.name);
   const [description, setDescription] = useState(server.description || '');
   const [visibility, setVisibility] = useState(server.visibility);
+  const [accessMode, setAccessMode] = useState<AccessMode>(server.access_mode || 'public');
   const [branch, setBranch] = useState(server.github_branch);
   const [region, setRegion] = useState<Region>(server.region);
   const [rootDirectory, setRootDirectory] = useState(server.root_directory || '');
@@ -1010,6 +1011,7 @@ function SettingsTab({
         name,
         description: description || null,
         visibility,
+        access_mode: accessMode,
         github_branch: branch,
         region,
         root_directory: rootDirectory || null,
@@ -1083,6 +1085,27 @@ function SettingsTab({
                 }`}
               >
                 {t(`create.visibility${v.charAt(0).toUpperCase() + v.slice(1)}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-gray-700 block mb-2">{t('accessMode.title')}</Label>
+          <p className="text-xs text-gray-500 mb-2">{t('accessMode.description')}</p>
+          <div className="inline-flex p-0.5 bg-gray-200/60 rounded-[10px] border border-gray-200">
+            {(['public', 'vpn_only'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAccessMode(mode)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-[10px] transition-all ${
+                  accessMode === mode
+                    ? 'bg-white text-gray-800 shadow border border-gray-100'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {t(`accessMode.${mode}`)}
               </button>
             ))}
           </div>
