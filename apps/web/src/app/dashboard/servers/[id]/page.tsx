@@ -46,7 +46,7 @@ export default function ServerDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const serverId = params.id as string;
-  const [activeTab, setActiveTab] = useState<'deployments' | 'tools' | 'secrets' | 'regions' | 'webhooks' | 'settings'>('deployments');
+  const [activeTab, setActiveTab] = useState<'deployments' | 'tools' | 'secrets' | 'regions' | 'webhooks' | 'console' | 'settings'>('deployments');
   const [showDeployInfo, setShowDeployInfo] = useState(false);
 
   const { data: servers, isLoading: isLoadingServers } = useQuery<McpServer[]>({
@@ -178,6 +178,7 @@ export default function ServerDetailPage() {
     { id: 'secrets', label: t('detail.secrets'), count: secrets?.length },
     { id: 'regions', label: t('regions.title'), count: serverRegions?.length },
     { id: 'webhooks', label: t('webhooks.title') },
+    { id: 'console', label: t('console.title') },
     { id: 'settings', label: t('detail.settings') },
   ] as const;
 
@@ -403,6 +404,16 @@ export default function ServerDetailPage() {
             <WebhooksTab
               serverId={serverId}
               workspaceId={workspaceId!}
+              t={t}
+              tCommon={tCommon}
+            />
+          )}
+          {activeTab === 'console' && (
+            <ConsoleTab
+              serverId={serverId}
+              workspaceId={workspaceId!}
+              serverRegions={serverRegions ?? []}
+              serverStatus={server.status}
               t={t}
               tCommon={tCommon}
             />
@@ -730,6 +741,223 @@ function SecretsTab({
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConsoleTab({
+  serverId,
+  workspaceId,
+  serverRegions,
+  serverStatus,
+  t,
+  tCommon
+}: {
+  serverId: string;
+  workspaceId: string;
+  serverRegions: ServerRegion[];
+  serverStatus: string;
+  t: (key: string) => string;
+  tCommon: (key: string) => string;
+}) {
+  const [command, setCommand] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState<string | undefined>();
+  const [output, setOutput] = useState<{ stdout: string; stderr: string; exit_code: number } | null>(null);
+  const [history, setHistory] = useState<Array<{ command: string; output: { stdout: string; stderr: string; exit_code: number } }>>([]);
+
+  const execMutation = useMutation({
+    mutationFn: (cmd: string) =>
+      api.post<{ stdout: string; stderr: string; exit_code: number }>(
+        `/workspaces/${workspaceId}/servers/${serverId}/console/exec`,
+        {
+          command: cmd.split(' '),
+          timeout: 30,
+          region: selectedRegion,
+        }
+      ),
+    onSuccess: (data) => {
+      setOutput(data);
+      setHistory((prev) => [...prev, { command, output: data }]);
+      setCommand('');
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (command.trim()) {
+      execMutation.mutate(command);
+    }
+  };
+
+  const runningRegions = serverRegions.filter(r => r.status === 'running');
+
+  if (serverStatus !== 'running') {
+    return (
+      <div className="py-16 text-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+          <svg className="w-8 h-8 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M9 9l6 6M15 9l-6 6" strokeLinecap="round" />
+          </svg>
+        </div>
+        <p className="text-gray-500">{t('console.serverNotRunning')}</p>
+        <p className="text-sm text-gray-400 mt-1">{t('console.deployFirst')}</p>
+      </div>
+    );
+  }
+
+  if (runningRegions.length === 0) {
+    return (
+      <div className="py-16 text-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+          <svg className="w-8 h-8 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" strokeLinecap="round" />
+          </svg>
+        </div>
+        <p className="text-gray-500">{t('console.noRunningRegions')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Info Banner */}
+      <div className="p-4 rounded-xl bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-violet-600 flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M7 8l4 4-4 4M13 16h4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold text-white">{t('console.title')}</h3>
+            <p className="text-sm text-gray-400">{t('console.description')}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Region Selector */}
+      {runningRegions.length > 1 && (
+        <div className="flex items-center gap-3">
+          <Label className="text-gray-600">{t('console.selectRegion')}</Label>
+          <select
+            value={selectedRegion || ''}
+            onChange={(e) => setSelectedRegion(e.target.value || undefined)}
+            className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            <option value="">{t('console.primaryRegion')}</option>
+            {runningRegions.map((region) => {
+              const regionInfo = REGIONS.find(r => r.code === region.region);
+              return (
+                <option key={region.region} value={region.region}>
+                  {regionInfo?.city || region.region} ({region.region.toUpperCase()})
+                  {region.is_primary && ` - ${t('regions.primary')}`}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      )}
+
+      {/* Terminal */}
+      <div className="rounded-xl bg-gray-900 border border-gray-700 overflow-hidden">
+        {/* Terminal Header */}
+        <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 border-b border-gray-700">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <div className="w-3 h-3 rounded-full bg-yellow-500" />
+            <div className="w-3 h-3 rounded-full bg-green-500" />
+          </div>
+          <span className="text-sm text-gray-400 ml-2">
+            {selectedRegion ? selectedRegion.toUpperCase() : runningRegions.find(r => r.is_primary)?.region.toUpperCase() || 'Console'}
+          </span>
+        </div>
+
+        {/* Terminal Output */}
+        <div className="p-4 font-mono text-sm max-h-80 overflow-y-auto">
+          {history.length === 0 && !output && (
+            <div className="text-gray-500">
+              {t('console.welcome')}
+            </div>
+          )}
+
+          {history.map((item, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex items-center gap-2 text-green-400">
+                <span>$</span>
+                <span>{item.command}</span>
+              </div>
+              {item.output.stdout && (
+                <pre className="text-gray-300 whitespace-pre-wrap mt-1">{item.output.stdout}</pre>
+              )}
+              {item.output.stderr && (
+                <pre className="text-red-400 whitespace-pre-wrap mt-1">{item.output.stderr}</pre>
+              )}
+              <div className={`text-xs mt-1 ${item.output.exit_code === 0 ? 'text-gray-500' : 'text-red-400'}`}>
+                exit: {item.output.exit_code}
+              </div>
+            </div>
+          ))}
+
+          {execMutation.isPending && (
+            <div className="flex items-center gap-2 text-gray-400">
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
+              </svg>
+              <span>{t('console.executing')}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Command Input */}
+        <form onSubmit={handleSubmit} className="flex items-center border-t border-gray-700">
+          <span className="pl-4 text-green-400 font-mono">$</span>
+          <input
+            type="text"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder={t('console.placeholder')}
+            disabled={execMutation.isPending}
+            className="flex-1 px-2 py-3 bg-transparent text-gray-300 font-mono text-sm focus:outline-none placeholder-gray-600"
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={!command.trim() || execMutation.isPending}
+            className="px-4 py-3 text-violet-400 hover:text-violet-300 disabled:text-gray-600 transition-colors"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </form>
+      </div>
+
+      {/* Quick Commands */}
+      <div>
+        <Label className="text-gray-600 mb-2 block">{t('console.quickCommands')}</Label>
+        <div className="flex flex-wrap gap-2">
+          {['ls -la', 'pwd', 'cat package.json', 'node --version', 'npm list --depth=0'].map((cmd) => (
+            <button
+              key={cmd}
+              onClick={() => {
+                setCommand(cmd);
+              }}
+              className="px-3 py-1.5 text-sm font-mono bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            >
+              {cmd}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {execMutation.isError && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+          <p className="text-red-700 text-sm">{t('console.error')}</p>
         </div>
       )}
     </div>

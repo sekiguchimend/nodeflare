@@ -1,10 +1,12 @@
 pub mod auth;
 pub mod billing;
+pub mod console;
 pub mod contact;
 pub mod github;
 pub mod health;
 pub mod openapi;
 pub mod servers;
+pub mod wireguard;
 pub mod workspaces;
 pub mod members;
 pub mod tools;
@@ -204,6 +206,20 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route(
             "/user/notifications",
             get(notifications::get_settings).patch(notifications::update_settings),
+        )
+        // Console (Machine Exec)
+        .route(
+            "/workspaces/:workspace_id/servers/:server_id/console/exec",
+            post(console::exec_command),
+        )
+        // WireGuard VPN
+        .route(
+            "/workspaces/:workspace_id/wireguard",
+            post(wireguard::create_wireguard_peer),
+        )
+        .route(
+            "/workspaces/:workspace_id/wireguard/:peer_name",
+            delete(wireguard::delete_wireguard_peer),
         )
 }
 

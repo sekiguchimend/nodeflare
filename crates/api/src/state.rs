@@ -2,6 +2,7 @@ use fred::prelude::RedisClient;
 use mcp_auth::{CryptoService, JwtService};
 use mcp_billing::{BillingService, WebhookHandler};
 use mcp_common::AppConfig;
+use mcp_container::FlyioRuntime;
 use mcp_db::DbPool;
 use mcp_email::EmailService;
 use mcp_github::GitHubApp;
@@ -21,6 +22,7 @@ pub struct AppState {
     pub billing: Option<BillingService>,
     pub webhook_handler: Option<WebhookHandler>,
     pub email: Option<EmailService>,
+    pub fly_runtime: Option<FlyioRuntime>,
 }
 
 impl AppState {
@@ -73,6 +75,22 @@ impl AppState {
             }
         };
 
+        // Initialize Fly.io runtime (optional)
+        let fly_runtime = match (
+            std::env::var("FLY_API_TOKEN"),
+            std::env::var("FLY_ORG"),
+        ) {
+            (Ok(api_token), Ok(org_slug)) => {
+                let region = std::env::var("FLY_REGION").unwrap_or_else(|_| "nrt".to_string());
+                tracing::info!("Fly.io runtime initialized for org: {}", org_slug);
+                Some(FlyioRuntime::new(api_token, org_slug, region))
+            }
+            _ => {
+                tracing::warn!("Fly.io not configured - container features disabled");
+                None
+            }
+        };
+
         Self {
             config,
             db,
@@ -85,6 +103,7 @@ impl AppState {
             billing,
             webhook_handler,
             email,
+            fly_runtime,
         }
     }
 }

@@ -1,8 +1,9 @@
 use crate::{Container, ContainerConfig, ContainerRuntime, ContainerStatus};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
 const FLY_API_URL: &str = "https://api.machines.dev/v1";
+const FLY_GRAPHQL_URL: &str = "https://api.fly.io/graphql";
 
 pub struct FlyioRuntime {
     api_token: String,
@@ -269,5 +270,241 @@ impl ContainerRuntime for FlyioRuntime {
 
         let logs = response.text().await.unwrap_or_default();
         Ok(logs)
+    }
+}
+
+// ============================================================================
+// Extended Fly.io Features: Exec, WireGuard, Tigris
+// ============================================================================
+
+/// Response from machine exec
+#[derive(Debug, Deserialize)]
+pub struct ExecResponse {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+}
+
+/// WireGuard peer configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireGuardPeer {
+    pub name: String,
+    pub pubkey: String,
+    pub peerip: String,
+    pub endpoint: String,
+    pub private_key: Option<String>,
+}
+
+/// WireGuard configuration for client
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireGuardConfig {
+    pub peer_name: String,
+    pub private_key: String,
+    pub public_key: String,
+    pub peer_ip: String,
+    pub dns: String,
+    pub endpoint: String,
+    pub endpoint_public_key: String,
+    pub allowed_ips: String,
+}
+
+impl FlyioRuntime {
+    /// Execute a command on a running machine
+    pub async fn exec(&self, id: &str, command: Vec<String>, timeout_secs: u32) -> Result<ExecResponse> {
+        let (app_name, machine_id) = Self::decode_id(id)?;
+
+        let request = serde_json::json!({
+            "cmd": command,
+            "timeout": timeout_secs
+        });
+
+        let response = self
+            .http_client
+            .post(format!(
+                "{}/apps/{}/machines/{}/exec",
+                FLY_API_URL, app_name, machine_id
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to execute command")?;
+
+        if !response.status().is_success() {
+            let error = response.text().await.unwrap_or_default();
+            anyhow::bail!("Failed to execute command: {}", error);
+        }
+
+        let result: ExecResponse = response.json().await?;
+        Ok(result)
+    }
+
+    /// Create a WireGuard peer for an organization
+    pub async fn create_wireguard_peer(
+        &self,
+        org_slug: &str,
+        region: &str,
+        peer_name: &str,
+    ) -> Result<WireGuardConfig> {
+        // Generate WireGuard keypair
+        let private_key = Self::generate_wireguard_private_key();
+        let public_key = Self::derive_wireguard_public_key(&private_key)?;
+
+        let query = r#"
+            mutation AddWireGuardPeer($input: AddWireGuardPeerInput!) {
+                addWireGuardPeer(input: $input) {
+                    peerip
+                    endpointip
+                    pubkey
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "input": {
+                "organizationId": org_slug,
+                "region": region,
+                "name": peer_name,
+                "pubkey": public_key
+            }
+        });
+
+        let response = self
+            .http_client
+            .post(FLY_GRAPHQL_URL)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .json(&serde_json::json!({
+                "query": query,
+                "variables": variables
+            }))
+            .send()
+            .await
+            .context("Failed to create WireGuard peer")?;
+
+        if !response.status().is_success() {
+            let error = response.text().await.unwrap_or_default();
+            anyhow::bail!("Failed to create WireGuard peer: {}", error);
+        }
+
+        let result: serde_json::Value = response.json().await?;
+
+        if let Some(errors) = result.get("errors") {
+            anyhow::bail!("GraphQL error: {}", errors);
+        }
+
+        let data = result
+            .get("data")
+            .and_then(|d| d.get("addWireGuardPeer"))
+            .ok_or_else(|| anyhow!("Invalid response from WireGuard API"))?;
+
+        let peer_ip = data["peerip"].as_str().unwrap_or("").to_string();
+        let endpoint_ip = data["endpointip"].as_str().unwrap_or("").to_string();
+        let endpoint_pubkey = data["pubkey"].as_str().unwrap_or("").to_string();
+
+        Ok(WireGuardConfig {
+            peer_name: peer_name.to_string(),
+            private_key,
+            public_key,
+            peer_ip,
+            dns: "fdaa::3".to_string(),
+            endpoint: format!("{}:51820", endpoint_ip),
+            endpoint_public_key: endpoint_pubkey,
+            allowed_ips: "fdaa::/16".to_string(),
+        })
+    }
+
+    /// Remove a WireGuard peer
+    pub async fn remove_wireguard_peer(&self, org_slug: &str, peer_name: &str) -> Result<()> {
+        let query = r#"
+            mutation RemoveWireGuardPeer($input: RemoveWireGuardPeerInput!) {
+                removeWireGuardPeer(input: $input) {
+                    organization {
+                        id
+                    }
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "input": {
+                "organizationId": org_slug,
+                "name": peer_name
+            }
+        });
+
+        let response = self
+            .http_client
+            .post(FLY_GRAPHQL_URL)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .json(&serde_json::json!({
+                "query": query,
+                "variables": variables
+            }))
+            .send()
+            .await
+            .context("Failed to remove WireGuard peer")?;
+
+        if !response.status().is_success() {
+            let error = response.text().await.unwrap_or_default();
+            anyhow::bail!("Failed to remove WireGuard peer: {}", error);
+        }
+
+        Ok(())
+    }
+
+    /// Generate WireGuard configuration file content
+    pub fn generate_wireguard_config(config: &WireGuardConfig) -> String {
+        format!(
+            r#"[Interface]
+PrivateKey = {}
+Address = {}/120
+DNS = {}
+
+[Peer]
+PublicKey = {}
+AllowedIPs = {}
+Endpoint = {}
+PersistentKeepalive = 15
+"#,
+            config.private_key,
+            config.peer_ip,
+            config.dns,
+            config.endpoint_public_key,
+            config.allowed_ips,
+            config.endpoint
+        )
+    }
+
+    // Helper: Generate WireGuard private key (base64 encoded)
+    fn generate_wireguard_private_key() -> String {
+        use rand::RngCore;
+        let mut key = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut key);
+        // Clamp the key for Curve25519
+        key[0] &= 248;
+        key[31] &= 127;
+        key[31] |= 64;
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key)
+    }
+
+    // Helper: Derive public key from private key
+    fn derive_wireguard_public_key(private_key: &str) -> Result<String> {
+        use base64::Engine;
+        let private_bytes = base64::engine::general_purpose::STANDARD
+            .decode(private_key)
+            .context("Invalid private key")?;
+
+        if private_bytes.len() != 32 {
+            anyhow::bail!("Invalid private key length");
+        }
+
+        // Use x25519-dalek for proper key derivation
+        let mut private_array = [0u8; 32];
+        private_array.copy_from_slice(&private_bytes);
+
+        // Compute public key using scalar multiplication
+        let public_key = x25519_dalek::x25519(private_array, x25519_dalek::X25519_BASEPOINT_BYTES);
+
+        Ok(base64::engine::general_purpose::STANDARD.encode(public_key))
     }
 }

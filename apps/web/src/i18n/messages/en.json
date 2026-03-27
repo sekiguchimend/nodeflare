@@ -367,6 +367,20 @@
       "success": "Success",
       "failure": "Failure"
     },
+    "console": {
+      "title": "Console",
+      "description": "Execute commands on your server for debugging and inspection",
+      "serverNotRunning": "Server is not running",
+      "deployFirst": "Deploy your server first to use the console",
+      "noRunningRegions": "No running regions available",
+      "selectRegion": "Region:",
+      "primaryRegion": "Primary Region",
+      "welcome": "Type a command and press Enter...",
+      "placeholder": "ls -la, node --version, etc.",
+      "quickCommands": "Quick Commands",
+      "executing": "Executing...",
+      "error": "Failed to execute command"
+    },
     "status": {
       "running": "Running",
       "stopped": "Stopped",

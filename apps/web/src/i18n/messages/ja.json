@@ -367,6 +367,20 @@
       "success": "成功",
       "failure": "失敗"
     },
+    "console": {
+      "title": "コンソール",
+      "description": "サーバー内でコマンドを実行してデバッグ情報を確認できます",
+      "serverNotRunning": "サーバーが起動していません",
+      "deployFirst": "コンソールを使用するにはまずサーバーをデプロイしてください",
+      "noRunningRegions": "実行中のリージョンがありません",
+      "selectRegion": "リージョン:",
+      "primaryRegion": "プライマリリージョン",
+      "welcome": "コマンドを入力して Enter を押してください...",
+      "placeholder": "ls -la, node --version など",
+      "quickCommands": "クイックコマンド",
+      "executing": "実行中...",
+      "error": "コマンドの実行に失敗しました"
+    },
     "status": {
       "running": "実行中",
       "stopped": "停止",

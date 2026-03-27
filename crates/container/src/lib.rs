@@ -47,4 +47,6 @@ pub mod docker;
 pub mod flyio;
 
 pub use docker::DockerRuntime;
-pub use flyio::FlyioRuntime;
+pub use flyio::{
+    ExecResponse, FlyioRuntime, WireGuardConfig, WireGuardPeer,
+};
