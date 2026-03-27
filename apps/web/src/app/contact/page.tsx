@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Header, Footer } from '@/components/layout';
 import { api } from '@/lib/api';
+import { getApiErrorCode } from '@/types';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -27,8 +28,8 @@ export default function ContactPage() {
         message: formData.message,
       });
       setIsSubmitted(true);
-    } catch (err: any) {
-      const errorCode = err?.response?.data?.error?.code;
+    } catch (err: unknown) {
+      const errorCode = getApiErrorCode(err);
       if (errorCode === 'RATE_LIMITED') {
         setError('送信回数が上限に達しました。しばらくしてからお試しください。');
       } else if (errorCode === 'INVALID_EMAIL') {

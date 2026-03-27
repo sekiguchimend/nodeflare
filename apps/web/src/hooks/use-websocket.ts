@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ServerStatus } from '@/types';
 
+// Constants
+const DEFAULT_RECONNECT_INTERVAL = 3000;
+const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10;
+
 type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 interface UseWebSocketOptions {
@@ -22,7 +26,10 @@ export type WsMessageType =
   | 'ServerLog'
   | 'Error'
   | 'Ping'
-  | 'Pong';
+  | 'Pong'
+  | 'Auth'
+  | 'AuthSuccess'
+  | 'AuthError';
 
 export interface DeploymentStatusUpdate {
   deployment_id: string;
@@ -71,7 +78,9 @@ export type WebSocketMessage =
   | { type: 'ServerLog'; data: ServerLogLine }
   | { type: 'Error'; data: { code: string; message: string } }
   | { type: 'Ping' }
-  | { type: 'Pong' };
+  | { type: 'Pong' }
+  | { type: 'AuthSuccess' }
+  | { type: 'AuthError'; data: { message: string } };
 
 export function useWebSocket({
   url,
@@ -80,16 +89,32 @@ export function useWebSocket({
   onDisconnect,
   onError,
   reconnect = true,
-  reconnectInterval = 3000,
-  maxReconnectAttempts = 10,
+  reconnectInterval = DEFAULT_RECONNECT_INTERVAL,
+  maxReconnectAttempts = DEFAULT_MAX_RECONNECT_ATTEMPTS,
 }: UseWebSocketOptions) {
   const [status, setStatus] = useState<WebSocketStatus>('disconnected');
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Store callbacks in refs to avoid dependency issues
+  const onMessageRef = useRef(onMessage);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+  const onErrorRef = useRef(onError);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    onConnectRef.current = onConnect;
+    onDisconnectRef.current = onDisconnect;
+    onErrorRef.current = onError;
+  }, [onMessage, onConnect, onDisconnect, onError]);
 
   const connect = useCallback(() => {
+    if (!isMountedRef.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -101,50 +126,70 @@ export function useWebSocket({
       return;
     }
 
-    // Add token to URL
-    const wsUrl = new URL(url);
-    wsUrl.searchParams.set('token', token);
-
     setStatus('connecting');
-    const ws = new WebSocket(wsUrl.toString());
+    // Connect without token in URL (security fix)
+    const ws = new WebSocket(url);
 
     ws.onopen = () => {
-      setStatus('connected');
-      reconnectAttemptsRef.current = 0;
-      onConnect?.();
+      if (!isMountedRef.current) {
+        ws.close();
+        return;
+      }
+      // Send authentication message after connection (instead of URL param)
+      ws.send(JSON.stringify({ type: 'Auth', token }));
     };
 
     ws.onmessage = (event) => {
+      if (!isMountedRef.current) return;
       try {
         const message = JSON.parse(event.data) as WebSocketMessage;
+
+        // Handle auth response
+        if (message.type === 'AuthSuccess') {
+          setStatus('connected');
+          reconnectAttemptsRef.current = 0;
+          onConnectRef.current?.();
+          return;
+        }
+
+        if (message.type === 'AuthError') {
+          setStatus('error');
+          ws.close();
+          return;
+        }
+
         setLastMessage(message);
-        onMessage?.(message);
+        onMessageRef.current?.(message);
       } catch (e) {
         console.error('Failed to parse WebSocket message:', e);
       }
     };
 
     ws.onerror = (error) => {
+      if (!isMountedRef.current) return;
       setStatus('error');
-      onError?.(error);
+      onErrorRef.current?.(error);
     };
 
     ws.onclose = () => {
+      if (!isMountedRef.current) return;
       setStatus('disconnected');
       wsRef.current = null;
-      onDisconnect?.();
+      onDisconnectRef.current?.();
 
       // Attempt to reconnect
-      if (reconnect && reconnectAttemptsRef.current < maxReconnectAttempts) {
+      if (reconnect && reconnectAttemptsRef.current < maxReconnectAttempts && isMountedRef.current) {
         reconnectAttemptsRef.current++;
         reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
+          if (isMountedRef.current) {
+            connect();
+          }
         }, reconnectInterval);
       }
     };
 
     wsRef.current = ws;
-  }, [url, onMessage, onConnect, onDisconnect, onError, reconnect, reconnectInterval, maxReconnectAttempts]);
+  }, [url, reconnect, reconnectInterval, maxReconnectAttempts]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -165,11 +210,21 @@ export function useWebSocket({
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     connect();
+
     return () => {
-      disconnect();
+      isMountedRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
-  }, [connect, disconnect]);
+  }, [connect]);
 
   return {
     status,
@@ -181,14 +236,19 @@ export function useWebSocket({
   };
 }
 
+// Helper to get WebSocket URL from API URL
+function getWsUrl(path: string): string {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  return apiUrl.replace(/^http/, 'ws') + path;
+}
+
 // Convenience hooks for specific WebSocket connections
 
 export function useDeploymentWebSocket(deploymentId: string, options?: {
   onStatusUpdate?: (status: DeploymentStatusUpdate) => void;
   onBuildLog?: (log: BuildLogLine) => void;
 }) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/deployments/${deploymentId}`;
+  const wsUrl = getWsUrl(`/ws/deployments/${deploymentId}`);
 
   return useWebSocket({
     url: wsUrl,
@@ -203,8 +263,7 @@ export function useDeploymentWebSocket(deploymentId: string, options?: {
 export function useBuildLogsWebSocket(deploymentId: string, options?: {
   onLog?: (log: BuildLogLine) => void;
 }) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/deployments/${deploymentId}/logs`;
+  const wsUrl = getWsUrl(`/ws/deployments/${deploymentId}/logs`);
 
   return useWebSocket({
     url: wsUrl,
@@ -219,8 +278,7 @@ export function useBuildLogsWebSocket(deploymentId: string, options?: {
 export function useServerLogsWebSocket(workspaceId: string, serverId: string, options?: {
   onLog?: (log: ServerLogLine) => void;
 }) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/workspaces/${workspaceId}/servers/${serverId}/logs`;
+  const wsUrl = getWsUrl(`/ws/workspaces/${workspaceId}/servers/${serverId}/logs`);
 
   return useWebSocket({
     url: wsUrl,
@@ -235,8 +293,7 @@ export function useServerLogsWebSocket(workspaceId: string, serverId: string, op
 export function useServerStatusWebSocket(workspaceId: string, serverId: string, options?: {
   onStatusUpdate?: (status: ServerStatusUpdate) => void;
 }) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/workspaces/${workspaceId}/servers/${serverId}/status`;
+  const wsUrl = getWsUrl(`/ws/workspaces/${workspaceId}/servers/${serverId}/status`);
 
   return useWebSocket({
     url: wsUrl,

@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { getApiErrorMessage } from '@/types';
 
 interface NotificationSettings {
   email_deploy_success: boolean;
@@ -60,8 +61,8 @@ export default function SettingsPage() {
       await api.patch('/auth/profile', { name: profileName.trim() });
       refreshUser?.();
       setIsEditingProfile(false);
-    } catch (err: any) {
-      setProfileError(err?.response?.data?.error?.message || 'Failed to update profile');
+    } catch (err: unknown) {
+      setProfileError(getApiErrorMessage(err));
     } finally {
       setProfileSaving(false);
     }

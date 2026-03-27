@@ -8,6 +8,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+// Constants
+const STATS_STALE_TIME_MS = 60 * 1000; // 1 minute
+const PULSE_DURATION_MS = 1000;
+const PULSE_INTERVAL_MS = 3000;
+const DEFAULT_MAX_SERVERS = 3;
+const DEFAULT_MAX_REQUESTS = 10000;
+
 interface Workspace {
   id: string;
   name: string;
@@ -29,28 +36,31 @@ export default function DashboardPage() {
   const tBilling = useTranslations('billing');
   const router = useRouter();
 
-  const { data: servers, isLoading, isSuccess } = useQuery<McpServer[]>({
+  const { data: servers, isLoading: isLoadingServers, isSuccess: isSuccessServers, isError: isErrorServers } = useQuery<McpServer[]>({
     queryKey: ['servers'],
     queryFn: () => api.get('/servers'),
   });
 
-  const { data: workspaces } = useQuery<Workspace[]>({
+  const { data: workspaces, isLoading: isLoadingWorkspaces } = useQuery<Workspace[]>({
     queryKey: ['workspaces'],
     queryFn: () => api.get('/workspaces'),
   });
 
-  const { data: plans } = useQuery<Plan[]>({
+  const { data: plans, isLoading: isLoadingPlans } = useQuery<Plan[]>({
     queryKey: ['billing-plans'],
     queryFn: () => api.get('/billing/plans'),
   });
 
-  const hasNoServers = isSuccess && (!servers || servers.length === 0);
+  const hasNoServers = isSuccessServers && (!servers || servers.length === 0);
 
   useEffect(() => {
     if (hasNoServers) {
       router.replace('/dashboard/servers/new');
     }
   }, [hasNoServers, router]);
+
+  // 必要なデータの初期ローディング中（サーバー以外）
+  const isInitialLoading = isLoadingWorkspaces && isLoadingPlans;
 
   const runningServers = servers?.filter((s) => s.status === 'running') ?? [];
   const currentWorkspace = workspaces?.[0];
@@ -62,7 +72,7 @@ export default function DashboardPage() {
       queryKey: ['workspaces', server.workspace_id, 'servers', server.id, 'stats'],
       queryFn: () => api.get<ServerStatsResponse>(`/workspaces/${server.workspace_id}/servers/${server.id}/stats`),
       enabled: !!server.workspace_id,
-      staleTime: 60000,
+      staleTime: STATS_STALE_TIME_MS,
     })),
   });
 
@@ -83,7 +93,8 @@ export default function DashboardPage() {
     return { totalRequests, totalErrors, errorRate, uptime, isLoadingStats };
   }, [statsQueries, runningServers.length, servers]);
 
-  if (isLoading || hasNoServers) {
+  // 初期ローディング（サーバーが成功して空の場合のみリダイレクト待ち）
+  if (isInitialLoading || hasNoServers) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -91,8 +102,8 @@ export default function DashboardPage() {
     );
   }
 
-  const maxServers = currentPlan?.limits?.max_servers || 3;
-  const maxRequests = currentPlan?.limits?.max_requests_per_month || 10000;
+  const maxServers = currentPlan?.limits?.max_servers || DEFAULT_MAX_SERVERS;
+  const maxRequests = currentPlan?.limits?.max_requests_per_month || DEFAULT_MAX_REQUESTS;
   const serverUsage = Math.min((servers?.length || 0) / maxServers * 100, 100);
   const requestUsage = Math.min(aggregatedStats.totalRequests / maxRequests * 100, 100);
 
@@ -116,16 +127,22 @@ export default function DashboardPage() {
       {/* Stats Row */}
       <div className="flex items-center gap-6 mb-6 text-sm">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="text-gray-500">{t('runningCount', { running: runningServers.length, total: servers?.length || 0 })}</span>
+          <span className={`w-2 h-2 rounded-full ${isErrorServers ? 'bg-gray-400' : 'bg-green-500'}`} />
+          <span className="text-gray-500">
+            {isErrorServers ? '--' : t('runningCount', { running: runningServers.length, total: servers?.length || 0 })}
+          </span>
         </div>
         <div className="text-gray-300">|</div>
         <div className="text-gray-500">
-          <span className="text-gray-900 font-medium">{aggregatedStats.totalRequests.toLocaleString()}</span> {t('requests')}
+          <span className="text-gray-900 font-medium">
+            {isErrorServers ? '--' : aggregatedStats.totalRequests.toLocaleString()}
+          </span> {t('requests')}
         </div>
         <div className="text-gray-300">|</div>
         <div className="text-gray-500">
-          <span className={aggregatedStats.totalErrors > 0 ? 'text-red-600 font-medium' : 'text-gray-900 font-medium'}>{aggregatedStats.totalErrors}</span> {t('errors')}
+          <span className={aggregatedStats.totalErrors > 0 ? 'text-red-600 font-medium' : 'text-gray-900 font-medium'}>
+            {isErrorServers ? '--' : aggregatedStats.totalErrors}
+          </span> {t('errors')}
         </div>
         <div className="flex-1" />
         <Link href="/dashboard/servers/new" className="flex items-center gap-1.5 text-violet-600 hover:text-violet-700">
@@ -145,9 +162,30 @@ export default function DashboardPage() {
           </Link>
         </div>
         <div className="divide-y divide-gray-100">
-          {servers?.slice(0, 6).map((server, index) => (
-            <ServerStatusRow key={server.id} server={server} index={index} t={tServers} />
-          ))}
+          {isLoadingServers ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+            </div>
+          ) : isErrorServers ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <svg className="w-8 h-8 text-red-400 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <p className="text-sm text-gray-500">{t('serversLoadError')}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-xs text-violet-600 hover:text-violet-700"
+              >
+                {t('retry')}
+              </button>
+            </div>
+          ) : (
+            servers?.slice(0, 6).map((server, index) => (
+              <ServerStatusRow key={server.id} server={server} index={index} t={tServers} />
+            ))
+          )}
         </div>
       </div>
 
@@ -164,14 +202,14 @@ export default function DashboardPage() {
             <div className="flex items-baseline justify-between mb-2">
               <span className="text-sm text-gray-600">{t('servers')}</span>
               <span className="text-sm">
-                <span className="font-semibold text-gray-900">{servers?.length || 0}</span>
+                <span className="font-semibold text-gray-900">{isErrorServers ? '--' : (servers?.length || 0)}</span>
                 <span className="text-gray-400"> / {maxServers === 4294967295 ? '∞' : maxServers}</span>
               </span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-violet-400 to-violet-500 rounded-full"
-                style={{ width: maxServers === 4294967295 ? '0%' : `${serverUsage}%` }}
+                style={{ width: isErrorServers ? '0%' : (maxServers === 4294967295 ? '0%' : `${serverUsage}%`) }}
               />
             </div>
           </div>
@@ -179,14 +217,14 @@ export default function DashboardPage() {
             <div className="flex items-baseline justify-between mb-2">
               <span className="text-sm text-gray-600">{t('requests')}</span>
               <span className="text-sm">
-                <span className="font-semibold text-gray-900">{aggregatedStats.totalRequests.toLocaleString()}</span>
+                <span className="font-semibold text-gray-900">{isErrorServers ? '--' : aggregatedStats.totalRequests.toLocaleString()}</span>
                 <span className="text-gray-400"> / {maxRequests === 4294967295 ? '∞' : maxRequests.toLocaleString()}</span>
               </span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full"
-                style={{ width: maxRequests === 4294967295 ? '0%' : `${requestUsage}%` }}
+                style={{ width: isErrorServers ? '0%' : (maxRequests === 4294967295 ? '0%' : `${requestUsage}%`) }}
               />
             </div>
           </div>
@@ -215,8 +253,8 @@ function ServerStatusRow({
     if (server.status === 'running') {
       const interval = setInterval(() => {
         setPulse(true);
-        setTimeout(() => setPulse(false), 1000);
-      }, 3000);
+        setTimeout(() => setPulse(false), PULSE_DURATION_MS);
+      }, PULSE_INTERVAL_MS);
       return () => clearInterval(interval);
     }
   }, [server.status]);
@@ -293,7 +331,7 @@ function NewsSection({ t }: { t: (key: string) => string }) {
   const { data: announcements } = useQuery<Announcement[]>({
     queryKey: ['announcements'],
     queryFn: () => api.get('/announcements?limit=5'),
-    staleTime: 60000,
+    staleTime: STATS_STALE_TIME_MS,
   });
 
   // Fetch blog posts from CMS
@@ -304,7 +342,7 @@ function NewsSection({ t }: { t: (key: string) => string }) {
       if (!res.ok) return [];
       return res.json();
     },
-    staleTime: 60000,
+    staleTime: STATS_STALE_TIME_MS,
   });
 
   // Static videos for now

@@ -26,7 +26,8 @@
     "disabled": "Disabled",
     "previous": "Previous",
     "showing": "Showing {from} to {to} of {total}",
-    "notFound": "Not found"
+    "notFound": "Not found",
+    "retry": "Retry"
   },
   "nav": {
     "home": "Home",
@@ -204,7 +205,9 @@
     "planUsage": "Plan Usage",
     "manage": "Manage →",
     "videos": "Videos",
-    "blog": "Blog"
+    "blog": "Blog",
+    "serversLoadError": "Failed to load servers",
+    "retry": "Retry"
   },
   "servers": {
     "title": "Servers",
@@ -212,6 +215,8 @@
     "list": "Server List",
     "empty": "No servers yet",
     "createFirst": "Create your first server",
+    "loadError": "Failed to load servers",
+    "retry": "Retry",
     "repo": "Repository",
     "runtime": "Runtime",
     "visibility": "Visibility",
@@ -396,6 +401,7 @@
     "title": "API Keys",
     "new": "New API Key",
     "empty": "No API keys yet",
+    "loadError": "Failed to load API keys",
     "yourKeys": "Your API Keys",
     "created": "API key created",
     "createdWarning": "This key will only be shown once. Store it in a safe place.",
@@ -445,6 +451,7 @@
     "recentRequests": "Recent Requests",
     "empty": "No logs",
     "noLogs": "No request logs yet",
+    "loadError": "Failed to load logs",
     "realtime": "Realtime",
     "download": "Download",
     "search": "Search logs...",
@@ -481,6 +488,7 @@
     "usage": "{current} / {max} members",
     "addMember": "Add Member",
     "empty": "You are the only member",
+    "loadError": "Failed to load team members",
     "roles": {
       "owner": "Owner",
       "admin": "Admin",
@@ -510,6 +518,7 @@
   "billing": {
     "title": "Billing & Subscription",
     "subtitle": "Manage your subscription and billing settings",
+    "loadError": "Failed to load billing information",
     "currentPlan": "Current Plan",
     "currentPlanDesc": "Your current subscription status",
     "plan": "{plan} Plan",

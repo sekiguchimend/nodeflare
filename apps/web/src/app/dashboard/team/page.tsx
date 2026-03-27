@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { TeamMember, AddMemberRequest, WorkspaceRole } from '@/types';
+import { TeamMember, AddMemberRequest, WorkspaceRole, getApiErrorCode, getApiErrorMessage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,7 +43,7 @@ export default function TeamPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
 
-  const { data: workspaces, isLoading: isLoadingWorkspaces } = useQuery<Workspace[]>({
+  const { data: workspaces, isLoading: isLoadingWorkspaces, isError: isErrorWorkspaces } = useQuery<Workspace[]>({
     queryKey: ['workspaces'],
     queryFn: () => api.get('/workspaces'),
   });
@@ -51,7 +51,7 @@ export default function TeamPage() {
   const workspaceId = selectedWorkspaceId || workspaces?.[0]?.id;
   const currentWorkspace = workspaces?.find(w => w.id === workspaceId);
 
-  const { data: members, isLoading: isLoadingMembers } = useQuery<TeamMember[]>({
+  const { data: members, isLoading: isLoadingMembers, isError: isErrorMembers } = useQuery<TeamMember[]>({
     queryKey: ['workspaces', workspaceId, 'members'],
     queryFn: () => api.get(`/workspaces/${workspaceId}/members`),
     enabled: !!workspaceId,
@@ -64,8 +64,8 @@ export default function TeamPage() {
 
   const currentPlanLimits = plans?.find(p => p.plan === (currentWorkspace?.plan || 'free'))?.limits;
   const maxMembers = currentPlanLimits?.max_team_members || 1;
-  const currentMemberCount = members?.length || 0;
-  const isAtLimit = currentMemberCount >= maxMembers;
+  const currentMemberCount = isErrorMembers ? 0 : (members?.length || 0);
+  const isAtLimit = !isErrorMembers && currentMemberCount >= maxMembers;
 
   const isLoading = isLoadingWorkspaces || isLoadingMembers;
 
@@ -160,6 +160,23 @@ export default function TeamPage() {
               <div key={i} className="h-20 bg-gray-100 animate-pulse rounded-xl" />
             ))}
           </div>
+        ) : isErrorWorkspaces || isErrorMembers ? (
+          <div className="py-16 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+              <svg className="w-8 h-8 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <p className="text-gray-500 mb-4">{t('loadError')}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm text-violet-600 hover:text-violet-700"
+            >
+              {tCommon('retry')}
+            </button>
+          </div>
         ) : members?.length === 1 ? (
           <div className="py-16 text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
@@ -212,8 +229,8 @@ function AddMemberForm({
       queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] });
       onClose();
     },
-    onError: (err: any) => {
-      const errorCode = err?.response?.data?.error?.code;
+    onError: (err: unknown) => {
+      const errorCode = getApiErrorCode(err);
       if (errorCode === 'NOT_FOUND') {
         setError(t('errors.userNotFound'));
       } else if (errorCode === 'ALREADY_MEMBER') {
@@ -221,7 +238,7 @@ function AddMemberForm({
       } else if (errorCode === 'MEMBER_LIMIT_REACHED') {
         setError(t('errors.limitReached'));
       } else {
-        setError(err.message || 'An error occurred');
+        setError(getApiErrorMessage(err));
       }
     },
   });

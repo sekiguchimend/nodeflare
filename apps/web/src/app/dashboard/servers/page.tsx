@@ -25,7 +25,7 @@ interface Plan {
 
 export default function ServersPage() {
   const t = useTranslations('servers');
-  const { data: servers, isLoading } = useQuery<McpServer[]>({
+  const { data: servers, isLoading, isError: isErrorServers } = useQuery<McpServer[]>({
     queryKey: ['servers'],
     queryFn: () => api.get('/servers'),
   });
@@ -43,8 +43,8 @@ export default function ServersPage() {
   const currentWorkspace = workspaces?.[0];
   const currentPlanLimits = plans?.find(p => p.plan === (currentWorkspace?.plan || 'free'))?.limits;
   const maxServers = currentPlanLimits?.max_servers || 3;
-  const currentServerCount = servers?.length || 0;
-  const isAtLimit = currentServerCount >= maxServers;
+  const currentServerCount = isErrorServers ? 0 : (servers?.length || 0);
+  const isAtLimit = !isErrorServers && currentServerCount >= maxServers;
 
   return (
     <div className="space-y-6">
@@ -97,6 +97,20 @@ export default function ServersPage() {
             <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
           ))}
         </div>
+      ) : isErrorServers ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <svg className="w-12 h-12 text-red-400 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <p className="text-muted-foreground mb-4">{t('loadError')}</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              {t('retry')}
+            </Button>
+          </CardContent>
+        </Card>
       ) : servers?.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">

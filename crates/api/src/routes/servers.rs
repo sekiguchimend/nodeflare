@@ -12,7 +12,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::extractors::AuthUser;
+use crate::extractors::{workspace, AuthUser};
 use crate::state::AppState;
 
 #[derive(serde::Deserialize)]
@@ -25,11 +25,10 @@ pub struct ServerPath {
 pub async fn list_all(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
-) -> Result<Json<Vec<ServerResponse>>, (StatusCode, String)> {
+) -> Result<Json<Vec<ServerResponse>>, AppError> {
     // Use single JOIN query to prevent N+1 problem
     let servers = ServerRepository::list_all_by_user(&state.db, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .await?;
 
     let response: Vec<ServerResponse> = servers
         .into_iter()
@@ -65,12 +64,9 @@ pub async fn list(
     auth_user: AuthUser,
     Path(workspace_id): Path<Uuid>,
     Query(pagination): Query<PaginationParams>,
-) -> Result<Json<Vec<ServerResponse>>, (StatusCode, String)> {
+) -> Result<Json<Vec<ServerResponse>>, AppError> {
     // Check membership
-    WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
+    workspace::require_member(&state.db, workspace_id, auth_user.user_id).await?;
 
     let servers = ServerRepository::list_by_workspace(
         &state.db,
@@ -78,8 +74,7 @@ pub async fn list(
         pagination.limit() as i64,
         pagination.offset() as i64,
     )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .await?;
 
     let response: Vec<ServerResponse> = servers
         .into_iter()
@@ -134,18 +129,8 @@ pub async fn create(
         })));
     }
 
-    // Check membership and permission
-    let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("Database error checking workspace membership: {}", e);
-            AppError::internal("Failed to verify workspace membership")
-        })?
-        .ok_or_else(|| AppError::forbidden("You are not a member of this workspace"))?;
-
-    if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
-        return Err(AppError::forbidden("Viewers cannot create servers. You need Editor or Admin role."));
-    }
+    // Check membership and write permission
+    workspace::require_write_access(&state.db, workspace_id, auth_user.user_id).await?;
 
     // Get workspace to check plan limits
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
@@ -325,20 +310,16 @@ pub async fn get(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
     Path(path): Path<ServerPath>,
-) -> Result<Json<ServerResponse>, (StatusCode, String)> {
+) -> Result<Json<ServerResponse>, AppError> {
     // Check membership
-    WorkspaceRepository::get_member(&state.db, path.workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
+    workspace::require_member(&state.db, path.workspace_id, auth_user.user_id).await?;
 
     let server = ServerRepository::find_by_id(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Server"))?;
 
     if server.workspace_id != path.workspace_id {
-        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+        return Err(AppError::not_found("Server"));
     }
 
     let runtime = server.runtime();
@@ -368,25 +349,17 @@ pub async fn update(
     auth_user: AuthUser,
     Path(path): Path<ServerPath>,
     Json(body): Json<UpdateServerRequest>,
-) -> Result<Json<ServerResponse>, (StatusCode, String)> {
-    // Check membership and permission
-    let member = WorkspaceRepository::get_member(&state.db, path.workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
-
-    if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
-    }
+) -> Result<Json<ServerResponse>, AppError> {
+    // Check membership and write permission
+    workspace::require_write_access(&state.db, path.workspace_id, auth_user.user_id).await?;
 
     // Verify server belongs to this workspace
     let existing = ServerRepository::find_by_id(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Server"))?;
 
     if existing.workspace_id != path.workspace_id {
-        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+        return Err(AppError::not_found("Server"));
     }
 
     let server = ServerRepository::update(
@@ -403,8 +376,7 @@ pub async fn update(
             root_directory: body.root_directory,
         },
     )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .await?;
 
     let runtime = server.runtime();
     let visibility = server.visibility();
@@ -432,30 +404,20 @@ pub async fn delete(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
     Path(path): Path<ServerPath>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    // Check membership and permission (only owner/admin can delete)
-    let member = WorkspaceRepository::get_member(&state.db, path.workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
-
-    if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
-    }
+) -> Result<StatusCode, AppError> {
+    // Check membership and admin permission (only owner/admin can delete)
+    workspace::require_admin(&state.db, path.workspace_id, auth_user.user_id).await?;
 
     // Verify server belongs to this workspace
     let existing = ServerRepository::find_by_id(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Server"))?;
 
     if existing.workspace_id != path.workspace_id {
-        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+        return Err(AppError::not_found("Server"));
     }
 
-    ServerRepository::delete(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    ServerRepository::delete(&state.db, path.server_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -464,22 +426,14 @@ pub async fn deploy(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
     Path(path): Path<ServerPath>,
-) -> Result<Json<mcp_common::types::DeploymentResponse>, (StatusCode, String)> {
-    // Check membership and permission
-    let member = WorkspaceRepository::get_member(&state.db, path.workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
-
-    if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
-    }
+) -> Result<Json<mcp_common::types::DeploymentResponse>, AppError> {
+    // Check membership and write permission
+    workspace::require_write_access(&state.db, path.workspace_id, auth_user.user_id).await?;
 
     // Get workspace to check plan limits
     let workspace = WorkspaceRepository::find_by_id(&state.db, path.workspace_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Workspace"))?;
 
     // Check deployment limits for this month
     let billing_plan = match workspace.plan.as_str() {
@@ -503,34 +457,37 @@ pub async fn deploy(
         path.workspace_id,
         month_start,
     )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .await?;
 
     if deployments_this_month >= limits.max_deployments_per_month as i64 {
-        return Err((
-            StatusCode::PAYMENT_REQUIRED,
-            format!(
+        return Err(AppError::payment_required(
+            "DEPLOYMENT_LIMIT_REACHED",
+            &format!(
                 "You have reached the maximum number of deployments ({}) for your {} plan this month. Please upgrade to deploy more.",
                 limits.max_deployments_per_month,
                 workspace.plan
             ),
-        ));
+        ).with_details(json!({
+            "current_count": deployments_this_month,
+            "max_allowed": limits.max_deployments_per_month,
+            "plan": workspace.plan,
+            "upgrade_url": "/dashboard/billing"
+        })));
     }
 
     // Get server
     let server = ServerRepository::find_by_id(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Server"))?;
 
     if server.workspace_id != path.workspace_id {
-        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+        return Err(AppError::not_found("Server"));
     }
 
     // Parse owner/repo from github_repo
     let parts: Vec<&str> = server.github_repo.split('/').collect();
     if parts.len() != 2 {
-        return Err((StatusCode::BAD_REQUEST, "Invalid github_repo format".to_string()));
+        return Err(AppError::bad_request("INVALID_GITHUB_REPO", "Invalid github_repo format"));
     }
     let (owner, repo) = (parts[0], parts[1]);
 
@@ -578,13 +535,11 @@ pub async fn deploy(
             deployed_by: Some(auth_user.user_id),
         },
     )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .await?;
 
     // Update server status
     ServerRepository::update_status(&state.db, path.server_id, mcp_common::types::ServerStatus::Building, None)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .await?;
 
     // Enqueue build job
     let build_job = mcp_queue::BuildJob {
@@ -602,7 +557,7 @@ pub async fn deploy(
         .job_queue
         .push_build_job(build_job)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to enqueue build job: {}", e)))?;
+        .map_err(|e| AppError::internal(&format!("Failed to enqueue build job: {}", e)))?;
 
     tracing::info!("Build job enqueued for deployment {}", deployment.id);
 
@@ -623,29 +578,27 @@ pub async fn stop(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
     Path(path): Path<ServerPath>,
-) -> Result<Json<ServerResponse>, (StatusCode, String)> {
+) -> Result<Json<ServerResponse>, AppError> {
     // Check membership and permission
     let member = WorkspaceRepository::get_member(&state.db, path.workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::forbidden("Not a member of this workspace"))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
+        return Err(AppError::forbidden("Insufficient permissions"));
     }
 
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Server"))?;
 
     if server.workspace_id != path.workspace_id {
-        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+        return Err(AppError::not_found("Server"));
     }
 
     if !server.is_running() {
-        return Err((StatusCode::BAD_REQUEST, "Server is not running".to_string()));
+        return Err(AppError::bad_request("SERVER_NOT_RUNNING", "Server is not running"));
     }
 
     // Update server status to stopped
@@ -655,14 +608,12 @@ pub async fn stop(
         mcp_common::types::ServerStatus::Stopped,
         None,
     )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .await?;
 
     // Get updated server
     let server = ServerRepository::find_by_id(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Server"))?;
 
     let runtime = server.runtime();
     let visibility = server.visibility();
@@ -690,25 +641,23 @@ pub async fn restart(
     State(state): State<Arc<AppState>>,
     auth_user: AuthUser,
     Path(path): Path<ServerPath>,
-) -> Result<Json<mcp_common::types::DeploymentResponse>, (StatusCode, String)> {
+) -> Result<Json<mcp_common::types::DeploymentResponse>, AppError> {
     // Check membership and permission
     let member = WorkspaceRepository::get_member(&state.db, path.workspace_id, auth_user.user_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::forbidden("Not a member of this workspace"))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
+        return Err(AppError::forbidden("Insufficient permissions"));
     }
 
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, path.server_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+        .await?
+        .ok_or_else(|| AppError::not_found("Server"))?;
 
     if server.workspace_id != path.workspace_id {
-        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+        return Err(AppError::not_found("Server"));
     }
 
     // For restart, we trigger a new deployment

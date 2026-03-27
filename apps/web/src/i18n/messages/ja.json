@@ -26,7 +26,8 @@
     "disabled": "無効",
     "previous": "前へ",
     "showing": "{from}から{to}件を表示（全{total}件）",
-    "notFound": "見つかりませんでした"
+    "notFound": "見つかりませんでした",
+    "retry": "再試行"
   },
   "nav": {
     "home": "ホーム",
@@ -204,7 +205,9 @@
     "planUsage": "プラン利用状況",
     "manage": "管理 →",
     "videos": "動画",
-    "blog": "ブログ"
+    "blog": "ブログ",
+    "serversLoadError": "サーバーの読み込みに失敗しました",
+    "retry": "再試行"
   },
   "servers": {
     "title": "サーバー",
@@ -212,6 +215,8 @@
     "list": "サーバー一覧",
     "empty": "サーバーがまだありません",
     "createFirst": "最初のサーバーを作成",
+    "loadError": "サーバーの読み込みに失敗しました",
+    "retry": "再試行",
     "repo": "リポジトリ",
     "runtime": "ランタイム",
     "visibility": "公開設定",
@@ -396,6 +401,7 @@
     "title": "APIキー",
     "new": "新規APIキー",
     "empty": "APIキーがまだありません",
+    "loadError": "APIキーの読み込みに失敗しました",
     "yourKeys": "あなたのAPIキー",
     "created": "APIキーが作成されました",
     "createdWarning": "このキーは一度だけ表示されます。安全な場所に保存してください。",
@@ -445,6 +451,7 @@
     "recentRequests": "最近のリクエスト",
     "empty": "ログがありません",
     "noLogs": "リクエストログがまだありません",
+    "loadError": "ログの読み込みに失敗しました",
     "realtime": "リアルタイム",
     "download": "ダウンロード",
     "search": "ログを検索...",
@@ -481,6 +488,7 @@
     "usage": "{current} / {max} メンバー",
     "addMember": "メンバーを追加",
     "empty": "メンバーはあなただけです",
+    "loadError": "チームメンバーの読み込みに失敗しました",
     "roles": {
       "owner": "オーナー",
       "admin": "管理者",
@@ -510,6 +518,7 @@
   "billing": {
     "title": "請求と購読",
     "subtitle": "購読と請求設定を管理",
+    "loadError": "請求情報の読み込みに失敗しました",
     "currentPlan": "現在のプラン",
     "currentPlanDesc": "現在の購読状況",
     "plan": "{plan}プラン",

@@ -15,7 +15,15 @@ function formatDate(dateString?: string): string {
 export const revalidate = 60;
 
 export default async function BlogPage() {
-  const posts = await getBlogPosts();
+  // Return empty array if Hygraph is not configured
+  let posts: Awaited<ReturnType<typeof getBlogPosts>> = [];
+  if (process.env.HYGRAPH_TOKEN) {
+    try {
+      posts = await getBlogPosts();
+    } catch {
+      // Fail gracefully
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

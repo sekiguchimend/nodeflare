@@ -9,6 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+// Constants
+const COPY_FEEDBACK_DURATION_MS = 2000;
+const MS_PER_MINUTE = 60 * 1000;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
+
 export default function ApiKeysPage() {
   const t = useTranslations('apiKeys');
   const tCommon = useTranslations('common');
@@ -17,26 +23,27 @@ export default function ApiKeysPage() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  const { data: workspaces, isLoading: isLoadingWorkspaces } = useQuery<Workspace[]>({
+  const { data: workspaces, isLoading: isLoadingWorkspaces, isError: isErrorWorkspaces } = useQuery<Workspace[]>({
     queryKey: ['workspaces'],
     queryFn: () => api.get('/workspaces'),
   });
 
   const workspaceId = selectedWorkspaceId || workspaces?.[0]?.id;
 
-  const { data: apiKeys, isLoading: isLoadingKeys } = useQuery<ApiKey[]>({
+  const { data: apiKeys, isLoading: isLoadingKeys, isError: isErrorKeys } = useQuery<ApiKey[]>({
     queryKey: ['workspaces', workspaceId, 'api-keys'],
     queryFn: () => api.get(`/workspaces/${workspaceId}/api-keys`),
     enabled: !!workspaceId,
   });
 
   const isLoading = isLoadingWorkspaces || isLoadingKeys;
+  const isError = isErrorWorkspaces || isErrorKeys;
 
   const handleCopyKey = () => {
     if (newKeyValue) {
       navigator.clipboard.writeText(newKeyValue);
       setCopiedKey(true);
-      setTimeout(() => setCopiedKey(false), 2000);
+      setTimeout(() => setCopiedKey(false), COPY_FEEDBACK_DURATION_MS);
     }
   };
 
@@ -143,6 +150,23 @@ export default function ApiKeysPage() {
             {[...Array(3)].map((_, i) => (
               <div key={i} className="h-20 bg-gray-100 animate-pulse rounded-xl" />
             ))}
+          </div>
+        ) : isError ? (
+          <div className="py-16 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+              <svg className="w-8 h-8 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <p className="text-gray-500 mb-4">{t('loadError')}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm text-violet-600 hover:text-violet-700"
+            >
+              {tCommon('retry')}
+            </button>
           </div>
         ) : apiKeys?.length === 0 ? (
           <div className="py-16 text-center">
@@ -392,9 +416,9 @@ function ApiKeyRow({
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    const diffMins = Math.floor(diffMs / MS_PER_MINUTE);
+    const diffHours = Math.floor(diffMs / MS_PER_HOUR);
+    const diffDays = Math.floor(diffMs / MS_PER_DAY);
 
     if (diffMins < 1) return '今';
     if (diffMins < 60) return `${diffMins}分前`;

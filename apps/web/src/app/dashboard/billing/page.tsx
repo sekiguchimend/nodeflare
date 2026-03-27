@@ -89,25 +89,25 @@ export default function BillingPage() {
   const [exportTo, setExportTo] = useState('');
   const queryClient = useQueryClient();
 
-  const { data: workspaces, isLoading: workspacesLoading } = useQuery<Workspace[]>({
+  const { data: workspaces, isLoading: workspacesLoading, isError: workspacesError } = useQuery<Workspace[]>({
     queryKey: ['workspaces'],
     queryFn: () => api.get('/workspaces'),
   });
 
   const currentWorkspace = workspaces?.[0];
 
-  const { data: plans, isLoading: plansLoading } = useQuery<Plan[]>({
+  const { data: plans, isLoading: plansLoading, isError: plansError } = useQuery<Plan[]>({
     queryKey: ['billing-plans'],
     queryFn: () => api.get('/billing/plans'),
   });
 
-  const { data: subscription, isLoading: subscriptionLoading } = useQuery<Subscription>({
+  const { data: subscription, isLoading: subscriptionLoading, isError: subscriptionError } = useQuery<Subscription>({
     queryKey: ['subscription', currentWorkspace?.id],
     queryFn: () => api.get(`/workspaces/${currentWorkspace?.id}/billing/subscription`),
     enabled: !!currentWorkspace?.id,
   });
 
-  const { data: invoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({
+  const { data: invoices = [], isLoading: invoicesLoading, isError: invoicesError } = useQuery<Invoice[]>({
     queryKey: ['invoices', currentWorkspace?.id],
     queryFn: () => api.get(`/workspaces/${currentWorkspace?.id}/billing/invoices`),
     enabled: !!currentWorkspace?.id,
@@ -173,11 +173,31 @@ export default function BillingPage() {
   });
 
   const isLoading = workspacesLoading || plansLoading || subscriptionLoading;
+  const hasError = workspacesError || plansError || subscriptionError;
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <svg className="w-12 h-12 text-red-400 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <p className="text-muted-foreground mb-4">{t('loadError')}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-violet-600 hover:text-violet-700"
+        >
+          {tCommon('retry')}
+        </button>
       </div>
     );
   }

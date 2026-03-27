@@ -1,3 +1,5 @@
+import DOMPurify, { Config } from 'isomorphic-dompurify';
+
 const HYGRAPH_ENDPOINT = process.env.HYGRAPH_ENDPOINT || 'https://api-us-west-2.hygraph.com/v2/cmmky48hh00h006w5q885vkcf/master';
 // SECURITY: Token must be provided via environment variable - never commit tokens to code
 const HYGRAPH_TOKEN = process.env.HYGRAPH_TOKEN;
@@ -5,6 +7,28 @@ const HYGRAPH_TOKEN = process.env.HYGRAPH_TOKEN;
 if (!HYGRAPH_TOKEN) {
   console.warn('Warning: HYGRAPH_TOKEN environment variable not set. Blog features will be unavailable.');
 }
+
+// Configure DOMPurify with safe defaults
+const DOMPURIFY_CONFIG: Config = {
+  ALLOWED_TAGS: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'hr',
+    'ul', 'ol', 'li',
+    'blockquote', 'pre', 'code',
+    'a', 'strong', 'em', 'u', 's', 'sub', 'sup',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'img', 'figure', 'figcaption',
+    'div', 'span',
+  ],
+  ALLOWED_ATTR: [
+    'href', 'src', 'alt', 'title', 'class', 'id',
+    'target', 'rel', 'width', 'height',
+  ],
+  ALLOW_DATA_ATTR: false,
+  ADD_ATTR: ['target'],
+  FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'base'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+};
 
 export interface Author {
   id: string;
@@ -59,35 +83,14 @@ async function fetchHygraph<T>(query: string, variables?: Record<string, unknown
 
 /**
  * Sanitize HTML content to prevent XSS attacks.
- * Removes potentially dangerous elements and attributes.
+ * Uses DOMPurify for robust protection against XSS vectors.
  */
 export function sanitizeHtml(html: string): string {
   if (!html) return '';
 
-  // Remove script tags and their content
-  let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-
-  // Remove event handlers (onclick, onerror, onload, etc.)
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, '');
-
-  // Remove javascript: URLs
-  sanitized = sanitized.replace(/javascript\s*:/gi, 'blocked:');
-
-  // Remove data: URLs in src/href (can be used for XSS)
-  sanitized = sanitized.replace(/(src|href)\s*=\s*["']data:[^"']*["']/gi, '$1="blocked"');
-
-  // Remove iframe, object, embed tags
-  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button)[^>]*>.*?<\/\1>/gi, '');
-  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button)[^>]*\/?>/gi, '');
-
-  // Remove style tags (can be used for CSS-based attacks)
-  sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-
-  // Remove base tag (can redirect all links)
-  sanitized = sanitized.replace(/<base[^>]*>/gi, '');
-
-  return sanitized;
+  // Use DOMPurify with strict configuration
+  // RETURN_TRUSTED_TYPE: false ensures string return type
+  return DOMPurify.sanitize(html, { ...DOMPURIFY_CONFIG, RETURN_TRUSTED_TYPE: false }) as string;
 }
 
 export async function getBlogPosts(): Promise<BlogPost[]> {

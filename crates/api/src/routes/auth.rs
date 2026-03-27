@@ -262,16 +262,20 @@ pub async fn github_callback(
     let access_token_max_age = state.config.auth.jwt_expiration_hours * 3600;
     let refresh_token_max_age = state.config.auth.refresh_token_expiration_days * 24 * 3600;
 
+    let secure_flag = if is_production { "; Secure" } else { "" };
+
     let access_cookie = format!(
-        "access_token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}{}",
+        "access_token={}; HttpOnly{}; SameSite=Lax; Path=/; Max-Age={}{}",
         access_token,
+        secure_flag,
         access_token_max_age,
         if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
     );
 
     let refresh_cookie = format!(
-        "refresh_token={}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age={}{}",
+        "refresh_token={}; HttpOnly{}; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age={}{}",
         refresh.token,
+        secure_flag,
         refresh_token_max_age,
         if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
     );
@@ -498,14 +502,17 @@ pub async fn logout(
     // Clear cookies by setting them with expired max-age
     let is_production = state.config.is_production();
     let cookie_domain = extract_domain(&state.config.server.frontend_url);
+    let secure_flag = if is_production { "; Secure" } else { "" };
 
     let clear_access_cookie = format!(
-        "access_token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0{}",
+        "access_token=; HttpOnly{}; SameSite=Lax; Path=/; Max-Age=0{}",
+        secure_flag,
         if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
     );
 
     let clear_refresh_cookie = format!(
-        "refresh_token=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=0{}",
+        "refresh_token=; HttpOnly{}; SameSite=Lax; Path=/api/v1/auth/refresh; Max-Age=0{}",
+        secure_flag,
         if is_production { format!("; Domain={}", cookie_domain) } else { String::new() }
     );
 

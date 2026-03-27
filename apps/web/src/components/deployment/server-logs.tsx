@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useServerLogsWebSocket, ServerLogLine } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
 
+// Constants
+const MAX_LOGS_IN_MEMORY = 1000;
+
 interface ServerLogsProps {
   workspaceId: string;
   serverId: string;
@@ -33,9 +36,9 @@ export function ServerLogs({ workspaceId, serverId, className }: ServerLogsProps
   const { isConnected } = useServerLogsWebSocket(workspaceId, serverId, {
     onLog: (log) => {
       setLogs((prev) => {
-        // Keep last 1000 logs to prevent memory issues
+        // Keep last N logs to prevent memory issues
         const newLogs = [...prev, log];
-        return newLogs.slice(-1000);
+        return newLogs.slice(-MAX_LOGS_IN_MEMORY);
       });
     },
   });

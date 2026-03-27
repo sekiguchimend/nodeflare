@@ -7,6 +7,9 @@ import { RequestLog, PaginatedResponse, McpServer } from '@/types';
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 
+// Constants
+const LIVE_REFETCH_INTERVAL_MS = 3000;
+
 type StatusFilter = 'all' | '2xx' | '4xx' | '5xx';
 type MethodFilter = 'all' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 type TimeFilter = 'all' | '1h' | '24h' | '7d' | '30d';
@@ -22,7 +25,7 @@ export default function LogsPage() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [isLive, setIsLive] = useState(true);
 
-  const { data: servers, isLoading: isLoadingServers } = useQuery<McpServer[]>({
+  const { data: servers, isLoading: isLoadingServers, isError: isErrorServers } = useQuery<McpServer[]>({
     queryKey: ['servers'],
     queryFn: () => api.get('/servers'),
   });
@@ -48,7 +51,7 @@ export default function LogsPage() {
     queryKey: ['workspaces', workspaceId, 'servers', serverId, 'logs', page, statusFilter, methodFilter, timeFilter, searchQuery],
     queryFn: () => api.get(`/workspaces/${workspaceId}/servers/${serverId}/logs?${buildQueryParams()}`),
     enabled: !!workspaceId && !!serverId,
-    refetchInterval: isLive ? 3000 : false,
+    refetchInterval: isLive ? LIVE_REFETCH_INTERVAL_MS : false,
   });
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || methodFilter !== 'all' || timeFilter !== 'all';
@@ -85,6 +88,25 @@ export default function LogsPage() {
         {[...Array(10)].map((_, i) => (
           <div key={i} className="h-8 bg-gray-100 animate-pulse rounded" />
         ))}
+      </div>
+    );
+  }
+
+  if (isErrorServers) {
+    return (
+      <div className="py-20 text-center">
+        <svg className="w-12 h-12 text-red-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <p className="text-gray-500 mb-4">{t('loadError')}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-violet-600 hover:text-violet-700"
+        >
+          {tCommon('retry')}
+        </button>
       </div>
     );
   }

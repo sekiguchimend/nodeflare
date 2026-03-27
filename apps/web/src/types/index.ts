@@ -246,3 +246,46 @@ export interface RegionCostEstimate {
   price_per_region_jpy: number;
   estimated_monthly_jpy: number;
 }
+
+// API Error types
+export interface ApiErrorResponse {
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+export interface ApiError {
+  response?: {
+    data?: ApiErrorResponse;
+  };
+  message?: string;
+}
+
+// Type guard for API errors
+export function isApiError(error: unknown): error is ApiError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    ('response' in error || 'message' in error)
+  );
+}
+
+// Helper to extract error code from API error
+export function getApiErrorCode(error: unknown): string | undefined {
+  if (isApiError(error)) {
+    return error.response?.data?.error?.code;
+  }
+  return undefined;
+}
+
+// Helper to extract error message from API error
+export function getApiErrorMessage(error: unknown): string {
+  if (isApiError(error)) {
+    return error.response?.data?.error?.message || error.message || 'An error occurred';
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'An error occurred';
+}

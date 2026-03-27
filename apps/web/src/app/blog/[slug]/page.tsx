@@ -16,29 +16,53 @@ function formatDate(dateString?: string): string {
 export const revalidate = 60;
 
 export async function generateStaticParams() {
-  const posts = await getBlogPosts();
-  return posts.map((post) => ({
-    slug: post.slug,
-  }));
+  // Return empty array if Hygraph is not configured (build will use dynamic rendering)
+  if (!process.env.HYGRAPH_TOKEN) {
+    return [];
+  }
+
+  try {
+    const posts = await getBlogPosts();
+    return posts.map((post) => ({
+      slug: post.slug,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const post = await getBlogPost(slug);
-
-  if (!post) {
-    return { title: '記事が見つかりません' };
+  if (!process.env.HYGRAPH_TOKEN) {
+    return { title: 'ブログ' };
   }
 
-  return {
-    title: `${post.title} | ブログ`,
-    description: post.excerpt,
-  };
+  const { slug } = await params;
+  try {
+    const post = await getBlogPost(slug);
+    if (!post) {
+      return { title: '記事が見つかりません' };
+    }
+    return {
+      title: `${post.title} | ブログ`,
+      description: post.excerpt,
+    };
+  } catch {
+    return { title: 'ブログ' };
+  }
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  if (!process.env.HYGRAPH_TOKEN) {
+    notFound();
+  }
+
   const { slug } = await params;
-  const post = await getBlogPost(slug);
+  let post;
+  try {
+    post = await getBlogPost(slug);
+  } catch {
+    notFound();
+  }
 
   if (!post) {
     notFound();
