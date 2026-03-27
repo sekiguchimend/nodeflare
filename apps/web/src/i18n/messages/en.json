@@ -27,13 +27,15 @@
     "previous": "Previous",
     "showing": "Showing {from} to {to} of {total}",
     "notFound": "Not found",
-    "retry": "Retry"
+    "retry": "Retry",
+    "copied": "Copied!"
   },
   "nav": {
     "home": "Home",
     "dashboard": "Dashboard",
     "servers": "MCP Servers",
     "apiKeys": "API Keys",
+    "vpn": "VPN",
     "team": "Team Members",
     "logs": "Request Logs",
     "settings": "Settings",
@@ -444,6 +446,34 @@
       "promptsGetDesc": "Get any prompt content",
       "noPermissions": "No permissions"
     }
+  },
+  "vpn": {
+    "title": "VPN Connection",
+    "description": "Securely connect to your MCP servers via WireGuard VPN",
+    "createConnection": "Create Connection",
+    "howItWorks": "How it Works",
+    "step1": "Create a VPN connection and download the config file",
+    "step2": "Install WireGuard on your device",
+    "step3": "Import the config file into WireGuard",
+    "step4": "Connect and access your MCP servers directly",
+    "configGenerated": "Configuration Generated",
+    "peerName": "Peer Name",
+    "peerIP": "Peer IP Address",
+    "configFile": "Configuration File",
+    "download": "Download",
+    "nextSteps": "Next Steps",
+    "noConnections": "No VPN Connections",
+    "noConnectionsDescription": "Create a VPN connection to securely access your MCP servers from anywhere.",
+    "createFirstConnection": "Create Your First Connection",
+    "connectionName": "Connection Name",
+    "connectionNamePlaceholder": "my-laptop",
+    "connectionNameHint": "A memorable name for this device (e.g., my-laptop, work-pc)",
+    "region": "Region",
+    "creating": "Creating...",
+    "create": "Create",
+    "createError": "Failed to create VPN connection. Please try again.",
+    "requiresWireGuard": "WireGuard Required",
+    "wireGuardInfo": "You need to install WireGuard on your device to use VPN connections. Download from"
   },
   "logs": {
     "title": "Logs",
