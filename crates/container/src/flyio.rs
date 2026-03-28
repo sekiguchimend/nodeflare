@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 const FLY_API_URL: &str = "https://api.machines.dev/v1";
 const FLY_GRAPHQL_URL: &str = "https://api.fly.io/graphql";
 
+/// SECURITY: Log detailed error server-side but return sanitized message
+fn log_and_sanitize_error(operation: &str, status: reqwest::StatusCode, body: &str) -> String {
+    tracing::error!("Fly.io {} failed: {} - {}", operation, status, body);
+    format!("{} failed (status: {})", operation, status)
+}
+
 pub struct FlyioRuntime {
     api_token: String,
     org_slug: String,
@@ -14,11 +20,19 @@ pub struct FlyioRuntime {
 
 impl FlyioRuntime {
     pub fn new(api_token: String, org_slug: String, region: String) -> Self {
+        // SECURITY: Configure HTTP client with timeout and redirect policy
+        let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .redirect(reqwest::redirect::Policy::limited(5))
+            .build()
+            .expect("Failed to build HTTP client");
+
         Self {
             api_token,
             org_slug,
             region,
-            http_client: reqwest::Client::new(),
+            http_client,
         }
     }
 
@@ -138,8 +152,9 @@ impl ContainerRuntime for FlyioRuntime {
             .context("Failed to create machine")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to create machine: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Create machine", status, &error));
         }
 
         let machine: MachineResponse = response.json().await?;
@@ -167,8 +182,9 @@ impl ContainerRuntime for FlyioRuntime {
             .context("Failed to start machine")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to start machine: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Start machine", status, &error));
         }
 
         Ok(())
@@ -189,8 +205,9 @@ impl ContainerRuntime for FlyioRuntime {
             .context("Failed to stop machine")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to stop machine: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Stop machine", status, &error));
         }
 
         Ok(())
@@ -211,8 +228,9 @@ impl ContainerRuntime for FlyioRuntime {
             .context("Failed to delete machine")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to delete machine: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Delete machine", status, &error));
         }
 
         Ok(())
@@ -233,8 +251,9 @@ impl ContainerRuntime for FlyioRuntime {
             .context("Failed to get machine status")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to get machine status: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Get machine status", status, &error));
         }
 
         let machine: MachineResponse = response.json().await?;
@@ -329,8 +348,9 @@ impl FlyioRuntime {
             .context("Failed to execute command")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to execute command: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Execute command", status, &error));
         }
 
         let result: ExecResponse = response.json().await?;
@@ -380,14 +400,17 @@ impl FlyioRuntime {
             .context("Failed to create WireGuard peer")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to create WireGuard peer: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Create WireGuard peer", status, &error));
         }
 
         let result: serde_json::Value = response.json().await?;
 
         if let Some(errors) = result.get("errors") {
-            anyhow::bail!("GraphQL error: {}", errors);
+            // SECURITY: Log full GraphQL error server-side only
+            tracing::error!("GraphQL error creating WireGuard peer: {}", errors);
+            anyhow::bail!("GraphQL operation failed");
         }
 
         let data = result
@@ -443,8 +466,9 @@ impl FlyioRuntime {
             .context("Failed to remove WireGuard peer")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to remove WireGuard peer: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("Remove WireGuard peer", status, &error));
         }
 
         Ok(())
@@ -483,14 +507,17 @@ impl FlyioRuntime {
             .context("Failed to list WireGuard peers")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to list WireGuard peers: {}", error);
+            anyhow::bail!("{}", log_and_sanitize_error("List WireGuard peers", status, &error));
         }
 
         let result: serde_json::Value = response.json().await?;
 
         if let Some(errors) = result.get("errors") {
-            anyhow::bail!("GraphQL error: {}", errors);
+            // SECURITY: Log full GraphQL error server-side only
+            tracing::error!("GraphQL error listing WireGuard peers: {}", errors);
+            anyhow::bail!("GraphQL operation failed");
         }
 
         let nodes = result
@@ -540,10 +567,12 @@ PersistentKeepalive = 15
     }
 
     // Helper: Generate WireGuard private key (base64 encoded)
+    // SECURITY: Uses cryptographically secure RNG for key generation
     fn generate_wireguard_private_key() -> String {
-        use rand::RngCore;
+        use ring::rand::{SecureRandom, SystemRandom};
+        let rng = SystemRandom::new();
         let mut key = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut key);
+        rng.fill(&mut key).expect("SystemRandom failed");
         // Clamp the key for Curve25519
         key[0] &= 248;
         key[31] &= 127;

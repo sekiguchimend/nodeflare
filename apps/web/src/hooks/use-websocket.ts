@@ -119,15 +119,10 @@ export function useWebSocket({
       return;
     }
 
-    // Get the access token
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setStatus('error');
-      return;
-    }
-
     setStatus('connecting');
-    // Connect without token in URL (security fix)
+    // SECURITY: WebSocket authentication using cookies
+    // The server will read the access_token cookie from the upgrade request headers
+    // No need to pass token in URL or localStorage
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -135,8 +130,9 @@ export function useWebSocket({
         ws.close();
         return;
       }
-      // Send authentication message after connection (instead of URL param)
-      ws.send(JSON.stringify({ type: 'Auth', token }));
+      // Server authenticates via cookie from upgrade request
+      // Send a ping to confirm connection
+      ws.send(JSON.stringify({ type: 'Ping' }));
     };
 
     ws.onmessage = (event) => {
@@ -144,14 +140,15 @@ export function useWebSocket({
       try {
         const message = JSON.parse(event.data) as WebSocketMessage;
 
-        // Handle auth response
-        if (message.type === 'AuthSuccess') {
+        // Handle ping/pong
+        if (message.type === 'Pong') {
           setStatus('connected');
           reconnectAttemptsRef.current = 0;
           onConnectRef.current?.();
           return;
         }
 
+        // Handle auth error (server could not authenticate via cookie)
         if (message.type === 'AuthError') {
           setStatus('error');
           ws.close();

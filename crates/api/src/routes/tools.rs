@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use mcp_common::types::{ToolResponse, UpdateToolRequest};
-use mcp_db::{ToolRepository, UpdateTool, WorkspaceRepository};
+use mcp_db::{ServerRepository, ToolRepository, UpdateTool, WorkspaceRepository};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -28,6 +28,16 @@ pub async fn list(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
+
+    // SECURITY: Verify server belongs to this workspace
+    let server = ServerRepository::find_by_id(&state.db, server_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+
+    if server.workspace_id != workspace_id {
+        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+    }
 
     let tools = ToolRepository::list_by_server(&state.db, server_id)
         .await
@@ -67,6 +77,26 @@ pub async fn update(
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
         return Err((StatusCode::FORBIDDEN, "Insufficient permissions".to_string()));
+    }
+
+    // SECURITY: Verify server belongs to this workspace
+    let server = ServerRepository::find_by_id(&state.db, path.server_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
+
+    if server.workspace_id != path.workspace_id {
+        return Err((StatusCode::NOT_FOUND, "Server not found".to_string()));
+    }
+
+    // SECURITY: Verify tool belongs to this server
+    let existing_tool = ToolRepository::find_by_id(&state.db, path.tool_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Tool not found".to_string()))?;
+
+    if existing_tool.server_id != path.server_id {
+        return Err((StatusCode::NOT_FOUND, "Tool not found".to_string()));
     }
 
     let tool = ToolRepository::update(

@@ -40,12 +40,23 @@ impl AppState {
         // Initialize API cache
         let cache = ApiCache::new(redis.clone());
 
-        // In production, use a proper key from config
-        let crypto = CryptoService::from_hex(
-            &std::env::var("ENCRYPTION_KEY")
-                .unwrap_or_else(|_| CryptoService::generate_key()),
-        )
-        .expect("Invalid encryption key");
+        // SECURITY: ENCRYPTION_KEY must be set in production
+        // In development, generate a key if not set (with warning)
+        let encryption_key = match std::env::var("ENCRYPTION_KEY") {
+            Ok(key) => key,
+            Err(_) => {
+                if std::env::var("ENVIRONMENT").as_deref() == Ok("production") {
+                    panic!("ENCRYPTION_KEY must be set in production environment");
+                }
+                tracing::warn!(
+                    "ENCRYPTION_KEY not set - generating temporary key. \
+                     This is only acceptable for development!"
+                );
+                CryptoService::generate_key()
+            }
+        };
+        let crypto = CryptoService::from_hex(&encryption_key)
+            .expect("Invalid encryption key format");
 
         let ws_manager = WsManager::new();
 

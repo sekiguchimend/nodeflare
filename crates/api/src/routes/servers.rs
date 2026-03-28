@@ -115,6 +115,26 @@ pub async fn create(
     Path(workspace_id): Path<Uuid>,
     Json(body): Json<CreateServerRequest>,
 ) -> Result<Json<ServerResponse>, AppError> {
+    // SECURITY: Validate input using validator crate
+    use validator::Validate;
+    if let Err(validation_errors) = body.validate() {
+        let error_messages: Vec<String> = validation_errors
+            .field_errors()
+            .iter()
+            .flat_map(|(field, errors)| {
+                errors.iter().map(move |e| {
+                    format!("{}: {}", field, e.message.as_ref().map(|m| m.to_string()).unwrap_or_else(|| e.code.to_string()))
+                })
+            })
+            .collect();
+        return Err(AppError::bad_request(
+            "VALIDATION_ERROR",
+            &error_messages.join(", "),
+        ).with_details(json!({
+            "errors": error_messages
+        })));
+    }
+
     // Validate runtime
     let runtime = body.runtime.clone().unwrap_or_default();
     if !matches!(runtime,
@@ -514,7 +534,13 @@ pub async fn deploy(
         }
     } else {
         // No GitHub App - try to get commit via public API
-        let client = reqwest::Client::new();
+        // SECURITY: Configure HTTP client with timeout and redirect policy
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::limited(3))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
         let url = format!(
             "https://api.github.com/repos/{}/{}/commits/{}",
             owner, repo, server.github_branch

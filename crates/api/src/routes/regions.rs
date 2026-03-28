@@ -151,16 +151,10 @@ pub async fn add(
     // If yes, just increment quantity and add region directly
     // If no, redirect to checkout for first-time subscription
     if let Some(region_subscription_item_id) = &workspace.stripe_region_subscription_item_id {
-        // Existing subscription - increment quantity and add region directly
-        billing
-            .add_region_billing(
-                "", // subscription_id not needed when we have item_id
-                Some(region_subscription_item_id),
-            )
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Billing error: {}", e)))?;
+        // Existing subscription - create region first, then increment billing
+        // This order ensures we don't charge for a region that wasn't created
 
-        // Create the region record
+        // Step 1: Create the region record first (can be rolled back if billing fails)
         let region = ServerRegionRepository::create(
             &state.db,
             CreateServerRegion {
@@ -172,12 +166,39 @@ pub async fn add(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        tracing::info!(
-            "Added region {} to server {} (workspace {}) - subscription quantity incremented",
-            body.region,
-            server_id,
-            workspace_id
-        );
+        // Step 2: Increment billing quantity
+        match billing
+            .add_region_billing(
+                "", // subscription_id not needed when we have item_id
+                Some(region_subscription_item_id),
+            )
+            .await
+        {
+            Ok(_) => {
+                tracing::info!(
+                    "Added region {} to server {} (workspace {}) - subscription quantity incremented",
+                    body.region,
+                    server_id,
+                    workspace_id
+                );
+            }
+            Err(e) => {
+                // Billing failed - rollback the region creation
+                tracing::error!(
+                    "Billing failed for region {}, rolling back: {}",
+                    body.region,
+                    e
+                );
+                if let Err(delete_err) = ServerRegionRepository::delete(&state.db, server_id, &body.region).await {
+                    tracing::error!(
+                        "Failed to rollback region {} after billing failure: {}",
+                        body.region,
+                        delete_err
+                    );
+                }
+                return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Billing error: {}", e)));
+            }
+        }
 
         Ok(Json(AddRegionResponse::Added {
             region: RegionResponse {

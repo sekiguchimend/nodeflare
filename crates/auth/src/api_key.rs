@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use mcp_db::models::CreateApiKey;
-use rand::Rng;
 use ring::digest::{digest, SHA256};
+use ring::rand::{SecureRandom, SystemRandom};
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
@@ -19,10 +19,11 @@ pub struct ApiKeyService;
 
 impl ApiKeyService {
     pub fn generate() -> GeneratedApiKey {
-        let mut rng = rand::thread_rng();
+        let rng = SystemRandom::new();
 
-        // Generate random bytes
-        let random_bytes: Vec<u8> = (0..API_KEY_LENGTH).map(|_| rng.gen()).collect();
+        // Generate random bytes using cryptographically secure RNG
+        let mut random_bytes = vec![0u8; API_KEY_LENGTH];
+        rng.fill(&mut random_bytes).expect("SystemRandom failed");
         let random_part = base64::Engine::encode(
             &base64::engine::general_purpose::URL_SAFE_NO_PAD,
             &random_bytes,

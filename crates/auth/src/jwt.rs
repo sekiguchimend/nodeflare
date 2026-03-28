@@ -101,9 +101,10 @@ impl RefreshToken {
 }
 
 pub fn generate_random_token(length: usize) -> String {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let bytes: Vec<u8> = (0..length).map(|_| rng.gen()).collect();
+    use ring::rand::{SecureRandom, SystemRandom};
+    let rng = SystemRandom::new();
+    let mut bytes = vec![0u8; length];
+    rng.fill(&mut bytes).expect("SystemRandom failed");
     hex::encode(bytes)
 }
 

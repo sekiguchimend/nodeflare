@@ -103,19 +103,45 @@ impl WebhookHandler {
                 .and_then(|id| Uuid::parse_str(id).ok())
                 .ok_or_else(|| anyhow!("Missing workspace_id in metadata"))?;
 
+            // IDEMPOTENCY CHECK: Verify workspace doesn't already have this subscription
+            // This prevents duplicate processing if webhook is sent multiple times
+            let workspace = WorkspaceRepository::find_by_id(&self.db, workspace_id)
+                .await?
+                .ok_or_else(|| anyhow!("Workspace not found"))?;
+
+            let subscription_id = session
+                .subscription
+                .as_ref()
+                .map(|s| s.id().to_string())
+                .ok_or_else(|| anyhow!("Missing subscription ID"))?;
+
+            // If workspace already has this subscription ID, skip (idempotent)
+            if workspace.stripe_subscription_id.as_ref() == Some(&subscription_id) {
+                tracing::info!(
+                    "Workspace {} already has subscription {}, skipping duplicate webhook",
+                    workspace_id,
+                    subscription_id
+                );
+                return Ok(());
+            }
+
+            // If workspace has a different subscription, this is suspicious
+            if workspace.stripe_subscription_id.is_some() {
+                tracing::warn!(
+                    "Workspace {} already has a different subscription (existing: {:?}, new: {})",
+                    workspace_id,
+                    workspace.stripe_subscription_id,
+                    subscription_id
+                );
+                // Still proceed - Stripe is the source of truth
+            }
+
             // Get customer ID
             let customer_id = session
                 .customer
                 .as_ref()
                 .map(|c| c.id().to_string())
                 .ok_or_else(|| anyhow!("Missing customer ID"))?;
-
-            // Get subscription ID
-            let subscription_id = session
-                .subscription
-                .as_ref()
-                .map(|s| s.id().to_string())
-                .ok_or_else(|| anyhow!("Missing subscription ID"))?;
 
             // Update workspace with Stripe IDs
             WorkspaceRepository::update_stripe_ids(

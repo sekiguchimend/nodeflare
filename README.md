@@ -244,6 +244,16 @@ https://my-notion-mcp.mcp.run/mcp
 - リクエストログ
 - ツールレベルの権限管理
 
+## ドキュメント
+
+詳細なドキュメントは `docs/` フォルダにあります:
+
+- [**ARCHITECTURE.md**](docs/ARCHITECTURE.md) - システムアーキテクチャと設計
+- [**DEPLOYMENT.md**](docs/DEPLOYMENT.md) - Fly.ioへのデプロイ手順
+- [**SECURITY.md**](docs/SECURITY.md) - セキュリティガイドライン
+- [**CONTRIBUTING.md**](docs/CONTRIBUTING.md) - 貢献ガイドライン
+- [**CHANGELOG.md**](CHANGELOG.md) - 変更履歴
+
 ## ライセンス
 
 MIT

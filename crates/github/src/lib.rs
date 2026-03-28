@@ -54,8 +54,12 @@ impl GitHubApp {
         let private_key = EncodingKey::from_rsa_pem(config.github.app_private_key.as_bytes())
             .context("Invalid GitHub App private key")?;
 
+        // SECURITY: Configure HTTP client with timeout and redirect policy
         let http_client = reqwest::Client::builder()
             .user_agent("MCP-Cloud/1.0")
+            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .redirect(reqwest::redirect::Policy::limited(5))
             .build()?;
 
         Ok(Self {
@@ -95,7 +99,9 @@ impl GitHubApp {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("GitHub API error: {} - {}", status, body);
+            // SECURITY: Log full error server-side, but don't expose sensitive details to caller
+            tracing::error!("GitHub API error: {} - {}", status, body);
+            anyhow::bail!("GitHub API error: {} - Failed to get installation token", status);
         }
 
         response.json().await.context("Failed to parse response")

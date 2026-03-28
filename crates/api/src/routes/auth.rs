@@ -167,7 +167,8 @@ pub async fn github_callback(
         }
     };
 
-    tracing::info!("GitHub user: id={}, login={}, email={}", github_user.id, github_user.login, email);
+    // SECURITY: Don't log PII (email addresses) - only log non-sensitive identifiers
+    tracing::info!("GitHub user authenticated: id={}, login={}", github_user.id, github_user.login);
 
     // Upsert user in database
     let user = UserRepository::upsert_from_github(
@@ -286,18 +287,25 @@ pub async fn github_callback(
     let frontend_callback_url = format!("{}/auth/callback", state.config.server.frontend_url);
 
     let mut headers = HeaderMap::new();
-    headers.insert(
-        header::SET_COOKIE,
-        HeaderValue::from_str(&access_cookie).unwrap(),
-    );
-    headers.append(
-        header::SET_COOKIE,
-        HeaderValue::from_str(&refresh_cookie).unwrap(),
-    );
-    headers.insert(
-        header::LOCATION,
-        HeaderValue::from_str(&frontend_callback_url).unwrap(),
-    );
+    // SECURITY: Handle potential invalid header values instead of panicking
+    if let Ok(val) = HeaderValue::from_str(&access_cookie) {
+        headers.insert(header::SET_COOKIE, val);
+    } else {
+        tracing::error!("Failed to create access cookie header");
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Cookie generation failed".to_string()));
+    }
+    if let Ok(val) = HeaderValue::from_str(&refresh_cookie) {
+        headers.append(header::SET_COOKIE, val);
+    } else {
+        tracing::error!("Failed to create refresh cookie header");
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Cookie generation failed".to_string()));
+    }
+    if let Ok(val) = HeaderValue::from_str(&frontend_callback_url) {
+        headers.insert(header::LOCATION, val);
+    } else {
+        tracing::error!("Failed to create location header");
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Redirect URL generation failed".to_string()));
+    }
 
     Ok((StatusCode::TEMPORARY_REDIRECT, headers, ()).into_response())
 }
@@ -517,14 +525,13 @@ pub async fn logout(
     );
 
     let mut headers = HeaderMap::new();
-    headers.insert(
-        header::SET_COOKIE,
-        HeaderValue::from_str(&clear_access_cookie).unwrap(),
-    );
-    headers.append(
-        header::SET_COOKIE,
-        HeaderValue::from_str(&clear_refresh_cookie).unwrap(),
-    );
+    // SECURITY: Handle potential invalid header values instead of panicking
+    if let Ok(val) = HeaderValue::from_str(&clear_access_cookie) {
+        headers.insert(header::SET_COOKIE, val);
+    }
+    if let Ok(val) = HeaderValue::from_str(&clear_refresh_cookie) {
+        headers.append(header::SET_COOKIE, val);
+    }
 
     (StatusCode::OK, headers, ())
 }

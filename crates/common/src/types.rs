@@ -1,7 +1,14 @@
 use chrono::{DateTime, Utc};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
+
+/// Regex for validating slugs: lowercase alphanumeric with hyphens, no leading/trailing hyphens
+pub static SLUG_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[a-z0-9]+(-[a-z0-9]+)*$").expect("Invalid slug regex")
+});
 
 // ============================================================================
 // Enums
@@ -434,16 +441,19 @@ fn validate_slug(slug: &str) -> Result<(), validator::ValidationError> {
 pub struct CreateServerRequest {
     #[validate(length(min = 1, max = 255))]
     pub name: String,
-    #[validate(length(min = 1, max = 63))]
+    #[validate(length(min = 1, max = 63), custom(function = "validate_slug"))]
     pub slug: String,
+    #[validate(length(max = 1000))]
     pub description: Option<String>,
     #[validate(length(min = 1, max = 255))]
     pub github_repo: String,
+    #[validate(length(max = 255))]
     pub github_branch: Option<String>,
     pub github_installation_id: Option<i64>,
     pub runtime: Option<Runtime>,
     pub visibility: Option<Visibility>,
     pub access_mode: Option<AccessMode>,
+    #[validate(length(max = 20))]
     pub region: Option<String>,
     #[validate(length(max = 255))]
     pub root_directory: Option<String>,
@@ -732,13 +742,3 @@ pub struct WsError {
     pub message: String,
 }
 
-// ============================================================================
-// Slug validation regex
-// ============================================================================
-
-use once_cell::sync::Lazy;
-use regex::Regex;
-
-pub static SLUG_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$").unwrap()
-});
