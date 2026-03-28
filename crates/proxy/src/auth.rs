@@ -60,6 +60,30 @@ pub async fn validate_api_key(
     // Hash and lookup
     let key_hash = ApiKeyService::hash_key(api_key);
 
+    // Try Redis cache first
+    if let Some(cached) = state.redis_cache.get_api_key(&key_hash).await {
+        let api_key_record = cached.to_api_key();
+
+        // Check expiration
+        if api_key_record.is_expired() {
+            record_api_key_failed_attempt(state, client_ip).await;
+            return Err(ProxyError::Unauthorized("API key expired".into()));
+        }
+
+        // Clear failed attempts on success
+        clear_api_key_failed_attempts(state, client_ip).await;
+
+        // Update last used (async, don't block)
+        let db = state.db.clone();
+        let key_id = api_key_record.id;
+        tokio::spawn(async move {
+            let _ = ApiKeyRepository::update_last_used(&db, key_id).await;
+        });
+
+        return Ok(api_key_record);
+    }
+
+    // Cache miss - query database
     let api_key_record = match ApiKeyRepository::find_by_hash(&state.db, &key_hash).await {
         Ok(Some(record)) => record,
         Ok(None) => {
@@ -77,6 +101,14 @@ pub async fn validate_api_key(
 
     // Clear failed attempts on success
     clear_api_key_failed_attempts(state, client_ip).await;
+
+    // Cache the API key (async, don't block)
+    let redis_cache = state.redis_cache.clone();
+    let api_key_clone = api_key_record.clone();
+    let key_hash_owned = key_hash.clone();
+    tokio::spawn(async move {
+        redis_cache.set_api_key(&key_hash_owned, &api_key_clone).await;
+    });
 
     // Update last used (async, don't block)
     let db = state.db.clone();

@@ -68,28 +68,19 @@ impl DeploymentRepository {
     }
 
     pub async fn create(pool: &PgPool, data: CreateDeployment) -> Result<Deployment> {
-        // Get next version number
-        let version: (i32,) = sqlx::query_as(
-            r#"
-            SELECT COALESCE(MAX(version), 0) + 1
-            FROM deployments
-            WHERE server_id = $1
-            "#,
-        )
-        .bind(data.server_id)
-        .fetch_one(pool)
-        .await?;
-
+        // Single query: compute next version and insert in one atomic operation
+        // This eliminates the race condition and reduces round trips from 2 to 1
         let deployment = sqlx::query_as::<_, Deployment>(
             r#"
             INSERT INTO deployments (server_id, version, commit_sha, deployed_by)
-            VALUES ($1, $2, $3, $4)
+            SELECT $1, COALESCE(MAX(version), 0) + 1, $2, $3
+            FROM deployments
+            WHERE server_id = $1
             RETURNING id, server_id, version, commit_sha, status, build_logs,
                       error_message, started_at, finished_at, deployed_by
             "#,
         )
         .bind(data.server_id)
-        .bind(version.0)
         .bind(&data.commit_sha)
         .bind(data.deployed_by)
         .fetch_one(pool)

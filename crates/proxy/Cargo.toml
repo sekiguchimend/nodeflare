@@ -53,3 +53,6 @@ uuid.workspace = true
 chrono.workspace = true
 dotenvy.workspace = true
 bytes.workspace = true
+
+# LRU cache
+lru = "0.12"

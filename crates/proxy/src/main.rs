@@ -20,8 +20,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod auth;
 mod cache;
 mod rate_limit;
+mod redis_cache;
 
 use cache::{RequestCache, CoalesceResult};
+use redis_cache::RedisCache;
 
 pub struct ProxyState {
     pub config: AppConfig,
@@ -29,6 +31,7 @@ pub struct ProxyState {
     pub redis: fred::prelude::RedisClient,
     pub http_client: reqwest::Client,
     pub request_cache: RequestCache,
+    pub redis_cache: RedisCache,
 }
 
 #[tokio::main]
@@ -58,12 +61,16 @@ async fn main() -> Result<()> {
     // Request cache: 30 second TTL, max 10000 entries
     let request_cache = RequestCache::new(30, 10000);
 
+    // Redis cache for API keys and server metadata
+    let redis_cache = RedisCache::new(redis.clone());
+
     let state = Arc::new(ProxyState {
         config: config.clone(),
         db: db_pool,
         redis,
         http_client,
         request_cache,
+        redis_cache,
     });
 
     // Get request body limit from env (default: 10MB for proxy)
@@ -188,10 +195,26 @@ async fn proxy_handler(
 }
 
 async fn resolve_server(state: &ProxyState, slug: &str) -> Result<McpServer, ProxyError> {
-    ServerRepository::find_by_endpoint_slug(&state.db, slug)
+    // Try Redis cache first
+    if let Some(cached) = state.redis_cache.get_server(slug).await {
+        return Ok(cached.to_mcp_server());
+    }
+
+    // Cache miss - query database
+    let server = ServerRepository::find_by_endpoint_slug(&state.db, slug)
         .await
         .map_err(|e| ProxyError::Internal(e.to_string()))?
-        .ok_or_else(|| ProxyError::NotFound("Server not found".into()))
+        .ok_or_else(|| ProxyError::NotFound("Server not found".into()))?;
+
+    // Cache the result (async, don't block)
+    let redis_cache = state.redis_cache.clone();
+    let server_clone = server.clone();
+    let slug_owned = slug.to_string();
+    tokio::spawn(async move {
+        redis_cache.set_server(&slug_owned, &server_clone).await;
+    });
+
+    Ok(server)
 }
 
 /// Extracted MCP request info for scope checking and logging
@@ -422,11 +445,24 @@ async fn execute_upstream_request(
 
     // Convert response
     let status = response.status().as_u16();
+
+    // Only preserve essential headers to reduce allocations
+    // Most headers (connection, transfer-encoding, etc.) are handled by the framework
     let headers: Vec<(String, String)> = response
         .headers()
         .iter()
-        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+        .filter_map(|(k, v)| {
+            // Only keep headers that are meaningful for the response
+            let name = k.as_str();
+            match name {
+                "content-type" | "content-encoding" | "cache-control" | "etag" | "vary" | "x-request-id" => {
+                    v.to_str().ok().map(|val| (name.to_string(), val.to_string()))
+                }
+                _ => None,
+            }
+        })
         .collect();
+
     let body = response
         .bytes()
         .await

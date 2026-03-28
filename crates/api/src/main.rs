@@ -18,6 +18,7 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod cache;
 mod error;
 mod extractors;
 mod middleware;

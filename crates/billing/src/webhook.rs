@@ -1,5 +1,9 @@
 use anyhow::{anyhow, Result};
-use mcp_db::{CreateServerRegion, DbPool, ServerRegionRepository, WorkspaceRepository};
+use mcp_db::{
+    CreateDeployment, CreateServerRegion, DbPool, DeploymentRepository, ServerRegionRepository,
+    ServerRepository, WorkspaceRepository,
+};
+use mcp_queue::JobQueue;
 use stripe::{Client, Event, EventObject, EventType, Subscription, SubscriptionId, Webhook};
 use uuid::Uuid;
 
@@ -10,6 +14,7 @@ pub struct WebhookHandler {
     webhook_secret: String,
     db: DbPool,
     stripe_client: Client,
+    job_queue: Option<JobQueue>,
 }
 
 impl WebhookHandler {
@@ -18,6 +23,22 @@ impl WebhookHandler {
             webhook_secret: webhook_secret.to_string(),
             db,
             stripe_client: Client::new(stripe_api_key),
+            job_queue: None,
+        }
+    }
+
+    /// Create a new WebhookHandler with job queue for deployment triggering
+    pub fn with_job_queue(
+        webhook_secret: &str,
+        db: DbPool,
+        stripe_api_key: &str,
+        job_queue: JobQueue,
+    ) -> Self {
+        Self {
+            webhook_secret: webhook_secret.to_string(),
+            db,
+            stripe_client: Client::new(stripe_api_key),
+            job_queue: Some(job_queue),
         }
     }
 
@@ -200,8 +221,64 @@ impl WebhookHandler {
             );
         }
 
-        // TODO: Trigger deployment to the new region
-        // This would enqueue a deploy job for the new region
+        // Trigger deployment to the new region
+        if let Some(job_queue) = &self.job_queue {
+            // Get server information
+            let server = ServerRepository::find_by_id(&self.db, server_id)
+                .await?
+                .ok_or_else(|| anyhow!("Server not found for deployment trigger"))?;
+
+            // Get the latest successful deployment to get the commit SHA
+            if let Some(latest_deployment) =
+                DeploymentRepository::find_latest_by_server(&self.db, server_id).await?
+            {
+                // Create a new deployment record for this region
+                let deployment = DeploymentRepository::create(
+                    &self.db,
+                    CreateDeployment {
+                        server_id,
+                        commit_sha: latest_deployment.commit_sha.clone(),
+                        deployed_by: None, // System-triggered deployment
+                    },
+                )
+                .await?;
+
+                // Create and enqueue the build job
+                let build_job = mcp_queue::BuildJob {
+                    deployment_id: deployment.id,
+                    server_id,
+                    github_repo: server.github_repo,
+                    github_branch: server.github_branch,
+                    commit_sha: latest_deployment.commit_sha,
+                    runtime: server.runtime,
+                    github_installation_id: server.github_installation_id,
+                    region: region.clone(),
+                };
+
+                job_queue.push_build_job(build_job).await.map_err(|e| {
+                    anyhow!("Failed to enqueue build job for new region: {}", e)
+                })?;
+
+                tracing::info!(
+                    "Enqueued build job for server {} new region {} (deployment {})",
+                    server_id,
+                    region,
+                    deployment.id
+                );
+            } else {
+                tracing::warn!(
+                    "No previous deployment found for server {}, skipping auto-deploy to region {}",
+                    server_id,
+                    region
+                );
+            }
+        } else {
+            tracing::warn!(
+                "Job queue not configured, skipping auto-deploy for region {} on server {}",
+                region,
+                server_id
+            );
+        }
 
         Ok(())
     }

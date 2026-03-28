@@ -4,9 +4,10 @@ use axum::{
     Json,
 };
 use mcp_common::types::WorkspaceRole;
+use mcp_container::ContainerRuntime;
 use mcp_db::{
-    CreateServerRegion, RegionStatus, ServerRegionRepository, ServerRepository,
-    WorkspaceRepository,
+    CreateDeployment, CreateServerRegion, DeploymentRepository, RegionStatus,
+    ServerRegionRepository, ServerRepository, WorkspaceRepository,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -285,7 +286,41 @@ pub async fn remove(
         }
     }
 
-    // TODO: Stop and delete the machine in Fly.io before removing from DB
+    // Stop and delete the machine in Fly.io before removing from DB
+    if let Some(machine_id) = &region.machine_id {
+        if let Some(fly_runtime) = &state.fly_runtime {
+            // First stop the machine
+            if let Err(e) = fly_runtime.stop(machine_id).await {
+                tracing::warn!(
+                    "Failed to stop machine {} for region {}: {}",
+                    machine_id,
+                    region_code,
+                    e
+                );
+            }
+
+            // Then delete the machine
+            if let Err(e) = fly_runtime.delete(machine_id).await {
+                tracing::warn!(
+                    "Failed to delete machine {} for region {}: {}",
+                    machine_id,
+                    region_code,
+                    e
+                );
+            } else {
+                tracing::info!(
+                    "Deleted Fly.io machine {} for region {}",
+                    machine_id,
+                    region_code
+                );
+            }
+        } else {
+            tracing::warn!(
+                "Fly.io runtime not configured, skipping machine cleanup for region {}",
+                region_code
+            );
+        }
+    }
 
     // Delete the region record
     let deleted = ServerRegionRepository::delete(&state.db, server_id, &region_code)
@@ -387,7 +422,59 @@ pub async fn deploy_all_regions(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
-    // TODO: Enqueue deploy jobs for each region
+    // Get the latest successful deployment to get the commit SHA
+    let latest_deployment = DeploymentRepository::find_latest_by_server(&state.db, server_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((
+            StatusCode::BAD_REQUEST,
+            "No previous deployment found. Please deploy the server first.".to_string(),
+        ))?;
+
+    // Enqueue build jobs for each region
+    for region in &regions {
+        // Create a new deployment record for this region
+        let deployment = DeploymentRepository::create(
+            &state.db,
+            CreateDeployment {
+                server_id,
+                commit_sha: latest_deployment.commit_sha.clone(),
+                deployed_by: Some(auth_user.user_id),
+            },
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // Create and enqueue the build job
+        let build_job = mcp_queue::BuildJob {
+            deployment_id: deployment.id,
+            server_id,
+            github_repo: server.github_repo.clone(),
+            github_branch: server.github_branch.clone(),
+            commit_sha: latest_deployment.commit_sha.clone(),
+            runtime: server.runtime.clone(),
+            github_installation_id: server.github_installation_id,
+            region: region.region.clone(),
+        };
+
+        state
+            .job_queue
+            .push_build_job(build_job)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to enqueue build job for region {}: {}", region.region, e),
+                )
+            })?;
+
+        tracing::info!(
+            "Enqueued build job for server {} region {} (deployment {})",
+            server_id,
+            region.region,
+            deployment.id
+        );
+    }
 
     tracing::info!(
         "Initiated deployment to {} regions for server {}",

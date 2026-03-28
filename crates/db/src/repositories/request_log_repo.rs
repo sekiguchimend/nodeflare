@@ -60,6 +60,7 @@ impl RequestLogRepository {
 
     /// List request logs with filtering - optimized to use window function for count
     /// This executes a single query instead of two separate queries
+    /// Uses sqlx::QueryBuilder for safe, efficient query construction
     pub async fn list_by_server_filtered(
         pool: &PgPool,
         server_id: Uuid,
@@ -69,6 +70,8 @@ impl RequestLogRepository {
         time_range: Option<&str>,
         search: Option<&str>,
     ) -> Result<(Vec<RequestLog>, i64)> {
+        use sqlx::QueryBuilder;
+
         let since = match time_range {
             Some("1h") => Some(Utc::now() - chrono::Duration::hours(1)),
             Some("24h") => Some(Utc::now() - chrono::Duration::hours(24)),
@@ -77,62 +80,56 @@ impl RequestLogRepository {
             _ => None,
         };
 
-        let status_condition = match status_filter {
-            Some("2xx") => Some("response_status = 'success'"),
-            Some("4xx") => Some("response_status LIKE 'client_%' OR response_status = 'bad_request' OR response_status = 'unauthorized' OR response_status = 'forbidden' OR response_status = 'not_found'"),
-            Some("5xx") => Some("response_status LIKE 'server_%' OR response_status = 'error' OR response_status = 'internal_error'"),
-            _ => None,
-        };
-
-        // Build dynamic query
-        let mut conditions = vec!["server_id = $1".to_string()];
-        let mut param_idx = 2;
-
-        if since.is_some() {
-            conditions.push(format!("created_at > ${}", param_idx));
-            param_idx += 1;
-        }
-
-        if status_condition.is_some() {
-            conditions.push(format!("({})", status_condition.unwrap()));
-        }
-
-        if search.is_some() {
-            conditions.push(format!("(tool_name ILIKE ${} OR error_message ILIKE ${})", param_idx, param_idx));
-            param_idx += 1;
-        }
-
-        let where_clause = conditions.join(" AND ");
-
-        // Use window function COUNT(*) OVER() to get total count in single query
-        let query = format!(
-            r#"
-            SELECT id, server_id, tool_name, api_key_id, client_info,
+        // Build query using QueryBuilder for type-safe parameter binding
+        let mut builder: QueryBuilder<sqlx::Postgres> = QueryBuilder::new(
+            r#"SELECT id, server_id, tool_name, api_key_id, client_info,
                    request_body, response_status, error_message, duration_ms, created_at,
                    COUNT(*) OVER() as total_count
             FROM request_logs
-            WHERE {}
-            ORDER BY created_at DESC
-            LIMIT ${} OFFSET ${}
-            "#,
-            where_clause, param_idx, param_idx + 1
+            WHERE server_id = "#
         );
 
-        // Build and execute the query with proper binding
-        let mut query_builder = sqlx::query_as::<_, RequestLogWithCount>(&query).bind(server_id);
+        builder.push_bind(server_id);
 
-        if let Some(s) = since {
-            query_builder = query_builder.bind(s);
+        // Add time filter
+        if let Some(since_time) = since {
+            builder.push(" AND created_at > ");
+            builder.push_bind(since_time);
         }
 
-        if let Some(s) = search {
-            let search_pattern = format!("%{}%", s);
-            query_builder = query_builder.bind(search_pattern);
+        // Add status filter (using predefined safe conditions)
+        match status_filter {
+            Some("2xx") => {
+                builder.push(" AND response_status = 'success'");
+            }
+            Some("4xx") => {
+                builder.push(" AND (response_status LIKE 'client_%' OR response_status IN ('bad_request', 'unauthorized', 'forbidden', 'not_found'))");
+            }
+            Some("5xx") => {
+                builder.push(" AND (response_status LIKE 'server_%' OR response_status IN ('error', 'internal_error'))");
+            }
+            _ => {}
         }
 
-        query_builder = query_builder.bind(limit).bind(offset);
+        // Add search filter
+        if let Some(search_term) = search {
+            let search_pattern = format!("%{}%", search_term);
+            builder.push(" AND (tool_name ILIKE ");
+            builder.push_bind(search_pattern.clone());
+            builder.push(" OR error_message ILIKE ");
+            builder.push_bind(search_pattern);
+            builder.push(")");
+        }
 
-        let logs_with_count = query_builder.fetch_all(pool).await?;
+        builder.push(" ORDER BY created_at DESC LIMIT ");
+        builder.push_bind(limit);
+        builder.push(" OFFSET ");
+        builder.push_bind(offset);
+
+        let logs_with_count = builder
+            .build_query_as::<RequestLogWithCount>()
+            .fetch_all(pool)
+            .await?;
 
         // Extract total count from first row (all rows have the same count)
         let total_count = logs_with_count.first().map(|r| r.total_count).unwrap_or(0);

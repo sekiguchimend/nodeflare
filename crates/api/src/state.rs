@@ -8,6 +8,7 @@ use mcp_email::EmailService;
 use mcp_github::GitHubApp;
 use mcp_queue::JobQueue;
 
+use crate::cache::ApiCache;
 use crate::ws_manager::WsManager;
 
 pub struct AppState {
@@ -23,6 +24,7 @@ pub struct AppState {
     pub webhook_handler: Option<WebhookHandler>,
     pub email: Option<EmailService>,
     pub fly_runtime: Option<FlyioRuntime>,
+    pub cache: ApiCache,
 }
 
 impl AppState {
@@ -34,6 +36,9 @@ impl AppState {
         github: Option<GitHubApp>,
     ) -> Self {
         let jwt = JwtService::new(&config);
+
+        // Initialize API cache
+        let cache = ApiCache::new(redis.clone());
 
         // In production, use a proper key from config
         let crypto = CryptoService::from_hex(
@@ -53,8 +58,13 @@ impl AppState {
                 let base_url = std::env::var("APP_URL")
                     .unwrap_or_else(|_| "http://localhost:3000".to_string());
                 let billing = BillingService::new(&secret_key, &base_url);
-                let webhook = WebhookHandler::new(&webhook_secret, db.clone(), &secret_key);
-                tracing::info!("Stripe billing initialized");
+                let webhook = WebhookHandler::with_job_queue(
+                    &webhook_secret,
+                    db.clone(),
+                    &secret_key,
+                    job_queue.clone(),
+                );
+                tracing::info!("Stripe billing initialized with job queue");
                 (Some(billing), Some(webhook))
             }
             _ => {
@@ -104,6 +114,7 @@ impl AppState {
             webhook_handler,
             email,
             fly_runtime,
+            cache,
         }
     }
 }

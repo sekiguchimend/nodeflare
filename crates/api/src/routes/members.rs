@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::cache::CachedWorkspaceInfo;
 use crate::error::AppError;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
@@ -79,25 +80,40 @@ pub async fn add(
         return Err(AppError::forbidden("Insufficient permissions"));
     }
 
-    // Get workspace to check plan limits
-    let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
-        .await?
-        .ok_or_else(|| AppError::not_found("Workspace"))?;
+    // Get workspace plan and member count (try cache first)
+    let (billing_plan, member_count, workspace_name) = if let Some(cached) = state.cache.get_workspace_info(workspace_id).await {
+        (cached.billing_plan(), cached.member_count as usize, cached.name)
+    } else {
+        // Cache miss - fetch from database
+        let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
+            .await?
+            .ok_or_else(|| AppError::not_found("Workspace"))?;
 
-    // Get plan limits
-    let billing_plan = match workspace.plan.as_str() {
-        "pro" => BillingPlan::Pro,
-        "team" => BillingPlan::Team,
-        "enterprise" => BillingPlan::Enterprise,
-        _ => BillingPlan::Free,
+        let billing_plan = match workspace.plan.as_str() {
+            "pro" => BillingPlan::Pro,
+            "team" => BillingPlan::Team,
+            "enterprise" => BillingPlan::Enterprise,
+            _ => BillingPlan::Free,
+        };
+
+        let current_members = WorkspaceRepository::list_members(&state.db, workspace_id).await?;
+        let member_count = current_members.len();
+
+        // Cache the workspace info for future requests
+        let cached_info = CachedWorkspaceInfo {
+            name: workspace.name.clone(),
+            plan: workspace.plan.clone(),
+            member_count: member_count as i32,
+        };
+        state.cache.set_workspace_info(workspace_id, &cached_info).await;
+
+        (billing_plan, member_count, workspace.name)
     };
+
     let limits = billing_plan.limits();
 
-    // Count current members
-    let current_members = WorkspaceRepository::list_members(&state.db, workspace_id).await?;
-
     // Check member limit
-    if current_members.len() >= limits.max_team_members as usize {
+    if member_count >= limits.max_team_members as usize {
         return Err(AppError::payment_required(
             "MEMBER_LIMIT_REACHED",
             &format!(
@@ -130,6 +146,12 @@ pub async fn add(
     let new_member = WorkspaceRepository::add_member(&state.db, workspace_id, user.id, role)
         .await?;
 
+    // Update cache member count (async, don't block)
+    let cache = state.cache.clone();
+    tokio::spawn(async move {
+        cache.update_member_count(workspace_id, 1).await;
+    });
+
     // Send invitation email (non-blocking)
     if let Some(ref email_service) = state.email {
         let inviter = UserRepository::find_by_id(&state.db, auth_user.user_id)
@@ -137,7 +159,6 @@ pub async fn add(
             .ok()
             .flatten();
         let inviter_name = inviter.map(|u| u.name).unwrap_or_else(|| "Someone".to_string());
-        let workspace_name = workspace.name.clone();
         let user_email = user.email.clone();
         let email_service = email_service.clone();
         let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://mcpcloud.dev".to_string());
@@ -242,6 +263,12 @@ pub async fn remove(
     }
 
     WorkspaceRepository::remove_member(&state.db, workspace_id, user_id).await?;
+
+    // Update cache member count (async, don't block)
+    let cache = state.cache.clone();
+    tokio::spawn(async move {
+        cache.update_member_count(workspace_id, -1).await;
+    });
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 mcp-common = { path = "../common" }
 mcp-db = { path = "../db" }
+mcp-queue = { path = "../queue" }
 
 # Async
 tokio.workspace = true
