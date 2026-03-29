@@ -57,7 +57,8 @@ struct AppResponse {
 
 pub async fn deploy(config: &AppConfig, job: &DeployJob) -> Result<String> {
     let client = reqwest::Client::new();
-    let app_name = format!("mcp-{}", job.server_id.to_string().split('-').next().unwrap());
+    let server_id_str = job.server_id.to_string();
+    let app_name = format!("mcp-{}", server_id_str.split('-').next().unwrap_or(&server_id_str[..8.min(server_id_str.len())]));
 
     // Create app if it doesn't exist
     create_app_if_not_exists(&client, config, &app_name).await?;

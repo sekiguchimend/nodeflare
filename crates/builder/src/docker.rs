@@ -192,7 +192,7 @@ pub async fn build_image(docker: &Docker, job: &BuildJob, image_tag: &str) -> Re
             "--branch",
             &job.github_branch,
             &format!("https://github.com/{}.git", job.github_repo),
-            repo_path.to_str().unwrap(),
+            repo_path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in repo path"))?,
         ])
         .status()
         .await

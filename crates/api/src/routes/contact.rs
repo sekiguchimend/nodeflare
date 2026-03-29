@@ -5,7 +5,32 @@ use axum::{
 use mcp_db::{models::CreateContactMessage, repositories::ContactMessageRepository};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::{Arc, LazyLock}};
+
+// Static regex for email validation - compiled once, no unwrap panic risk at runtime
+static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+    ).expect("Invalid email regex pattern - this is a compile-time constant")
+});
+
+// Static spam patterns - compiled once
+static SPAM_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    [
+        r"(?i)buy\s+now",
+        r"(?i)click\s+here",
+        r"(?i)free\s+money",
+        r"(?i)winner",
+        r"(?i)congratulations.*won",
+        r"(?i)casino",
+        r"(?i)viagra",
+        r"(?i)cryptocurrency.*invest",
+        r"(?i)bitcoin.*profit",
+    ]
+    .iter()
+    .filter_map(|p| Regex::new(p).ok())
+    .collect()
+});
 
 use crate::{error::AppError, state::AppState};
 
@@ -49,35 +74,12 @@ fn sanitize_input(input: &str) -> String {
 
 /// Validate email format with strict regex
 fn is_valid_email(email: &str) -> bool {
-    let email_regex = Regex::new(
-        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
-    ).unwrap();
-
-    email_regex.is_match(email) && email.len() <= MAX_EMAIL_LENGTH
+    EMAIL_REGEX.is_match(email) && email.len() <= MAX_EMAIL_LENGTH
 }
 
 /// Check for spam patterns in message
 fn contains_spam_patterns(message: &str) -> bool {
-    let spam_patterns: &[&str] = &[
-        r"(?i)buy\s+now",
-        r"(?i)click\s+here",
-        r"(?i)free\s+money",
-        r"(?i)winner",
-        r"(?i)congratulations.*won",
-        r"(?i)casino",
-        r"(?i)viagra",
-        r"(?i)cryptocurrency.*invest",
-        r"(?i)bitcoin.*profit",
-    ];
-
-    for pattern in spam_patterns {
-        if let Ok(re) = Regex::new(pattern) {
-            if re.is_match(message) {
-                return true;
-            }
-        }
-    }
-    false
+    SPAM_PATTERNS.iter().any(|re| re.is_match(message))
 }
 
 /// Check rate limit using Redis with atomic Lua script (fixes race condition)

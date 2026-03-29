@@ -209,12 +209,14 @@ pub async fn github_callback(
         })?;
 
     let workspace_id = if workspaces.is_empty() {
-        // Create personal workspace
+        // Create personal workspace - use first 8 chars of UUID (before first dash)
+        let user_id_str = user.id.to_string();
+        let user_id_prefix = user_id_str.split('-').next().unwrap_or(&user_id_str[..8.min(user_id_str.len())]);
         let ws = WorkspaceRepository::create(
             &state.db,
             mcp_db::CreateWorkspace {
                 name: format!("{}'s Workspace", user.name),
-                slug: format!("user-{}", user.id.to_string().split('-').next().unwrap()),
+                slug: format!("user-{}", user_id_prefix),
                 owner_id: user.id,
             },
         )

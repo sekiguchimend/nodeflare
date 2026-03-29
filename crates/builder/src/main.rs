@@ -286,7 +286,8 @@ async fn handle_build_job(job: BuildJob, ctx: Data<Arc<BuilderContext>>) -> Resu
                 .ok();
 
             // Push to Fly.io registry
-            let app_name = format!("mcp-{}", job.server_id.to_string().split('-').next().unwrap());
+            let server_id_str = job.server_id.to_string();
+            let app_name = format!("mcp-{}", server_id_str.split('-').next().unwrap_or(&server_id_str[..8.min(server_id_str.len())]));
             let registry_url = format!("registry.fly.io/{}", app_name);
 
             let log_msg = format!("Pushing image to {}...", registry_url);

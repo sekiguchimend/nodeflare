@@ -19,21 +19,21 @@ pub struct FlyioRuntime {
 }
 
 impl FlyioRuntime {
-    pub fn new(api_token: String, org_slug: String, region: String) -> Self {
+    pub fn new(api_token: String, org_slug: String, region: String) -> Result<Self> {
         // SECURITY: Configure HTTP client with timeout and redirect policy
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
             .connect_timeout(std::time::Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::limited(5))
             .build()
-            .expect("Failed to build HTTP client");
+            .context("Failed to build HTTP client")?;
 
-        Self {
+        Ok(Self {
             api_token,
             org_slug,
             region,
             http_client,
-        }
+        })
     }
 
     fn app_name_from_container_name(&self, name: &str) -> String {

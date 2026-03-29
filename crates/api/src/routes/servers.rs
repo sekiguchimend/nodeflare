@@ -479,10 +479,9 @@ pub async fn deploy(
     // Get first day of current month
     let now = chrono::Utc::now();
     let month_start = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1)
-        .unwrap()
-        .and_hms_opt(0, 0, 0)
-        .unwrap()
-        .and_utc();
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|dt| dt.and_utc())
+        .unwrap_or(now); // Fallback to now if date calculation fails (should never happen)
 
     let deployments_this_month = mcp_db::DeploymentRepository::count_by_workspace_since(
         &state.db,

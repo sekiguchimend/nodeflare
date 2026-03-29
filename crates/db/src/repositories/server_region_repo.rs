@@ -8,6 +8,21 @@ use crate::models::{
     UpdateServerRegion,
 };
 
+/// Helper function to get the first day of a month (safe, no panic)
+fn first_of_month(year: i32, month: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(year, month, 1)
+        .unwrap_or_else(|| NaiveDate::from_ymd_opt(year, 1, 1).unwrap_or(NaiveDate::MIN))
+}
+
+/// Helper function to get the first day of the next month (safe, no panic)
+fn first_of_next_month(year: i32, month: u32) -> NaiveDate {
+    if month == 12 {
+        first_of_month(year + 1, 1)
+    } else {
+        first_of_month(year, month + 1)
+    }
+}
+
 pub struct ServerRegionRepository;
 
 impl ServerRegionRepository {
@@ -225,12 +240,8 @@ impl RegionUsageRepository {
         region: &str,
     ) -> Result<RegionUsage> {
         let now = Utc::now().date_naive();
-        let period_start = NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap();
-        let period_end = if now.month() == 12 {
-            NaiveDate::from_ymd_opt(now.year() + 1, 1, 1).unwrap()
-        } else {
-            NaiveDate::from_ymd_opt(now.year(), now.month() + 1, 1).unwrap()
-        };
+        let period_start = first_of_month(now.year(), now.month());
+        let period_end = first_of_next_month(now.year(), now.month());
 
         // Try to get existing
         let existing = sqlx::query_as::<_, RegionUsage>(
@@ -281,7 +292,7 @@ impl RegionUsageRepository {
         hours: i32,
     ) -> Result<()> {
         let now = Utc::now().date_naive();
-        let period_start = NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap();
+        let period_start = first_of_month(now.year(), now.month());
 
         sqlx::query(
             r#"
@@ -345,7 +356,7 @@ impl RegionUsageRepository {
         workspace_id: Uuid,
     ) -> Result<i64> {
         let now = Utc::now().date_naive();
-        let period_start = NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap();
+        let period_start = first_of_month(now.year(), now.month());
 
         let count: (i64,) = sqlx::query_as(
             r#"

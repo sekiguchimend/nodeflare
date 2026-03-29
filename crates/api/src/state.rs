@@ -103,8 +103,16 @@ impl AppState {
         ) {
             (Ok(api_token), Ok(org_slug)) => {
                 let region = std::env::var("FLY_REGION").unwrap_or_else(|_| "nrt".to_string());
-                tracing::info!("Fly.io runtime initialized for org: {}", org_slug);
-                Some(FlyioRuntime::new(api_token, org_slug, region))
+                match FlyioRuntime::new(api_token, org_slug, region) {
+                    Ok(runtime) => {
+                        tracing::info!("Fly.io runtime initialized");
+                        Some(runtime)
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to initialize Fly.io runtime: {}", e);
+                        None
+                    }
+                }
             }
             _ => {
                 tracing::warn!("Fly.io not configured - container features disabled");

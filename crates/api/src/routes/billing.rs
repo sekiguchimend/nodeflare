@@ -3,6 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fred::interfaces::KeysInterface;
 use mcp_billing::{PaymentMethodDetails, PLANS};
 use mcp_db::WorkspaceRepository;
 use serde::{Deserialize, Serialize};
@@ -11,6 +12,9 @@ use uuid::Uuid;
 
 use crate::extractors::AuthUser;
 use crate::state::AppState;
+
+// Lock timeout for checkout creation (prevents race conditions)
+const CHECKOUT_LOCK_TTL_SECS: i64 = 30;
 
 /// Get available plans
 pub async fn list_plans() -> Json<Vec<PlanResponse>> {
@@ -123,6 +127,26 @@ pub async fn create_checkout(
         return Err((StatusCode::CONFLICT, "Workspace already has an active subscription. Please cancel the existing subscription first or use the billing portal to change plans.".to_string()));
     }
 
+    // Acquire lock to prevent race condition (two simultaneous checkout requests)
+    let lock_key = format!("checkout_lock:{}", workspace_id);
+    let lock_acquired: bool = state.redis
+        .set(
+            &lock_key,
+            "1",
+            Some(fred::types::Expiration::EX(CHECKOUT_LOCK_TTL_SECS)),
+            Some(fred::types::SetOptions::NX), // Only set if not exists
+            false,
+        )
+        .await
+        .unwrap_or(false);
+
+    if !lock_acquired {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "A checkout is already in progress for this workspace. Please wait a moment and try again.".to_string()));
+    }
+
+    // Lock will auto-expire after CHECKOUT_LOCK_TTL_SECS
+    // This prevents race conditions while allowing retries after timeout
+
     let billing = state.billing.as_ref()
         .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Billing not configured".to_string()))?;
 
@@ -161,8 +185,12 @@ pub async fn create_checkout(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Ensure checkout URL is present
+    let checkout_url = session.url
+        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Stripe did not return a checkout URL".to_string()))?;
+
     Ok(Json(CheckoutResponse {
-        checkout_url: session.url.unwrap_or_default(),
+        checkout_url,
         session_id: session.id.to_string(),
     }))
 }

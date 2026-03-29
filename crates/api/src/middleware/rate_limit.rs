@@ -192,16 +192,14 @@ pub async fn rate_limit_middleware(
             let mut response = next.run(request).await;
             let remaining = (config.max_requests - count).max(0);
 
-            // Add rate limit headers to response
+            // Add rate limit headers to response (ignore if header value fails, which shouldn't happen for numbers)
             let headers = response.headers_mut();
-            headers.insert(
-                "X-RateLimit-Limit",
-                config.max_requests.to_string().parse().unwrap(),
-            );
-            headers.insert(
-                "X-RateLimit-Remaining",
-                remaining.to_string().parse().unwrap(),
-            );
+            if let Ok(limit_val) = config.max_requests.to_string().parse() {
+                headers.insert("X-RateLimit-Limit", limit_val);
+            }
+            if let Ok(remaining_val) = remaining.to_string().parse() {
+                headers.insert("X-RateLimit-Remaining", remaining_val);
+            }
 
             response
         }
