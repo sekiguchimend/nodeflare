@@ -89,7 +89,8 @@ pub async fn create(
         body.name.clone(),
         scopes,
         body.expires_in_days,
-    );
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let key = ApiKeyRepository::create(&state.db, data)
         .await

@@ -53,6 +53,7 @@ impl AppState {
                      This is only acceptable for development!"
                 );
                 CryptoService::generate_key()
+                    .expect("Failed to generate encryption key - system RNG unavailable")
             }
         };
         let crypto = CryptoService::from_hex(&encryption_key)

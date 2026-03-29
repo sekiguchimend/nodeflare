@@ -78,15 +78,15 @@ pub struct RefreshToken {
 }
 
 impl RefreshToken {
-    pub fn generate(user_id: Uuid, expiration_days: i64) -> Self {
-        let token = generate_random_token(32);
+    pub fn generate(user_id: Uuid, expiration_days: i64) -> Result<Self> {
+        let token = generate_random_token(32)?;
         let expires_at = Utc::now() + Duration::days(expiration_days);
 
-        Self {
+        Ok(Self {
             token,
             user_id,
             expires_at,
-        }
+        })
     }
 
     pub fn hash(&self) -> String {
@@ -100,12 +100,13 @@ impl RefreshToken {
     }
 }
 
-pub fn generate_random_token(length: usize) -> String {
+pub fn generate_random_token(length: usize) -> Result<String> {
     use ring::rand::{SecureRandom, SystemRandom};
     let rng = SystemRandom::new();
     let mut bytes = vec![0u8; length];
-    rng.fill(&mut bytes).expect("SystemRandom failed");
-    hex::encode(bytes)
+    rng.fill(&mut bytes)
+        .map_err(|_| Error::Internal("Failed to generate random bytes".into()))?;
+    Ok(hex::encode(bytes))
 }
 
 pub fn hash_token(token: &str) -> String {

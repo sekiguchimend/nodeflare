@@ -28,11 +28,12 @@ impl CryptoService {
         Self::new(&key)
     }
 
-    pub fn generate_key() -> String {
+    pub fn generate_key() -> Result<String> {
         let rng = SystemRandom::new();
         let mut key = vec![0u8; KEY_SIZE];
-        rng.fill(&mut key).expect("Failed to generate random key");
-        hex::encode(key)
+        rng.fill(&mut key)
+            .map_err(|_| Error::Internal("Failed to generate random encryption key".into()))?;
+        Ok(hex::encode(key))
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
@@ -95,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        let key = CryptoService::generate_key();
+        let key = CryptoService::generate_key().unwrap();
         let crypto = CryptoService::from_hex(&key).unwrap();
 
         let plaintext = "Hello, World!";
@@ -107,8 +108,8 @@ mod tests {
 
     #[test]
     fn test_wrong_key_fails() {
-        let key1 = CryptoService::generate_key();
-        let key2 = CryptoService::generate_key();
+        let key1 = CryptoService::generate_key().unwrap();
+        let key2 = CryptoService::generate_key().unwrap();
 
         let crypto1 = CryptoService::from_hex(&key1).unwrap();
         let crypto2 = CryptoService::from_hex(&key2).unwrap();

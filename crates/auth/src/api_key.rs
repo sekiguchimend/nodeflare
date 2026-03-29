@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use mcp_common::{Error, Result};
 use mcp_db::models::CreateApiKey;
 use ring::digest::{digest, SHA256};
 use ring::rand::{SecureRandom, SystemRandom};
@@ -18,12 +19,13 @@ pub struct GeneratedApiKey {
 pub struct ApiKeyService;
 
 impl ApiKeyService {
-    pub fn generate() -> GeneratedApiKey {
+    pub fn generate() -> Result<GeneratedApiKey> {
         let rng = SystemRandom::new();
 
         // Generate random bytes using cryptographically secure RNG
         let mut random_bytes = vec![0u8; API_KEY_LENGTH];
-        rng.fill(&mut random_bytes).expect("SystemRandom failed");
+        rng.fill(&mut random_bytes)
+            .map_err(|_| Error::Internal("Failed to generate random bytes for API key".into()))?;
         let random_part = base64::Engine::encode(
             &base64::engine::general_purpose::URL_SAFE_NO_PAD,
             &random_bytes,
@@ -38,11 +40,11 @@ impl ApiKeyService {
         // Create hash
         let hash = Self::hash_key(&full_key);
 
-        GeneratedApiKey {
+        Ok(GeneratedApiKey {
             full_key,
             prefix,
             hash,
-        }
+        })
     }
 
     pub fn hash_key(key: &str) -> String {
@@ -64,8 +66,8 @@ impl ApiKeyService {
         name: String,
         scopes: Vec<String>,
         expires_in_days: Option<i64>,
-    ) -> (CreateApiKey, String) {
-        let generated = Self::generate();
+    ) -> Result<(CreateApiKey, String)> {
+        let generated = Self::generate()?;
 
         let expires_at = expires_in_days.map(|days| Utc::now() + Duration::days(days));
 
@@ -79,7 +81,7 @@ impl ApiKeyService {
             expires_at,
         };
 
-        (data, generated.full_key)
+        Ok((data, generated.full_key))
     }
 
     pub fn is_valid_format(key: &str) -> bool {
@@ -93,7 +95,7 @@ mod tests {
 
     #[test]
     fn test_generate_api_key() {
-        let key = ApiKeyService::generate();
+        let key = ApiKeyService::generate().unwrap();
 
         assert!(key.full_key.starts_with("mcp_"));
         assert_eq!(key.prefix.len(), 12);
@@ -102,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_verify_api_key() {
-        let key = ApiKeyService::generate();
+        let key = ApiKeyService::generate().unwrap();
 
         assert!(ApiKeyService::verify(&key.full_key, &key.hash));
         assert!(!ApiKeyService::verify("wrong_key", &key.hash));

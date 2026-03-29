@@ -243,7 +243,11 @@ pub async fn github_callback(
     let refresh = mcp_auth::jwt::RefreshToken::generate(
         user.id,
         state.config.auth.refresh_token_expiration_days,
-    );
+    )
+    .map_err(|e| {
+        tracing::error!("Refresh token generation failed: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Token generation failed".to_string())
+    })?;
 
     // Store refresh token hash in database
     sqlx::query(
@@ -407,7 +411,8 @@ pub async fn refresh_token(
     let new_refresh = mcp_auth::jwt::RefreshToken::generate(
         user.id,
         state.config.auth.refresh_token_expiration_days,
-    );
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Delete old refresh token and insert new one
     sqlx::query("DELETE FROM refresh_tokens WHERE token_hash = $1")
