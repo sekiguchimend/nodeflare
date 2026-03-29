@@ -635,10 +635,16 @@
       "paymentAnswer": "安全な決済プロセッサであるStripeを通じて、主要なクレジットカード（Visa、Mastercard、American Express）に対応しています。"
     },
     "success": {
-      "title": "支払いが完了しました！",
-      "description": "ご購読いただきありがとうございます。アカウントがアップグレードされました。",
-      "redirect": "数秒後に請求ページにリダイレクトされます。",
-      "goToBilling": "請求ページへ"
+      "title": "支払い処理中...",
+      "description": "お支払いを処理しています。しばらくお待ちください。",
+      "checkBilling": "確認を待っています...",
+      "goToDashboard": "ダッシュボード",
+      "goToBilling": "請求ページへ",
+      "completeTitle": "支払い完了！",
+      "completeDescription": "サブスクリプションが正常に有効化されました。",
+      "redirecting": "請求ページにリダイレクト中...",
+      "timeoutTitle": "処理に時間がかかっています",
+      "timeoutDescription": "請求ページでサブスクリプションの状態を確認してください。"
     },
     "cancel": {
       "title": "支払いがキャンセルされました",

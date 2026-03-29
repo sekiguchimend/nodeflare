@@ -1,47 +1,152 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Loader2, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
+import { api } from '@/lib/api';
+
+interface Workspace {
+  id: string;
+  name: string;
+  plan: string;
+}
+
+interface Subscription {
+  plan: string;
+  status: string;
+}
 
 export default function BillingSuccessPage() {
   const t = useTranslations('billing.success');
   const router = useRouter();
+  const [isComplete, setIsComplete] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
+  const { data: workspaces } = useQuery<Workspace[]>({
+    queryKey: ['workspaces'],
+    queryFn: () => api.get('/workspaces'),
+  });
+
+  const currentWorkspace = workspaces?.[0];
+
+  // Poll subscription status
+  const { data: subscription } = useQuery<Subscription>({
+    queryKey: ['subscription-check', currentWorkspace?.id],
+    queryFn: () => api.get(`/workspaces/${currentWorkspace?.id}/billing/subscription`),
+    enabled: !!currentWorkspace?.id && !isComplete,
+    refetchInterval: 2000, // Poll every 2 seconds
+  });
+
+  // Check if subscription is active (not free)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      router.push('/dashboard/billing');
-    }, 5000);
+    if (subscription && subscription.plan !== 'free' && subscription.status === 'active') {
+      setIsComplete(true);
+    }
+  }, [subscription]);
 
-    return () => clearTimeout(timer);
-  }, [router]);
+  // Track elapsed time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedTime((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Redirect after completion
+  useEffect(() => {
+    if (isComplete) {
+      const timer = setTimeout(() => {
+        router.push('/dashboard/billing');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isComplete, router]);
+
+  // Timeout after 30 seconds - stop polling and show manual check message
+  const isTimeout = elapsedTime >= 30;
+
+  if (isComplete) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <div className="max-w-sm w-full text-center">
+          <CheckCircle className="w-10 h-10 mx-auto text-green-500 mb-6" strokeWidth={1.5} />
+
+          <h1 className="text-xl font-bold mb-2 text-[#333333]">{t('completeTitle')}</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {t('completeDescription')}
+          </p>
+
+          <div className="my-8 h-px bg-border" />
+
+          <p className="text-xs text-muted-foreground/80 mb-6">
+            {t('redirecting')}
+          </p>
+
+          <div className="flex gap-3 justify-center">
+            <Button size="sm" asChild>
+              <Link href="/dashboard/billing">{t('goToBilling')}</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isTimeout) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <div className="max-w-sm w-full text-center">
+          <Loader2 className="w-10 h-10 mx-auto text-muted-foreground mb-6" strokeWidth={1.5} />
+
+          <h1 className="text-xl font-bold mb-2 text-[#333333]">{t('timeoutTitle')}</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {t('timeoutDescription')}
+          </p>
+
+          <div className="my-8 h-px bg-border" />
+
+          <div className="flex gap-3 justify-center">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard">{t('goToDashboard')}</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/dashboard/billing">{t('goToBilling')}</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Card className="max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <CardTitle className="text-2xl">{t('title')}</CardTitle>
-          <CardDescription>
-            {t('description')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-center space-y-4">
-          <p className="text-sm text-muted-foreground">
-            {t('redirect')}
-          </p>
-          <Link href="/dashboard/billing">
-            <Button>{t('goToBilling')}</Button>
-          </Link>
-        </CardContent>
-      </Card>
+    <div className="flex items-center justify-center min-h-[60vh] px-4">
+      <div className="max-w-sm w-full text-center">
+        <Loader2 className="w-10 h-10 mx-auto text-muted-foreground animate-spin mb-6" strokeWidth={1.5} />
+
+        <h1 className="text-xl font-bold mb-2 text-[#333333]">{t('title')}</h1>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {t('description')}
+        </p>
+
+        <div className="my-8 h-px bg-border" />
+
+        <p className="text-xs text-muted-foreground/80 mb-6">
+          {t('checkBilling')}
+        </p>
+
+        <div className="flex gap-3 justify-center">
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/dashboard">{t('goToDashboard')}</Link>
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/dashboard/billing">{t('goToBilling')}</Link>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -84,6 +84,7 @@ export default function BillingPage() {
   const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'yearly'>('monthly');
   const [showPlans, setShowPlans] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
@@ -146,6 +147,9 @@ export default function BillingPage() {
     },
     onSuccess: (data) => {
       window.location.href = data.checkout_url;
+    },
+    onSettled: () => {
+      setCheckoutPlan(null);
     },
   });
 
@@ -598,9 +602,12 @@ export default function BillingPage() {
                         className="w-full"
                         variant={isCurrent ? 'outline' : 'default'}
                         disabled={isCurrent || checkoutMutation.isPending}
-                        onClick={() => checkoutMutation.mutate({ plan: plan.plan, yearly: selectedInterval === 'yearly' })}
+                        onClick={() => {
+                          setCheckoutPlan(plan.plan);
+                          checkoutMutation.mutate({ plan: plan.plan, yearly: selectedInterval === 'yearly' });
+                        }}
                       >
-                        {isCurrent ? t('currentPlan') : checkoutMutation.isPending ? tCommon('loading') : t('upgrade')}
+                        {isCurrent ? t('currentPlan') : checkoutPlan === plan.plan ? tCommon('loading') : t('upgrade')}
                       </Button>
                     )}
                   </CardFooter>

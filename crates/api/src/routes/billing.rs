@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use mcp_billing::{BillingService, PaymentMethodDetails, Plan, WebhookHandler, PLANS};
+use mcp_billing::{PaymentMethodDetails, PLANS};
 use mcp_db::WorkspaceRepository;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

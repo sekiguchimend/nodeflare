@@ -152,9 +152,41 @@ impl WebhookHandler {
             )
             .await?;
 
-            tracing::info!(
-                "Updated workspace {} with Stripe customer {} and subscription {}",
+            // Get subscription to determine plan
+            let subscription_id_parsed: SubscriptionId = subscription_id.parse()
+                .map_err(|_| anyhow!("Invalid subscription ID"))?;
+            let subscription = Subscription::retrieve(&self.stripe_client, &subscription_id_parsed, &[])
+                .await
+                .map_err(|e| anyhow!("Failed to retrieve subscription: {}", e))?;
+
+            // Get plan from price
+            let plan = subscription
+                .items
+                .data
+                .first()
+                .and_then(|item| item.price.as_ref())
+                .and_then(|price| get_plan_by_price_id(&price.id))
+                .unwrap_or(Plan::Free);
+
+            // Update workspace plan
+            WorkspaceRepository::update_plan(&self.db, workspace_id, plan.into())
+                .await?;
+
+            // Update subscription status
+            let status = subscription.status.to_string();
+            let period_end = chrono::DateTime::from_timestamp(subscription.current_period_end, 0);
+
+            WorkspaceRepository::update_subscription_status(
+                &self.db,
                 workspace_id,
+                &status,
+                period_end,
+            ).await?;
+
+            tracing::info!(
+                "Updated workspace {} with plan {:?}, customer {}, subscription {}",
+                workspace_id,
+                plan,
                 customer_id,
                 subscription_id
             );

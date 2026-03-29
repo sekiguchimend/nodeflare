@@ -635,10 +635,16 @@
       "paymentAnswer": "We accept major credit cards (Visa, Mastercard, American Express) through Stripe, our secure payment processor."
     },
     "success": {
-      "title": "Payment Successful!",
-      "description": "Thank you for subscribing. Your account has been upgraded.",
-      "redirect": "Redirecting to billing page in a few seconds.",
-      "goToBilling": "Go to Billing"
+      "title": "Processing Payment...",
+      "description": "Your payment is being processed. This may take a moment.",
+      "checkBilling": "Waiting for confirmation...",
+      "goToDashboard": "Dashboard",
+      "goToBilling": "Go to Billing",
+      "completeTitle": "Payment Complete!",
+      "completeDescription": "Your subscription has been activated successfully.",
+      "redirecting": "Redirecting to billing page...",
+      "timeoutTitle": "Taking longer than expected",
+      "timeoutDescription": "Please check the billing page to confirm your subscription status."
     },
     "cancel": {
       "title": "Payment Cancelled",
