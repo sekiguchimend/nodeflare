@@ -85,6 +85,56 @@ fn validate_git_branch(branch: &str) -> Result<()> {
     Ok(())
 }
 
+// Security limits for tarball processing
+const MAX_TARBALL_SIZE: usize = 500 * 1024 * 1024; // 500MB max tarball
+const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024; // 100MB max single file
+const MAX_FILE_COUNT: usize = 10000; // Maximum files in archive
+const MAX_PATH_LENGTH: usize = 500; // Maximum path length
+
+/// Validate tar entry path for security issues
+fn validate_tar_path(path: &std::path::Path) -> Result<()> {
+    let path_str = path.to_string_lossy();
+
+    // Check path length
+    if path_str.len() > MAX_PATH_LENGTH {
+        return Err(anyhow::anyhow!("Path too long: {}", path_str.len()));
+    }
+
+    // Check for path traversal
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                return Err(anyhow::anyhow!(
+                    "Path traversal detected: '..' in path"
+                ));
+            }
+            std::path::Component::Normal(s) => {
+                let s_str = s.to_string_lossy();
+                // Check for hidden files starting with ..
+                if s_str.starts_with("..") {
+                    return Err(anyhow::anyhow!(
+                        "Suspicious path component: {}",
+                        s_str
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Check for absolute paths
+    if path.is_absolute() {
+        return Err(anyhow::anyhow!("Absolute paths not allowed"));
+    }
+
+    // Check for null bytes
+    if path_str.contains('\0') {
+        return Err(anyhow::anyhow!("Null bytes in path"));
+    }
+
+    Ok(())
+}
+
 /// Build Docker image from GitHub tarball
 pub async fn build_image_from_tarball(
     docker: &Docker,
@@ -92,6 +142,15 @@ pub async fn build_image_from_tarball(
     job: &BuildJob,
     image_tag: &str,
 ) -> Result<()> {
+    // Check tarball size
+    if tarball.len() > MAX_TARBALL_SIZE {
+        return Err(anyhow::anyhow!(
+            "Tarball too large: {} bytes (max: {} bytes)",
+            tarball.len(),
+            MAX_TARBALL_SIZE
+        ));
+    }
+
     // GitHub tarball is gzipped - decompress it
     let gz = GzDecoder::new(Cursor::new(tarball));
     let mut archive = tar::Archive::new(gz);
@@ -102,10 +161,40 @@ pub async fn build_image_from_tarball(
     // GitHub tarballs have a top-level directory like "owner-repo-sha/"
     // We need to strip this prefix
     let mut prefix: Option<String> = None;
+    let mut file_count: usize = 0;
 
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?.to_path_buf();
+        let header = entry.header();
+
+        // SECURITY: Skip symlinks to prevent symlink attacks
+        if header.entry_type().is_symlink() || header.entry_type().is_hard_link() {
+            tracing::warn!("Skipping symlink/hardlink in tarball: {:?}", path);
+            continue;
+        }
+
+        // SECURITY: Validate path
+        validate_tar_path(&path)?;
+
+        // SECURITY: Check file size
+        if header.size()? > MAX_FILE_SIZE {
+            return Err(anyhow::anyhow!(
+                "File too large: {:?} ({} bytes, max: {} bytes)",
+                path,
+                header.size()?,
+                MAX_FILE_SIZE
+            ));
+        }
+
+        // SECURITY: Limit file count
+        file_count += 1;
+        if file_count > MAX_FILE_COUNT {
+            return Err(anyhow::anyhow!(
+                "Too many files in archive (max: {})",
+                MAX_FILE_COUNT
+            ));
+        }
 
         // Determine the prefix from the first entry
         if prefix.is_none() {
@@ -117,7 +206,10 @@ pub async fn build_image_from_tarball(
         // Strip the prefix
         if let Some(ref pfx) = prefix {
             if let Ok(stripped) = path.strip_prefix(pfx) {
+                // SECURITY: Validate stripped path as well
                 if !stripped.as_os_str().is_empty() {
+                    validate_tar_path(stripped)?;
+
                     let mut header = entry.header().clone();
                     header.set_path(stripped)?;
 
