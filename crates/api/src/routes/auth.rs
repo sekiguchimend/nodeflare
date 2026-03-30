@@ -12,6 +12,7 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::error::{db_error, internal_error};
 use crate::extractors::AuthUser;
 use crate::middleware::rate_limit::{
     clear_failed_attempts, get_lockout_remaining, is_ip_locked_out, record_failed_attempt,
@@ -108,7 +109,7 @@ pub async fn github_callback(
         .redis
         .get(&csrf_key)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| internal_error("Redis CSRF check failed", e))?;
 
     if csrf_exists.is_none() {
         // Record failed attempt for invalid/expired state
@@ -134,7 +135,7 @@ pub async fn github_callback(
     };
 
     let oauth = GitHubOAuth::new(&state.config, &redirect_url)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| internal_error("OAuth initialization failed", e))?;
 
     // Exchange code for access token
     let access_token = oauth
@@ -142,7 +143,7 @@ pub async fn github_callback(
         .await
         .map_err(|e| {
             tracing::error!("GitHub code exchange failed: {}", e);
-            (StatusCode::BAD_REQUEST, e.to_string())
+            (StatusCode::BAD_REQUEST, "GitHub authentication failed".to_string())
         })?;
 
     // Get user info from GitHub
@@ -151,7 +152,7 @@ pub async fn github_callback(
         .await
         .map_err(|e| {
             tracing::error!("GitHub get user failed: {}", e);
-            (StatusCode::BAD_REQUEST, e.to_string())
+            (StatusCode::BAD_REQUEST, "Failed to get user info from GitHub".to_string())
         })?;
 
     // Get primary email if not provided
@@ -179,34 +180,22 @@ pub async fn github_callback(
         github_user.avatar_url.as_deref(),
     )
     .await
-    .map_err(|e| {
-        tracing::error!("User upsert failed: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    })?;
+    .map_err(|e| internal_error("User upsert failed", e))?;
 
     // Encrypt and store GitHub access token
     let (encrypted_token, nonce) = state
         .crypto
         .encrypt_string(&access_token)
-        .map_err(|e| {
-            tracing::error!("Token encryption failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+        .map_err(|e| internal_error("Token encryption failed", e))?;
 
     UserRepository::update_github_token(&state.db, user.id, &encrypted_token, &nonce)
         .await
-        .map_err(|e| {
-            tracing::error!("Update GitHub token failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+        .map_err(|e| internal_error("Update GitHub token failed", e))?;
 
     // Check if user has any workspaces, if not create a personal one
     let workspaces = WorkspaceRepository::list_by_user(&state.db, user.id)
         .await
-        .map_err(|e| {
-            tracing::error!("List workspaces failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+        .map_err(db_error)?;
 
     let workspace_id = if workspaces.is_empty() {
         // Create personal workspace - use first 8 chars of UUID (before first dash)
@@ -221,10 +210,7 @@ pub async fn github_callback(
             },
         )
         .await
-        .map_err(|e| {
-            tracing::error!("Create workspace failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+        .map_err(|e| internal_error("Create workspace failed", e))?;
         Some(ws.id)
     } else {
         Some(workspaces[0].id)
@@ -234,10 +220,7 @@ pub async fn github_callback(
     let access_token = state
         .jwt
         .generate_token(user.id, workspace_id)
-        .map_err(|e| {
-            tracing::error!("JWT generation failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+        .map_err(|e| internal_error("JWT generation failed", e))?;
 
     // Generate refresh token
     let refresh = mcp_auth::jwt::RefreshToken::generate(
@@ -258,10 +241,7 @@ pub async fn github_callback(
     .bind(refresh.expires_at)
     .execute(&state.db)
     .await
-    .map_err(|e| {
-        tracing::error!("Refresh token insert failed: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    })?;
+    .map_err(db_error)?;
 
     // Set tokens as HTTP-only secure cookies
     let is_production = state.config.is_production();
@@ -361,7 +341,7 @@ pub async fn refresh_token(
     .bind(&token_hash)
     .fetch_optional(&state.db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     let (user_id, expires_at) = record.ok_or_else(|| {
         // Record failed attempt for invalid token
@@ -392,13 +372,13 @@ pub async fn refresh_token(
     // Get user
     let user = UserRepository::find_by_id(&state.db, user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
 
     // Get user's workspaces
     let workspaces = WorkspaceRepository::list_by_user(&state.db, user.id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let workspace_id = workspaces.first().map(|w| w.id);
 
@@ -406,13 +386,13 @@ pub async fn refresh_token(
     let new_access_token = state
         .jwt
         .generate_token(user.id, workspace_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| internal_error("JWT generation failed", e))?;
 
     let new_refresh = mcp_auth::jwt::RefreshToken::generate(
         user.id,
         state.config.auth.refresh_token_expiration_days,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| internal_error("Token generation failed", e))?;
 
     // Delete old refresh token and insert new one
     sqlx::query("DELETE FROM refresh_tokens WHERE token_hash = $1")
@@ -429,7 +409,7 @@ pub async fn refresh_token(
     .bind(new_refresh.expires_at)
     .execute(&state.db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     Ok(Json(AuthResponse {
         access_token: new_access_token,
@@ -452,7 +432,7 @@ pub async fn get_current_user(
 ) -> Result<Json<UserResponse>, (StatusCode, String)> {
     let user = UserRepository::find_by_id(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
 
     Ok(Json(UserResponse {
@@ -476,7 +456,7 @@ pub async fn update_profile(
 ) -> Result<Json<UserResponse>, (StatusCode, String)> {
     let user = UserRepository::find_by_id(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
 
     let name = body.name.unwrap_or(user.name.clone());
@@ -491,7 +471,7 @@ pub async fn update_profile(
 
     let updated_user = UserRepository::update_name(&state.db, auth_user.user_id, &name)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(UserResponse {
         id: updated_user.id,
@@ -550,19 +530,19 @@ pub async fn delete_account(
     // Get all workspaces where user is owner
     let owned_workspaces = WorkspaceRepository::list_owned_by_user(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     // Delete owned workspaces and all their resources (servers, deployments, etc.)
     for workspace in owned_workspaces {
         WorkspaceRepository::delete(&state.db, workspace.id)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(db_error)?;
     }
 
     // Remove user from other workspaces where they are a member
     let member_workspaces = WorkspaceRepository::list_by_user(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     for workspace in member_workspaces {
         WorkspaceRepository::remove_member(&state.db, workspace.id, auth_user.user_id)
@@ -575,12 +555,12 @@ pub async fn delete_account(
         .bind(auth_user.user_id)
         .execute(&state.db)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     // Delete user
     UserRepository::delete(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     tracing::info!("User {} deleted their account", auth_user.user_id);
 

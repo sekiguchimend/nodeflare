@@ -8,6 +8,7 @@ use mcp_db::{CreateDeployment, DeploymentRepository, ServerRepository, Workspace
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -19,7 +20,7 @@ async fn verify_server_ownership(
 ) -> Result<(), (StatusCode, String)> {
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -36,7 +37,7 @@ pub async fn list(
 ) -> Result<Json<Vec<DeploymentResponse>>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Verify server belongs to workspace
@@ -49,7 +50,7 @@ pub async fn list(
         pagination.offset() as i64,
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     let response: Vec<DeploymentResponse> = deployments
         .into_iter()
@@ -78,7 +79,7 @@ pub async fn get(
 ) -> Result<Json<DeploymentResponse>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Verify server belongs to workspace
@@ -86,7 +87,7 @@ pub async fn get(
 
     let deployment = DeploymentRepository::find_by_id(&state.db, deployment_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Deployment not found".to_string()))?;
 
     // Verify deployment belongs to the specified server (prevents IDOR)
@@ -119,7 +120,7 @@ pub async fn get_logs(
 ) -> Result<Json<DeploymentLogsResponse>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Verify server belongs to workspace
@@ -127,7 +128,7 @@ pub async fn get_logs(
 
     let deployment = DeploymentRepository::find_by_id(&state.db, deployment_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Deployment not found".to_string()))?;
 
     // Verify deployment belongs to the specified server (prevents IDOR)
@@ -149,7 +150,7 @@ pub async fn rollback(
     // Check membership and permission
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), WorkspaceRole::Viewer) {
@@ -162,7 +163,7 @@ pub async fn rollback(
     // Get the deployment to rollback to
     let target_deployment = DeploymentRepository::find_by_id(&state.db, deployment_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Deployment not found".to_string()))?;
 
     // Verify deployment belongs to this server
@@ -178,7 +179,7 @@ pub async fn rollback(
     // Get server info
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     // Create new deployment with same commit SHA
@@ -191,7 +192,7 @@ pub async fn rollback(
         },
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     // Update server status to building
     ServerRepository::update_status(
@@ -201,7 +202,7 @@ pub async fn rollback(
         None,
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     // Enqueue build job
     let build_job = mcp_queue::BuildJob {

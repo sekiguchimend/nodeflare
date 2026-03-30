@@ -446,13 +446,25 @@ pub async fn test(
             })))
         }
         Err(e) => {
+            tracing::warn!("Webhook test failed for {}: {}", webhook_id, e);
             DeployWebhookRepository::update_trigger_status(&state.db, webhook_id, "failure")
                 .await
                 .ok();
 
+            // Provide user-friendly error messages without exposing internal details
+            let error_message = if e.is_timeout() {
+                "Connection timed out"
+            } else if e.is_connect() {
+                "Failed to connect to webhook URL"
+            } else if e.is_request() {
+                "Invalid request"
+            } else {
+                "Failed to send webhook"
+            };
+
             Ok(Json(serde_json::json!({
                 "success": false,
-                "error": e.to_string(),
+                "error": error_message,
             })))
         }
     }

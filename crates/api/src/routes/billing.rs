@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::{db_error, internal_error};
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -52,12 +53,12 @@ pub async fn get_subscription(
     // Verify user has access
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Get additional regions count from Stripe subscription items
@@ -110,7 +111,7 @@ pub async fn create_checkout(
     // Verify user is owner/admin
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
@@ -119,7 +120,7 @@ pub async fn create_checkout(
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Prevent duplicate subscriptions - check if already has active subscription
@@ -157,20 +158,20 @@ pub async fn create_checkout(
         // Get user info to create customer
         let user = mcp_db::UserRepository::find_by_id(&state.db, auth_user.user_id)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .map_err(db_error)?
             .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
 
         let customer = billing
             .create_customer(&user.email, &user.name, auth_user.user_id)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(db_error)?;
 
         let customer_id = customer.id.to_string();
 
         // Save customer ID to workspace
         WorkspaceRepository::update_stripe_customer(&state.db, workspace_id, &customer_id)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(db_error)?;
 
         customer_id
     };
@@ -183,7 +184,7 @@ pub async fn create_checkout(
     let session = billing
         .create_checkout_session(&customer_id, &price_id, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     // Ensure checkout URL is present
     let checkout_url = session.url
@@ -204,7 +205,7 @@ pub async fn cancel_subscription(
     // Verify user is owner/admin
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
@@ -213,7 +214,7 @@ pub async fn cancel_subscription(
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     let subscription_id = workspace
@@ -248,7 +249,7 @@ pub async fn create_portal_session(
     // Verify user is owner/admin
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
@@ -257,7 +258,7 @@ pub async fn create_portal_session(
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     let customer_id = workspace
@@ -270,7 +271,7 @@ pub async fn create_portal_session(
     let session = billing
         .create_portal_session(&customer_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(PortalResponse {
         portal_url: session.url,
@@ -293,15 +294,15 @@ pub async fn handle_webhook(
 
     let event = webhook_handler
         .verify_event(&body, signature)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        .map_err(|e| {
+            tracing::warn!("Webhook signature verification failed: {}", e);
+            (StatusCode::BAD_REQUEST, "Invalid webhook signature".to_string())
+        })?;
 
     webhook_handler
         .handle_event(event)
         .await
-        .map_err(|e| {
-            tracing::error!("Webhook handler error: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+        .map_err(|e| internal_error("Webhook handler error", e))?;
 
     Ok(StatusCode::OK)
 }
@@ -391,12 +392,12 @@ pub async fn get_billing_settings(
     // Verify user has access
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     Ok(Json(BillingSettingsResponse {
@@ -414,7 +415,7 @@ pub async fn update_billing_settings(
     // Verify user is owner/admin
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
@@ -423,7 +424,7 @@ pub async fn update_billing_settings(
 
     WorkspaceRepository::update_billing_settings(&state.db, workspace_id, body.auto_email_invoices)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(BillingSettingsResponse {
         auto_email_invoices: body.auto_email_invoices,
@@ -462,12 +463,12 @@ pub async fn get_payment_method(
     // Verify user has access
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     let customer_id = match workspace.stripe_customer_id {
@@ -502,12 +503,12 @@ pub async fn list_invoices(
     // Verify user has access
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     let customer_id = workspace
@@ -520,7 +521,7 @@ pub async fn list_invoices(
     let invoices = billing
         .list_invoices(&customer_id, 100)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let response: Vec<InvoiceResponse> = invoices
         .into_iter()

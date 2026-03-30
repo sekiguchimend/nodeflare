@@ -7,6 +7,7 @@ use mcp_db::UserPreferencesRepository;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -27,7 +28,7 @@ pub async fn get_preferences(
 ) -> Result<Json<UserPreferencesResponse>, (StatusCode, String)> {
     let prefs = UserPreferencesRepository::find_by_user_id(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let sidebar_order = prefs
         .map(|p| p.sidebar_order.0)
@@ -52,7 +53,7 @@ pub async fn update_preferences(
 ) -> Result<Json<UserPreferencesResponse>, (StatusCode, String)> {
     let prefs = UserPreferencesRepository::upsert(&state.db, auth_user.user_id, body.sidebar_order)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(UserPreferencesResponse {
         sidebar_order: prefs.sidebar_order.0,

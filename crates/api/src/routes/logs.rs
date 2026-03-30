@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -44,7 +45,7 @@ async fn verify_server_ownership(
 ) -> Result<(), (StatusCode, String)> {
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -61,7 +62,7 @@ pub async fn list(
 ) -> Result<Json<PaginatedLogsResponse>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Verify server belongs to workspace
@@ -80,7 +81,7 @@ pub async fn list(
         params.search.as_deref(),
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     let data: Vec<RequestLogResponse> = logs
         .into_iter()
@@ -115,7 +116,7 @@ pub async fn stats(
 ) -> Result<Json<ServerStatsResponse>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Verify server belongs to workspace
@@ -125,11 +126,11 @@ pub async fn stats(
 
     let stats = RequestLogRepository::get_stats(&state.db, server_id, since)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let tool_usage = RequestLogRepository::get_tool_usage_stats(&state.db, server_id, since)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(ServerStatsResponse { stats, tool_usage }))
 }

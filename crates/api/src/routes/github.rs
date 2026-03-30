@@ -7,6 +7,7 @@ use mcp_db::UserRepository;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -43,7 +44,7 @@ pub async fn list_repositories(
     // Get user with encrypted GitHub token
     let user = UserRepository::get_with_token(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
 
     // Decrypt GitHub access token
@@ -63,7 +64,7 @@ pub async fn list_repositories(
     let access_token = state
         .crypto
         .decrypt_string(&encrypted_token, &nonce)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     // Fetch repositories from GitHub
     let client = reqwest::Client::new();
@@ -75,7 +76,7 @@ pub async fn list_repositories(
         .header("User-Agent", "MCP-Cloud/1.0")
         .send()
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -90,7 +91,7 @@ pub async fn list_repositories(
     let repos: Vec<GitHubRepoResponse> = response
         .json()
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let result: Vec<GitHubRepo> = repos
         .into_iter()

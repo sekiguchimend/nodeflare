@@ -8,6 +8,7 @@ use mcp_db::{CreateWorkspace, WorkspaceRepository};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -17,7 +18,7 @@ pub async fn list(
 ) -> Result<Json<Vec<WorkspaceResponse>>, (StatusCode, String)> {
     let workspaces = WorkspaceRepository::list_by_user(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let response: Vec<WorkspaceResponse> = workspaces
         .into_iter()
@@ -46,7 +47,7 @@ pub async fn create(
     // Check if slug is already taken
     if WorkspaceRepository::find_by_slug(&state.db, &body.slug)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .is_some()
     {
         return Err((StatusCode::CONFLICT, "Slug already taken".to_string()));
@@ -61,7 +62,7 @@ pub async fn create(
         },
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     let plan = workspace.plan();
     Ok(Json(WorkspaceResponse {
@@ -82,12 +83,12 @@ pub async fn get(
     // Check membership
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
 
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     let plan = workspace.plan();
@@ -111,7 +112,7 @@ pub async fn update(
     // Check membership and permission
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
 
     if !matches!(member.role(), mcp_common::types::WorkspaceRole::Owner | mcp_common::types::WorkspaceRole::Admin) {
@@ -127,7 +128,7 @@ pub async fn update(
         },
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     let plan = workspace.plan();
     let role = member.role();
@@ -149,7 +150,7 @@ pub async fn delete(
     // Only owner can delete workspace
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     if workspace.owner_id != auth_user.user_id {
@@ -158,7 +159,7 @@ pub async fn delete(
 
     WorkspaceRepository::delete(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -10,6 +10,7 @@ use mcp_db::{
 use serde::Serialize;
 use std::sync::Arc;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -27,7 +28,7 @@ pub async fn get_settings(
 ) -> Result<Json<NotificationSettingsResponse>, (StatusCode, String)> {
     let settings = NotificationSettingsRepository::get_or_create(&state.db, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(NotificationSettingsResponse {
         email_deploy_success: settings.email_deploy_success,
@@ -44,7 +45,7 @@ pub async fn update_settings(
 ) -> Result<Json<NotificationSettingsResponse>, (StatusCode, String)> {
     let settings = NotificationSettingsRepository::update(&state.db, auth_user.user_id, body)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(NotificationSettingsResponse {
         email_deploy_success: settings.email_deploy_success,

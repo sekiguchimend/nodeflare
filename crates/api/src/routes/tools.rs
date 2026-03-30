@@ -8,6 +8,7 @@ use mcp_db::{ServerRepository, ToolRepository, UpdateTool, WorkspaceRepository};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -26,13 +27,13 @@ pub async fn list(
     // Check membership
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
 
     // SECURITY: Verify server belongs to this workspace
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -41,7 +42,7 @@ pub async fn list(
 
     let tools = ToolRepository::list_by_server(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let response: Vec<ToolResponse> = tools
         .into_iter()
@@ -72,7 +73,7 @@ pub async fn update(
     // Check membership and permission
     let member = WorkspaceRepository::get_member(&state.db, path.workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member of this workspace".to_string()))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
@@ -82,7 +83,7 @@ pub async fn update(
     // SECURITY: Verify server belongs to this workspace
     let server = ServerRepository::find_by_id(&state.db, path.server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != path.workspace_id {
@@ -92,7 +93,7 @@ pub async fn update(
     // SECURITY: Verify tool belongs to this server
     let existing_tool = ToolRepository::find_by_id(&state.db, path.tool_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Tool not found".to_string()))?;
 
     if existing_tool.server_id != path.server_id {
@@ -110,7 +111,7 @@ pub async fn update(
         },
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     let permission_level = tool.permission_level();
     Ok(Json(ToolResponse {

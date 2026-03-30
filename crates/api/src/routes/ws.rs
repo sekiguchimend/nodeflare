@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::error::{db_error, service_error};
 use crate::middleware::rate_limit::{check_ws_connection_rate_limit, extract_client_ip};
 use crate::state::AppState;
 use crate::ws_manager::WsManager;
@@ -59,7 +60,7 @@ pub async fn deployment_ws(
     // Verify deployment exists and user has access with optimized query
     let access = DeploymentRepository::check_user_access(&state.db, deployment_id, user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     if !access {
         return Err((StatusCode::FORBIDDEN, "Access denied".to_string()));
@@ -68,7 +69,7 @@ pub async fn deployment_ws(
     // Subscribe to deployment updates
     let channel = format!("deployment:{}", deployment_id);
     let rx = state.ws_manager.subscribe(&channel).await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+        .map_err(|e| service_error("WebSocket", e))?;
 
     let ws_manager = state.ws_manager.clone();
     Ok(ws.on_upgrade(move |socket| handle_deployment_socket(socket, rx, deployment_id, ws_manager)))
@@ -108,7 +109,7 @@ pub async fn server_status_ws(
     // Verify server exists, belongs to workspace, and user has access with optimized query
     let access = ServerRepository::check_user_access(&state.db, server_id, workspace_id, user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     if !access {
         return Err((StatusCode::FORBIDDEN, "Access denied".to_string()));
@@ -117,7 +118,7 @@ pub async fn server_status_ws(
     // Subscribe to server status updates
     let channel = format!("server:{}:status", server_id);
     let rx = state.ws_manager.subscribe(&channel).await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+        .map_err(|e| service_error("WebSocket", e))?;
 
     let ws_manager = state.ws_manager.clone();
     Ok(ws.on_upgrade(move |socket| handle_server_status_socket(socket, rx, server_id, ws_manager)))
@@ -157,7 +158,7 @@ pub async fn server_logs_ws(
     // Verify server exists, belongs to workspace, and user has access with optimized query
     let access = ServerRepository::check_user_access(&state.db, server_id, workspace_id, user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     if !access {
         return Err((StatusCode::FORBIDDEN, "Access denied".to_string()));
@@ -166,7 +167,7 @@ pub async fn server_logs_ws(
     // Subscribe to server logs
     let channel = format!("server:{}:logs", server_id);
     let rx = state.ws_manager.subscribe(&channel).await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+        .map_err(|e| service_error("WebSocket", e))?;
 
     let ws_manager = state.ws_manager.clone();
     Ok(ws.on_upgrade(move |socket| handle_logs_socket(socket, rx, server_id, ws_manager)))
@@ -206,7 +207,7 @@ pub async fn build_logs_ws(
     // Verify deployment exists and user has access with optimized query
     let access = DeploymentRepository::check_user_access(&state.db, deployment_id, user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     if !access {
         return Err((StatusCode::FORBIDDEN, "Access denied".to_string()));
@@ -215,7 +216,7 @@ pub async fn build_logs_ws(
     // Subscribe to build logs
     let channel = format!("deployment:{}:logs", deployment_id);
     let rx = state.ws_manager.subscribe(&channel).await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+        .map_err(|e| service_error("WebSocket", e))?;
 
     let ws_manager = state.ws_manager.clone();
     Ok(ws.on_upgrade(move |socket| handle_build_logs_socket(socket, rx, deployment_id, ws_manager)))

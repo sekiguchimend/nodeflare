@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::{db_error, internal_error};
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -48,13 +49,13 @@ pub async fn list_wireguard_peers(
     // Verify user is member
     let _member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Get workspace for filtering peers by prefix
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Get Fly.io runtime
@@ -69,7 +70,7 @@ pub async fn list_wireguard_peers(
     let all_peers = fly_runtime
         .list_wireguard_peers(&org_slug)
         .await
-        .map_err(|e: anyhow::Error| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e: anyhow::Error| internal_error("WireGuard operation failed", e))?;
 
     let workspace_prefix = format!("{}-", workspace.slug);
     let filtered_peers: Vec<WireGuardPeerResponse> = all_peers
@@ -95,7 +96,7 @@ pub async fn create_wireguard_peer(
     // Verify user is owner/admin
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if !matches!(
@@ -111,7 +112,7 @@ pub async fn create_wireguard_peer(
     // Get workspace for org slug
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Get Fly.io runtime
@@ -135,7 +136,7 @@ pub async fn create_wireguard_peer(
     let config = fly_runtime
         .create_wireguard_peer(&org_slug, &body.region, &peer_name)
         .await
-        .map_err(|e: anyhow::Error| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e: anyhow::Error| internal_error("WireGuard operation failed", e))?;
 
     // Generate config file content
     let config_file = FlyioRuntime::generate_wireguard_config(&config);
@@ -165,7 +166,7 @@ pub async fn delete_wireguard_peer(
     // Verify user is owner/admin
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if !matches!(
@@ -189,7 +190,7 @@ pub async fn delete_wireguard_peer(
     fly_runtime
         .remove_wireguard_peer(&org_slug, &peer_name)
         .await
-        .map_err(|e: anyhow::Error| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e: anyhow::Error| internal_error("WireGuard operation failed", e))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -9,6 +9,7 @@ use mcp_db::{ApiKeyRepository, WorkspaceRepository};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -19,12 +20,12 @@ pub async fn list(
 ) -> Result<Json<Vec<ApiKeyResponse>>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     let keys = ApiKeyRepository::list_by_workspace(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let response: Vec<ApiKeyResponse> = keys
         .into_iter()
@@ -54,7 +55,7 @@ pub async fn create(
 ) -> Result<Json<ApiKeyCreatedResponse>, (StatusCode, String)> {
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
@@ -90,11 +91,11 @@ pub async fn create(
         scopes,
         body.expires_in_days,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     let key = ApiKeyRepository::create(&state.db, data)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(Json(ApiKeyCreatedResponse {
         id: key.id,
@@ -112,7 +113,7 @@ pub async fn delete(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
@@ -122,7 +123,7 @@ pub async fn delete(
     // Verify api key belongs to this workspace
     let existing = ApiKeyRepository::find_by_id(&state.db, key_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "API key not found".to_string()))?;
 
     if existing.workspace_id != workspace_id {
@@ -131,7 +132,7 @@ pub async fn delete(
 
     ApiKeyRepository::delete(&state.db, key_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(StatusCode::NO_CONTENT)
 }

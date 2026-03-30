@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -47,13 +48,13 @@ pub async fn list(
     // Verify membership
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -62,7 +63,7 @@ pub async fn list(
 
     let regions = ServerRegionRepository::list_by_server(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let response: Vec<RegionResponse> = regions
         .into_iter()
@@ -94,7 +95,7 @@ pub async fn add(
     // Verify membership and permission
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), WorkspaceRole::Viewer) {
@@ -115,13 +116,13 @@ pub async fn add(
     // Get workspace for billing info
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -132,7 +133,7 @@ pub async fn add(
     let existing =
         ServerRegionRepository::find_by_server_and_region(&state.db, server_id, &body.region)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(db_error)?;
 
     if existing.is_some() {
         return Err((
@@ -164,7 +165,7 @@ pub async fn add(
             },
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
         // Step 2: Increment billing quantity
         match billing
@@ -245,7 +246,7 @@ pub async fn remove(
     // Verify membership and permission
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), WorkspaceRole::Viewer) {
@@ -258,13 +259,13 @@ pub async fn remove(
     // Get workspace for billing info
     let workspace = WorkspaceRepository::find_by_id(&state.db, workspace_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Workspace not found".to_string()))?;
 
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -275,7 +276,7 @@ pub async fn remove(
     let region =
         ServerRegionRepository::find_by_server_and_region(&state.db, server_id, &region_code)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .map_err(db_error)?
             .ok_or((StatusCode::NOT_FOUND, "Region not found".to_string()))?;
 
     if region.is_primary {
@@ -297,7 +298,7 @@ pub async fn remove(
             if updated_item_id.is_none() {
                 WorkspaceRepository::update_region_subscription_item(&state.db, workspace_id, None)
                     .await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    .map_err(db_error)?;
 
                 tracing::info!(
                     "Removed region subscription item from workspace {} (no more additional regions)",
@@ -346,7 +347,7 @@ pub async fn remove(
     // Delete the region record
     let deleted = ServerRegionRepository::delete(&state.db, server_id, &region_code)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     if !deleted {
         return Err((StatusCode::NOT_FOUND, "Region not found".to_string()));
@@ -378,13 +379,13 @@ pub async fn estimate_cost(
     // Verify membership
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     let additional_regions =
         ServerRegionRepository::count_workspace_additional_regions(&state.db, workspace_id)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(db_error)?;
 
     // Price per region: ¥300/month (approximately $2)
     let price_per_region_jpy = 300;
@@ -406,7 +407,7 @@ pub async fn deploy_all_regions(
     // Verify membership and permission
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), WorkspaceRole::Viewer) {
@@ -419,7 +420,7 @@ pub async fn deploy_all_regions(
     // Verify server belongs to workspace
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -429,7 +430,7 @@ pub async fn deploy_all_regions(
     // Get all regions for the server
     let regions = ServerRegionRepository::list_by_server(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     // Set all regions to deploying status
     for region in &regions {
@@ -440,13 +441,13 @@ pub async fn deploy_all_regions(
             RegionStatus::Deploying,
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
     }
 
     // Get the latest successful deployment to get the commit SHA
     let latest_deployment = DeploymentRepository::find_latest_by_server(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((
             StatusCode::BAD_REQUEST,
             "No previous deployment found. Please deploy the server first.".to_string(),
@@ -464,7 +465,7 @@ pub async fn deploy_all_regions(
             },
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
         // Create and enqueue the build job
         let build_job = mcp_queue::BuildJob {
