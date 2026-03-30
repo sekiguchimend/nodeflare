@@ -248,12 +248,67 @@ impl RequestLogRepository {
         Ok(count.0)
     }
 
+    /// Delete old logs in batches to avoid long-running transactions
+    /// Returns total number of rows deleted
     pub async fn delete_old_logs(pool: &PgPool, before: DateTime<Utc>) -> Result<u64> {
-        let result = sqlx::query("DELETE FROM request_logs WHERE created_at < $1")
+        let batch_size: i64 = 10000;
+        let mut total_deleted: u64 = 0;
+
+        loop {
+            // Delete in batches using a subquery with LIMIT
+            let result = sqlx::query(
+                r#"
+                DELETE FROM request_logs
+                WHERE id IN (
+                    SELECT id FROM request_logs
+                    WHERE created_at < $1
+                    LIMIT $2
+                )
+                "#
+            )
             .bind(before)
+            .bind(batch_size)
             .execute(pool)
             .await?;
 
-        Ok(result.rows_affected())
+            let deleted = result.rows_affected();
+            total_deleted += deleted;
+
+            // If we deleted less than batch_size, we're done
+            if deleted < batch_size as u64 {
+                break;
+            }
+
+            // Small delay between batches to reduce lock contention
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        Ok(total_deleted)
+    }
+
+    /// Get batch stats for all servers in a workspace (single query)
+    pub async fn get_batch_stats(
+        pool: &PgPool,
+        workspace_id: uuid::Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<crate::models::ServerStatsSummary>> {
+        let stats = sqlx::query_as::<_, crate::models::ServerStatsSummary>(
+            r#"
+            SELECT
+                r.server_id,
+                COUNT(*)::BIGINT as total_requests,
+                COUNT(*) FILTER (WHERE r.response_status != 'success')::BIGINT as error_count
+            FROM request_logs r
+            JOIN servers s ON r.server_id = s.id
+            WHERE s.workspace_id = $1 AND r.created_at > $2
+            GROUP BY r.server_id
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(since)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(stats)
     }
 }

@@ -1,12 +1,20 @@
 'use client';
 
-import { useQuery, useQueries } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
-import { McpServer, ServerStatsResponse } from '@/types';
+import { McpServer } from '@/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+
+interface BatchStatsResponse {
+  servers: {
+    server_id: string;
+    total_requests: number;
+    error_count: number;
+  }[];
+}
 
 // Constants
 const STATS_STALE_TIME_MS = 60 * 1000; // 1 minute
@@ -66,32 +74,29 @@ export default function DashboardPage() {
   const currentWorkspace = workspaces?.[0];
   const currentPlan = plans?.find(p => p.plan === (currentWorkspace?.plan || 'free'));
 
-  // Fetch stats for all servers
-  const statsQueries = useQueries({
-    queries: (servers ?? []).map((server) => ({
-      queryKey: ['workspaces', server.workspace_id, 'servers', server.id, 'stats'],
-      queryFn: () => api.get<ServerStatsResponse>(`/workspaces/${server.workspace_id}/servers/${server.id}/stats`),
-      enabled: !!server.workspace_id,
-      staleTime: STATS_STALE_TIME_MS,
-    })),
+  // Fetch stats for all servers in batch (single request instead of N requests)
+  const { data: batchStats, isLoading: isLoadingStats } = useQuery<BatchStatsResponse>({
+    queryKey: ['workspaces', currentWorkspace?.id, 'batch-stats'],
+    queryFn: () => api.get<BatchStatsResponse>(`/workspaces/${currentWorkspace?.id}/stats`),
+    enabled: !!currentWorkspace?.id,
+    staleTime: STATS_STALE_TIME_MS,
   });
 
   const aggregatedStats = useMemo(() => {
     let totalRequests = 0;
     let totalErrors = 0;
 
-    statsQueries.forEach((query) => {
-      if (query.data?.stats) {
-        totalRequests += query.data.stats.total_requests;
-        totalErrors += query.data.stats.error_count;
-      }
-    });
+    if (batchStats?.servers) {
+      batchStats.servers.forEach((serverStats) => {
+        totalRequests += serverStats.total_requests;
+        totalErrors += serverStats.error_count;
+      });
+    }
 
-    const isLoadingStats = statsQueries.some((q) => q.isLoading);
     const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
     const uptime = runningServers.length > 0 && servers ? (runningServers.length / servers.length) * 100 : 0;
     return { totalRequests, totalErrors, errorRate, uptime, isLoadingStats };
-  }, [statsQueries, runningServers.length, servers]);
+  }, [batchStats, runningServers.length, servers, isLoadingStats]);
 
   // 初期ローディング（サーバーが成功して空の場合のみリダイレクト待ち）
   if (isInitialLoading || hasNoServers) {

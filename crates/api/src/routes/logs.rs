@@ -134,3 +134,30 @@ pub async fn stats(
 
     Ok(Json(ServerStatsResponse { stats, tool_usage }))
 }
+
+/// Batch stats response for multiple servers
+#[derive(Serialize)]
+pub struct BatchStatsResponse {
+    pub servers: Vec<mcp_db::ServerStatsSummary>,
+}
+
+/// Get stats for all servers in a workspace (batch endpoint for dashboard)
+pub async fn batch_stats(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(workspace_id): Path<Uuid>,
+) -> Result<Json<BatchStatsResponse>, (StatusCode, String)> {
+    WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
+        .await
+        .map_err(db_error)?
+        .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
+
+    let since = Utc::now() - Duration::days(7);
+
+    // Use a single query to get stats for all servers in the workspace
+    let servers = RequestLogRepository::get_batch_stats(&state.db, workspace_id, since)
+        .await
+        .map_err(db_error)?;
+
+    Ok(Json(BatchStatsResponse { servers }))
+}

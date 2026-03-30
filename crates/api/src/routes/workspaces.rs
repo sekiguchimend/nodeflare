@@ -130,6 +130,9 @@ pub async fn update(
     .await
     .map_err(db_error)?;
 
+    // Invalidate workspace cache after update
+    state.cache.invalidate_workspace_info(workspace_id).await;
+
     let plan = workspace.plan();
     let role = member.role();
     Ok(Json(WorkspaceResponse {
@@ -160,6 +163,9 @@ pub async fn delete(
     WorkspaceRepository::delete(&state.db, workspace_id)
         .await
         .map_err(db_error)?;
+
+    // Invalidate workspace cache after delete
+    state.cache.invalidate_workspace_info(workspace_id).await;
 
     Ok(StatusCode::NO_CONTENT)
 }

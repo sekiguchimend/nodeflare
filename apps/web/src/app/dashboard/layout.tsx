@@ -2,12 +2,13 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { McpServer } from '@/types';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
   DndContext,
@@ -94,7 +95,8 @@ export default function DashboardLayout({
     })
   );
 
-  const navItemsMap: Record<string, NavItem> = {
+  // Memoize navItemsMap to prevent recreation on every render
+  const navItemsMap = useMemo<Record<string, NavItem>>(() => ({
     overview: {
       id: 'overview',
       href: '/dashboard',
@@ -136,13 +138,13 @@ export default function DashboardLayout({
       href: '/dashboard/settings',
       icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
     },
-  };
+  }), []);
 
   const sortedNavItems = useMemo(() => {
     return sidebarOrder
       .filter(id => navItemsMap[id])
       .map(id => navItemsMap[id]);
-  }, [sidebarOrder]);
+  }, [sidebarOrder, navItemsMap]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -188,7 +190,7 @@ export default function DashboardLayout({
         <div className="h-14 px-3 border-b flex items-center justify-between">
           {sidebarOpen && (
             <Link href="/dashboard" className="flex items-center gap-2">
-              <img src="/logo.png" alt="Nodeflare" className="h-5 w-auto" />
+              <Image src="/logo.png" alt="Nodeflare" width={20} height={20} className="h-5 w-auto" />
               <span className="font-bold">NodeFlare</span>
             </Link>
           )}
@@ -238,9 +240,11 @@ export default function DashboardLayout({
           <div className="flex items-center space-x-4">
             <span className="text-sm text-muted-foreground">{user.name}</span>
             {user.avatar_url && (
-              <img
+              <Image
                 src={user.avatar_url}
                 alt={user.name}
+                width={32}
+                height={32}
                 className="w-8 h-8 rounded-full"
               />
             )}

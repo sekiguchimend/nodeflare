@@ -108,9 +108,9 @@ export default function HomePage() {
   const proFeatures = ['pricing.pro.feature1', 'pricing.pro.feature2', 'pricing.pro.feature3', 'pricing.pro.feature4', 'pricing.pro.feature5'];
 
   const blogPosts = [
-    { titleKey: 'blog.post1.title', dateKey: 'blog.post1.date', thumbnail: '/blog/thumbnail1.png' },
-    { titleKey: 'blog.post2.title', dateKey: 'blog.post2.date', thumbnail: '/blog/thumbnail2.png' },
-    { titleKey: 'blog.post3.title', dateKey: 'blog.post3.date', thumbnail: '/blog/thumbnail3.png' },
+    { titleKey: 'blog.post1.title', dateKey: 'blog.post1.date', gradient: 'from-violet-500 to-purple-600' },
+    { titleKey: 'blog.post2.title', dateKey: 'blog.post2.date', gradient: 'from-blue-500 to-cyan-500' },
+    { titleKey: 'blog.post3.title', dateKey: 'blog.post3.date', gradient: 'from-emerald-500 to-teal-500' },
   ];
 
   const faqItems = [
@@ -507,8 +507,10 @@ export default function HomePage() {
               {blogPosts.map((post, idx) => (
                 <Link key={idx} href="/blog" className="group">
                   <div className="h-full rounded-[2px] border border-gray-200 hover:border-violet-200 hover:shadow-lg transition-all bg-white overflow-hidden">
-                    <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
-                      <img src={post.thumbnail} alt={t(post.titleKey)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div className={`aspect-[4/3] bg-gradient-to-br ${post.gradient} overflow-hidden flex items-center justify-center`}>
+                      <span className="text-white/80 text-5xl font-bold">
+                        {t(post.titleKey).charAt(0)}
+                      </span>
                     </div>
                     <div className="p-3">
                       <h3 className="text-xl font-bold text-gray-700 mb-2 group-hover:text-violet-600 transition-colors">

@@ -34,9 +34,9 @@ ON server_regions (server_id, status);
 CREATE INDEX IF NOT EXISTS idx_region_usage_workspace_period
 ON region_usage (workspace_id, period_start DESC, period_end DESC);
 
--- Composite index for announcements listing (published + date ordering)
-CREATE INDEX IF NOT EXISTS idx_announcements_published_created
-ON announcements (published, created_at DESC);
+-- Composite index for announcements listing (active + date ordering)
+CREATE INDEX IF NOT EXISTS idx_announcements_active_published
+ON announcements (is_active, published_at DESC);
 
 -- Index for recent users (admin dashboard, user management)
 CREATE INDEX IF NOT EXISTS idx_users_created_at

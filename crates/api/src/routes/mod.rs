@@ -129,6 +129,11 @@ pub fn api_router() -> Router<Arc<AppState>> {
             "/workspaces/:workspace_id/servers/:server_id/stats",
             get(logs::stats),
         )
+        // Batch stats for dashboard (single request for all servers)
+        .route(
+            "/workspaces/:workspace_id/stats",
+            get(logs::batch_stats),
+        )
         // Webhooks
         .route(
             "/workspaces/:workspace_id/servers/:server_id/webhooks",

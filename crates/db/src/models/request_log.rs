@@ -60,3 +60,11 @@ pub struct ToolUsageStats {
     pub error_count: i64,
     pub avg_duration_ms: f64,
 }
+
+/// Summary stats for a server (used in batch stats endpoint)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ServerStatsSummary {
+    pub server_id: Uuid,
+    pub total_requests: i64,
+    pub error_count: i64,
+}

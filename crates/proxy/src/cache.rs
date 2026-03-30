@@ -7,6 +7,7 @@
 //!
 //! Uses sharding to reduce lock contention on high-traffic scenarios.
 
+use bytes::Bytes;
 use lru::LruCache;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
@@ -15,13 +16,15 @@ use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 /// Number of shards for cache partitioning (must be power of 2)
-const NUM_SHARDS: usize = 16;
+/// Increased from 16 to 32 for better performance under high concurrency
+const NUM_SHARDS: usize = 32;
 
 /// Cache entry with TTL tracking
+/// Uses Bytes for zero-copy sharing between requests
 struct CacheEntry {
-    response_body: Vec<u8>,
+    response_body: Bytes,
     status: u16,
-    headers: Vec<(String, String)>,
+    headers: Arc<Vec<(String, String)>>,
     created_at: Instant,
 }
 
@@ -105,9 +108,9 @@ impl RequestCache {
         if let Some(entry) = cache.get(&key) {
             if entry.created_at.elapsed() < ttl {
                 return Some(CachedResponse {
-                    body: entry.response_body.clone(),
+                    body: entry.response_body.clone(), // Zero-copy clone with Bytes
                     status: entry.status,
-                    headers: entry.headers.clone(),
+                    headers: (*entry.headers).clone(),
                 });
             }
             // Expired - remove it
@@ -141,9 +144,9 @@ impl RequestCache {
             match rx.recv().await {
                 Ok(entry) => {
                     return CoalesceResult::Coalesced(CachedResponse {
-                        body: entry.response_body.clone(),
+                        body: entry.response_body.clone(), // Zero-copy clone with Bytes
                         status: entry.status,
-                        headers: entry.headers.clone(),
+                        headers: (*entry.headers).clone(),
                     });
                 }
                 Err(_) => {
@@ -160,9 +163,9 @@ impl RequestCache {
                 if entry.created_at.elapsed() < ttl {
                     tracing::debug!("Cache hit for request");
                     return CoalesceResult::Cached(CachedResponse {
-                        body: entry.response_body.clone(),
+                        body: entry.response_body.clone(), // Zero-copy clone with Bytes
                         status: entry.status,
-                        headers: entry.headers.clone(),
+                        headers: (*entry.headers).clone(),
                     });
                 }
                 // Expired - remove it
@@ -189,10 +192,14 @@ impl RequestCache {
         let shard = self.get_shard(handle.key);
         let now = Instant::now();
 
+        // Convert to Bytes and Arc for zero-copy sharing
+        let response_bytes = Bytes::from(response_body);
+        let headers_arc = Arc::new(headers);
+
         let entry = Arc::new(CacheEntry {
-            response_body,
+            response_body: response_bytes.clone(),
             status,
-            headers,
+            headers: headers_arc.clone(),
             created_at: now,
         });
 
@@ -210,10 +217,10 @@ impl RequestCache {
         cache.put(
             handle.key,
             CacheEntry {
-                response_body: entry.response_body.clone(),
-                status: entry.status,
-                headers: entry.headers.clone(),
-                created_at: entry.created_at,
+                response_body: response_bytes, // Zero-copy - Bytes is cheap to clone
+                status,
+                headers: headers_arc, // Arc clone is cheap
+                created_at: now,
             },
         );
     }
@@ -290,9 +297,10 @@ pub enum CoalesceResult {
 }
 
 /// Cached response data
+/// Uses Bytes for efficient zero-copy sharing between requests
 #[derive(Clone)]
 pub struct CachedResponse {
-    pub body: Vec<u8>,
+    pub body: Bytes,
     pub status: u16,
     pub headers: Vec<(String, String)>,
 }
