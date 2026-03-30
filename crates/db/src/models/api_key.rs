@@ -11,6 +11,8 @@ pub struct ApiKey {
     pub server_id: Option<Uuid>,
     pub name: String,
     pub key_prefix: String,
+    /// SECURITY: key_hash should never be serialized to API responses
+    #[serde(skip_serializing)]
     pub key_hash: String,
     pub scopes: serde_json::Value,
     pub last_used_at: Option<DateTime<Utc>>,

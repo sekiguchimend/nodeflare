@@ -1,5 +1,4 @@
 use crate::models::{CreateDeployWebhook, DeployWebhook, UpdateDeployWebhook};
-use chrono::Utc;
 use mcp_common::Result;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -12,6 +11,7 @@ impl DeployWebhookRepository {
         let webhooks = sqlx::query_as::<_, DeployWebhook>(
             r#"
             SELECT id, server_id, name, webhook_url, webhook_type, events, secret,
+                   encrypted_secret, secret_nonce,
                    is_active, last_triggered_at, last_status, created_at, updated_at
             FROM deploy_webhooks
             WHERE server_id = $1
@@ -34,6 +34,7 @@ impl DeployWebhookRepository {
         let webhooks = sqlx::query_as::<_, DeployWebhook>(
             r#"
             SELECT id, server_id, name, webhook_url, webhook_type, events, secret,
+                   encrypted_secret, secret_nonce,
                    is_active, last_triggered_at, last_status, created_at, updated_at
             FROM deploy_webhooks
             WHERE server_id = $1 AND is_active = true AND $2 = ANY(events)
@@ -52,6 +53,7 @@ impl DeployWebhookRepository {
         let webhook = sqlx::query_as::<_, DeployWebhook>(
             r#"
             SELECT id, server_id, name, webhook_url, webhook_type, events, secret,
+                   encrypted_secret, secret_nonce,
                    is_active, last_triggered_at, last_status, created_at, updated_at
             FROM deploy_webhooks
             WHERE id = $1
@@ -64,13 +66,14 @@ impl DeployWebhookRepository {
         Ok(webhook)
     }
 
-    /// Create a new webhook
+    /// Create a new webhook with encrypted secret
     pub async fn create(pool: &PgPool, data: CreateDeployWebhook) -> Result<DeployWebhook> {
         let webhook = sqlx::query_as::<_, DeployWebhook>(
             r#"
-            INSERT INTO deploy_webhooks (server_id, name, webhook_url, webhook_type, events, secret)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO deploy_webhooks (server_id, name, webhook_url, webhook_type, events, encrypted_secret, secret_nonce)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id, server_id, name, webhook_url, webhook_type, events, secret,
+                      encrypted_secret, secret_nonce,
                       is_active, last_triggered_at, last_status, created_at, updated_at
             "#,
         )
@@ -79,14 +82,15 @@ impl DeployWebhookRepository {
         .bind(&data.webhook_url)
         .bind(&data.webhook_type)
         .bind(&data.events)
-        .bind(data.secret.as_deref())
+        .bind(&data.encrypted_secret)
+        .bind(&data.secret_nonce)
         .fetch_one(pool)
         .await?;
 
         Ok(webhook)
     }
 
-    /// Update a webhook
+    /// Update a webhook with encrypted secret
     pub async fn update(
         pool: &PgPool,
         id: Uuid,
@@ -99,11 +103,14 @@ impl DeployWebhookRepository {
                 name = COALESCE($2, name),
                 webhook_url = COALESCE($3, webhook_url),
                 events = COALESCE($4, events),
-                secret = COALESCE($5, secret),
-                is_active = COALESCE($6, is_active),
+                encrypted_secret = COALESCE($5, encrypted_secret),
+                secret_nonce = COALESCE($6, secret_nonce),
+                is_active = COALESCE($7, is_active),
+                secret = NULL,
                 updated_at = NOW()
             WHERE id = $1
             RETURNING id, server_id, name, webhook_url, webhook_type, events, secret,
+                      encrypted_secret, secret_nonce,
                       is_active, last_triggered_at, last_status, created_at, updated_at
             "#,
         )
@@ -111,7 +118,8 @@ impl DeployWebhookRepository {
         .bind(data.name)
         .bind(data.webhook_url)
         .bind(data.events)
-        .bind(data.secret)
+        .bind(data.encrypted_secret)
+        .bind(data.secret_nonce)
         .bind(data.is_active)
         .fetch_optional(pool)
         .await?;

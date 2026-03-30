@@ -231,6 +231,17 @@ pub async fn create(
         }
     }
 
+    // Encrypt the secret if provided
+    let (encrypted_secret, secret_nonce) = if let Some(ref secret) = body.secret {
+        let (enc, nonce) = state.crypto.encrypt_string(secret).map_err(|e| {
+            tracing::error!("Failed to encrypt webhook secret: {}", e);
+            AppError::internal("Failed to encrypt secret")
+        })?;
+        (Some(enc), Some(nonce))
+    } else {
+        (None, None)
+    };
+
     let webhook = DeployWebhookRepository::create(
         &state.db,
         CreateDeployWebhook {
@@ -239,7 +250,8 @@ pub async fn create(
             webhook_url: body.webhook_url,
             webhook_type: body.webhook_type,
             events: body.events,
-            secret: body.secret,
+            encrypted_secret,
+            secret_nonce,
         },
     )
     .await
@@ -308,6 +320,17 @@ pub async fn update(
         }
     }
 
+    // Encrypt the secret if provided
+    let (encrypted_secret, secret_nonce) = if let Some(ref secret) = body.secret {
+        let (enc, nonce) = state.crypto.encrypt_string(secret).map_err(|e| {
+            tracing::error!("Failed to encrypt webhook secret: {}", e);
+            AppError::internal("Failed to encrypt secret")
+        })?;
+        (Some(enc), Some(nonce))
+    } else {
+        (None, None)
+    };
+
     let webhook = DeployWebhookRepository::update(
         &state.db,
         webhook_id,
@@ -315,7 +338,8 @@ pub async fn update(
             name: body.name,
             webhook_url: body.webhook_url,
             events: body.events,
-            secret: body.secret,
+            encrypted_secret,
+            secret_nonce,
             is_active: body.is_active,
         },
     )
