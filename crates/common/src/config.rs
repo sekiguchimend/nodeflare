@@ -59,6 +59,10 @@ pub struct DatabaseConfig {
     pub acquire_timeout_secs: u64,
     /// Idle connection timeout in seconds
     pub idle_timeout_secs: u64,
+    /// Maximum lifetime of a connection in seconds (prevents stale connections)
+    pub max_lifetime_secs: u64,
+    /// Whether to test connections before acquiring from pool
+    pub test_before_acquire: bool,
 }
 
 impl Default for DatabaseConfig {
@@ -70,6 +74,10 @@ impl Default for DatabaseConfig {
             min_connections: 5,
             acquire_timeout_secs: 30,
             idle_timeout_secs: 600,
+            // Max 30 minutes lifetime to prevent stale connections
+            max_lifetime_secs: 1800,
+            // Test connections in production for reliability
+            test_before_acquire: true,
         }
     }
 }
@@ -186,6 +194,12 @@ impl AppConfig {
                 idle_timeout_secs: env::var("DATABASE_IDLE_TIMEOUT_SECS")
                     .unwrap_or_else(|_| "600".to_string())
                     .parse()?,
+                max_lifetime_secs: env::var("DATABASE_MAX_LIFETIME_SECS")
+                    .unwrap_or_else(|_| "1800".to_string())
+                    .parse()?,
+                test_before_acquire: env::var("DATABASE_TEST_BEFORE_ACQUIRE")
+                    .map(|v| v == "true" || v == "1")
+                    .unwrap_or(true),
             },
             redis: RedisConfig {
                 url: env::var("REDIS_URL")
