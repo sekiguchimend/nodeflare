@@ -530,22 +530,30 @@ impl std::fmt::Display for ProxyError {
 
 impl IntoResponse for ProxyError {
     fn into_response(self) -> Response {
-        let (status, message, error_code) = match self {
-            ProxyError::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m, "UNAUTHORIZED"),
-            ProxyError::Forbidden(m) => (StatusCode::FORBIDDEN, m, "FORBIDDEN"),
-            ProxyError::NotFound(m) => (StatusCode::NOT_FOUND, m, "NOT_FOUND"),
-            ProxyError::BadRequest(m) => (StatusCode::BAD_REQUEST, m, "BAD_REQUEST"),
+        let (status, message, error_code) = match &self {
+            ProxyError::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m.clone(), "UNAUTHORIZED"),
+            ProxyError::Forbidden(m) => (StatusCode::FORBIDDEN, m.clone(), "FORBIDDEN"),
+            ProxyError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone(), "NOT_FOUND"),
+            ProxyError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone(), "BAD_REQUEST"),
             ProxyError::RateLimitExceeded => {
                 (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded. Please slow down.".to_string(), "RATE_LIMIT_EXCEEDED")
             }
             ProxyError::QuotaExceeded(m) => {
-                (StatusCode::TOO_MANY_REQUESTS, m, "MONTHLY_QUOTA_EXCEEDED")
+                (StatusCode::TOO_MANY_REQUESTS, m.clone(), "MONTHLY_QUOTA_EXCEEDED")
             }
             ProxyError::PaymentRequired(m) => {
-                (StatusCode::PAYMENT_REQUIRED, m, "PAYMENT_REQUIRED")
+                (StatusCode::PAYMENT_REQUIRED, m.clone(), "PAYMENT_REQUIRED")
             }
-            ProxyError::ServiceUnavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m, "SERVICE_UNAVAILABLE"),
-            ProxyError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m, "INTERNAL_ERROR"),
+            ProxyError::ServiceUnavailable(m) => {
+                // Log internal details, return safe message
+                tracing::error!("Service unavailable: {}", m);
+                (StatusCode::SERVICE_UNAVAILABLE, "Service temporarily unavailable".to_string(), "SERVICE_UNAVAILABLE")
+            }
+            ProxyError::Internal(m) => {
+                // Log internal details, return safe message
+                tracing::error!("Internal proxy error: {}", m);
+                (StatusCode::INTERNAL_SERVER_ERROR, "An internal error occurred".to_string(), "INTERNAL_ERROR")
+            }
         };
 
         let body = serde_json::json!({

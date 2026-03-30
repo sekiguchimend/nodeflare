@@ -8,6 +8,7 @@ use mcp_db::{CreateSecret, SecretRepository, ServerRepository, WorkspaceReposito
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::db_error;
 use crate::extractors::AuthUser;
 use crate::state::AppState;
 
@@ -19,7 +20,7 @@ async fn verify_server_ownership(
 ) -> Result<(), (StatusCode, String)> {
     let server = ServerRepository::find_by_id(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::NOT_FOUND, "Server not found".to_string()))?;
 
     if server.workspace_id != workspace_id {
@@ -35,7 +36,7 @@ pub async fn list(
 ) -> Result<Json<Vec<SecretResponse>>, (StatusCode, String)> {
     WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     // Verify server belongs to workspace
@@ -43,7 +44,7 @@ pub async fn list(
 
     let secrets = SecretRepository::list_by_server(&state.db, server_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     let response: Vec<SecretResponse> = secrets
         .into_iter()
@@ -65,7 +66,7 @@ pub async fn set(
 ) -> Result<Json<SecretResponse>, (StatusCode, String)> {
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
@@ -79,7 +80,10 @@ pub async fn set(
     let (encrypted_value, nonce) = state
         .crypto
         .encrypt_string(&body.value)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Encryption failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Encryption failed".to_string())
+        })?;
 
     let secret = SecretRepository::upsert(
         &state.db,
@@ -91,7 +95,7 @@ pub async fn set(
         },
     )
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(db_error)?;
 
     Ok(Json(SecretResponse {
         key: secret.key,
@@ -107,7 +111,7 @@ pub async fn delete(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let member = WorkspaceRepository::get_member(&state.db, workspace_id, auth_user.user_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(db_error)?
         .ok_or((StatusCode::FORBIDDEN, "Not a member".to_string()))?;
 
     if matches!(member.role(), mcp_common::types::WorkspaceRole::Viewer) {
@@ -119,7 +123,7 @@ pub async fn delete(
 
     SecretRepository::delete_by_key(&state.db, server_id, &key)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(db_error)?;
 
     Ok(StatusCode::NO_CONTENT)
 }

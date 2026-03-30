@@ -122,3 +122,38 @@ impl From<mcp_common::Error> for AppError {
         Self::new(status, e.error_code(), e.to_string())
     }
 }
+
+/// Helper function to convert internal errors to safe HTTP responses.
+/// Logs the full error server-side but returns a sanitized message to the client.
+///
+/// # Usage
+/// ```ignore
+/// some_operation()
+///     .await
+///     .map_err(|e| internal_error("Database query failed", e))?;
+/// ```
+pub fn internal_error<E: std::fmt::Display>(context: &str, error: E) -> (StatusCode, String) {
+    tracing::error!("{}: {}", context, error);
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "An internal error occurred".to_string(),
+    )
+}
+
+/// Helper for database errors - logs details but returns generic message
+pub fn db_error<E: std::fmt::Display>(error: E) -> (StatusCode, String) {
+    tracing::error!("Database error: {}", error);
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "A database error occurred".to_string(),
+    )
+}
+
+/// Helper for service unavailable errors
+pub fn service_error<E: std::fmt::Display>(service: &str, error: E) -> (StatusCode, String) {
+    tracing::error!("{} error: {}", service, error);
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        format!("{} is temporarily unavailable", service),
+    )
+}
