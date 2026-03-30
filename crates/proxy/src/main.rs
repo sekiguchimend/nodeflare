@@ -112,7 +112,8 @@ async fn proxy_handler(
     request: Request<Body>,
 ) -> Result<Response, ProxyError> {
     let start = Instant::now();
-    let client_ip = addr.ip().to_string();
+    // Extract real client IP (handles reverse proxy headers when TRUST_PROXY_HEADERS=true)
+    let client_ip = rate_limit::extract_client_ip(request.headers(), &addr);
 
     // 1. Extract server slug from subdomain
     // e.g., "my-server.mcp.cloud" -> "my-server"

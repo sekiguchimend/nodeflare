@@ -1,10 +1,64 @@
+use axum::http::HeaderMap;
 use chrono::Datelike;
 use fred::interfaces::{KeysInterface, LuaInterface};
 use mcp_billing::Plan;
 use mcp_db::{ApiKey, McpServer, WorkspaceRepository};
+use std::net::SocketAddr;
 use uuid::Uuid;
 
 use crate::{ProxyError, ProxyState};
+
+/// Extract real client IP from request, handling reverse proxy headers
+///
+/// Security: Only trusts proxy headers when TRUST_PROXY_HEADERS=true
+/// Priority: fly-client-ip > cf-connecting-ip > x-real-ip > x-forwarded-for > direct connection
+pub fn extract_client_ip(headers: &HeaderMap, addr: &SocketAddr) -> String {
+    let trust_proxy = std::env::var("TRUST_PROXY_HEADERS")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+
+    if !trust_proxy {
+        return addr.ip().to_string();
+    }
+
+    // Fly.io specific header (most trusted when using Fly.io)
+    if let Some(fly_ip) = headers.get("fly-client-ip").and_then(|v| v.to_str().ok()) {
+        if is_valid_ip(fly_ip) {
+            return fly_ip.to_string();
+        }
+    }
+
+    // Cloudflare header
+    if let Some(cf_ip) = headers.get("cf-connecting-ip").and_then(|v| v.to_str().ok()) {
+        if is_valid_ip(cf_ip) {
+            return cf_ip.to_string();
+        }
+    }
+
+    // Nginx/generic reverse proxy header
+    if let Some(real_ip) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
+        if is_valid_ip(real_ip) {
+            return real_ip.to_string();
+        }
+    }
+
+    // X-Forwarded-For: take the first (leftmost) IP which is the original client
+    if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        if let Some(first_ip) = xff.split(',').next().map(|s| s.trim()) {
+            if is_valid_ip(first_ip) {
+                return first_ip.to_string();
+            }
+        }
+    }
+
+    // Fall back to direct connection IP
+    addr.ip().to_string()
+}
+
+/// Validate that a string looks like a valid IP address
+fn is_valid_ip(ip: &str) -> bool {
+    !ip.is_empty() && (ip.parse::<std::net::Ipv4Addr>().is_ok() || ip.parse::<std::net::Ipv6Addr>().is_ok())
+}
 
 const DEFAULT_RATE_LIMIT: i32 = 100; // requests per minute
 const WINDOW_SIZE_SECONDS: i64 = 60;

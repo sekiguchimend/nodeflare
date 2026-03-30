@@ -1,6 +1,6 @@
 use axum::{
     extract::{ConnectInfo, State},
-    http::{Request, StatusCode},
+    http::{header::HeaderMap, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     body::Body,
@@ -9,6 +9,60 @@ use fred::interfaces::{KeysInterface, LuaInterface};
 use std::{net::SocketAddr, sync::Arc};
 
 use crate::state::AppState;
+
+/// Extract real client IP from request, handling reverse proxy headers
+///
+/// Security: Only trusts proxy headers when TRUST_PROXY_HEADERS=true
+/// Priority: fly-client-ip > cf-connecting-ip > x-real-ip > x-forwarded-for > direct connection
+pub fn extract_client_ip(headers: &HeaderMap, addr: &SocketAddr) -> String {
+    let trust_proxy = std::env::var("TRUST_PROXY_HEADERS")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+
+    if !trust_proxy {
+        return addr.ip().to_string();
+    }
+
+    // Fly.io specific header (most trusted when using Fly.io)
+    if let Some(fly_ip) = headers.get("fly-client-ip").and_then(|v| v.to_str().ok()) {
+        if is_valid_ip(fly_ip) {
+            return fly_ip.to_string();
+        }
+    }
+
+    // Cloudflare header
+    if let Some(cf_ip) = headers.get("cf-connecting-ip").and_then(|v| v.to_str().ok()) {
+        if is_valid_ip(cf_ip) {
+            return cf_ip.to_string();
+        }
+    }
+
+    // Nginx/generic reverse proxy header
+    if let Some(real_ip) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
+        if is_valid_ip(real_ip) {
+            return real_ip.to_string();
+        }
+    }
+
+    // X-Forwarded-For: take the first (leftmost) IP which is the original client
+    // Format: "client, proxy1, proxy2"
+    if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        if let Some(first_ip) = xff.split(',').next().map(|s| s.trim()) {
+            if is_valid_ip(first_ip) {
+                return first_ip.to_string();
+            }
+        }
+    }
+
+    // Fall back to direct connection IP
+    addr.ip().to_string()
+}
+
+/// Validate that a string looks like a valid IP address (basic check)
+fn is_valid_ip(ip: &str) -> bool {
+    // Must not be empty and must parse as IP
+    !ip.is_empty() && (ip.parse::<std::net::Ipv4Addr>().is_ok() || ip.parse::<std::net::Ipv6Addr>().is_ok())
+}
 
 /// Brute force protection configuration
 #[derive(Clone)]
@@ -154,7 +208,8 @@ pub async fn rate_limit_middleware(
     next: Next,
 ) -> Response {
     let config = RateLimitConfig::default();
-    let ip = addr.ip().to_string();
+    // Extract real client IP (handles reverse proxy headers when TRUST_PROXY_HEADERS=true)
+    let ip = extract_client_ip(request.headers(), &addr);
     let key = format!("{}{}", config.key_prefix, ip);
 
     // Use Lua script for atomic rate limiting (fixes race condition)
@@ -207,6 +262,49 @@ pub async fn rate_limit_middleware(
             // On Redis error, allow the request but log the error
             tracing::error!("Rate limit Redis error: {}", e);
             next.run(request).await
+        }
+    }
+}
+
+/// WebSocket connection rate limiting
+/// Returns true if connection is allowed, false if rate limited
+pub async fn check_ws_connection_rate_limit(
+    redis: &fred::prelude::RedisClient,
+    ip: &str,
+) -> Result<bool, String> {
+    let max_connections: i64 = std::env::var("WS_RATE_LIMIT_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30); // 30 connection attempts per minute per IP
+
+    let window_secs: u64 = std::env::var("WS_RATE_LIMIT_WINDOW_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60);
+
+    let key = format!("ws_rate_limit:{}", ip);
+
+    let lua_script = r#"
+        local current = redis.call('INCR', KEYS[1])
+        if current == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        return current
+    "#;
+
+    let result: Result<i64, _> = LuaInterface::eval(
+        redis,
+        lua_script,
+        vec![key],
+        vec![window_secs.to_string()],
+    )
+    .await;
+
+    match result {
+        Ok(count) => Ok(count <= max_connections),
+        Err(e) => {
+            tracing::error!("WebSocket rate limit Redis error: {}", e);
+            Ok(true) // Allow on Redis error (fail-open)
         }
     }
 }

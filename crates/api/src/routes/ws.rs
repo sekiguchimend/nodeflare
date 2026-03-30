@@ -1,7 +1,7 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Path, Query, State,
+        ConnectInfo, Path, Query, State,
     },
     response::IntoResponse,
     http::StatusCode,
@@ -10,10 +10,12 @@ use futures::{SinkExt, StreamExt};
 use mcp_common::types::WsMessage;
 use mcp_db::{DeploymentRepository, ServerRepository};
 use serde::Deserialize;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::middleware::rate_limit::{check_ws_connection_rate_limit, extract_client_ip};
 use crate::state::AppState;
 use crate::ws_manager::WsManager;
 
@@ -27,9 +29,23 @@ pub struct WsAuthQuery {
 pub async fn deployment_ws(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Path(deployment_id): Path<Uuid>,
     Query(auth): Query<WsAuthQuery>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Rate limit WebSocket connection attempts
+    let client_ip = extract_client_ip(&headers, &addr);
+    if !check_ws_connection_rate_limit(&state.redis, &client_ip)
+        .await
+        .unwrap_or(true)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many connection attempts".to_string(),
+        ));
+    }
+
     // Verify JWT token
     let claims = state
         .jwt
@@ -62,9 +78,23 @@ pub async fn deployment_ws(
 pub async fn server_status_ws(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Path((workspace_id, server_id)): Path<(Uuid, Uuid)>,
     Query(auth): Query<WsAuthQuery>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Rate limit WebSocket connection attempts
+    let client_ip = extract_client_ip(&headers, &addr);
+    if !check_ws_connection_rate_limit(&state.redis, &client_ip)
+        .await
+        .unwrap_or(true)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many connection attempts".to_string(),
+        ));
+    }
+
     // Verify JWT token
     let claims = state
         .jwt
@@ -97,9 +127,23 @@ pub async fn server_status_ws(
 pub async fn server_logs_ws(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Path((workspace_id, server_id)): Path<(Uuid, Uuid)>,
     Query(auth): Query<WsAuthQuery>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Rate limit WebSocket connection attempts
+    let client_ip = extract_client_ip(&headers, &addr);
+    if !check_ws_connection_rate_limit(&state.redis, &client_ip)
+        .await
+        .unwrap_or(true)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many connection attempts".to_string(),
+        ));
+    }
+
     // Verify JWT token
     let claims = state
         .jwt
@@ -132,9 +176,23 @@ pub async fn server_logs_ws(
 pub async fn build_logs_ws(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Path(deployment_id): Path<Uuid>,
     Query(auth): Query<WsAuthQuery>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Rate limit WebSocket connection attempts
+    let client_ip = extract_client_ip(&headers, &addr);
+    if !check_ws_connection_rate_limit(&state.redis, &client_ip)
+        .await
+        .unwrap_or(true)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many connection attempts".to_string(),
+        ));
+    }
+
     // Verify JWT token
     let claims = state
         .jwt
