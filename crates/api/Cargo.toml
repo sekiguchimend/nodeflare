@@ -7,6 +7,10 @@ edition.workspace = true
 name = "mcp-api"
 path = "src/main.rs"
 
+[[bin]]
+name = "migrate-webhook-secrets"
+path = "src/bin/migrate_webhook_secrets.rs"
+
 [dependencies]
 mcp-common = { path = "../common" }
 mcp-db = { path = "../db" }
